@@ -22,5 +22,8 @@ build-dev:
 
 # Build the ESP32-S3 firmware
 fw:
-    @test -f firmware/platformio.ini || { echo "firmware/ not scaffolded yet (M0 task)"; exit 1; }
     pio run -d firmware
+
+# Flash the firmware to a connected device
+fw-upload:
+    pio run -d firmware -t upload

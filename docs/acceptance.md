@@ -39,6 +39,12 @@ Record format: `PASS` or `FAIL`, date, build (git short SHA), one line of notes.
 4. Make a trivial code change, rebuild with `scripts/build-dev.sh`, relaunch. Tray still shows "granted" with no new prompt.
 5. Repeat step 4 once more.
 
+Firmware (any time; needs the XIAO ESP32-S3 on USB):
+
+6. Run `just fw-upload`. The first flash over stock firmware may need BOOT held while plugging in. The orange user LED blinks about once a second.
+7. Run `ioreg -p IOUSB -l -w0 | grep -iE '"(idVendor|idProduct|USB Product Name)"'` (or check System Information, USB). The device shows vendor `12346` (0x303A), product `36830` (0x8FDE), name `Detent Dev`. No Seeed `0x2886` entry.
+8. Run `just fw-upload` again without touching BOOT. It resets and flashes on its own.
+
 Results:
 
 - (none yet)
