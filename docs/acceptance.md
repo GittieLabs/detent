@@ -57,4 +57,5 @@ Firmware (needs the XIAO ESP32-S3 on USB):
 
 Results:
 
-- (none yet)
+- Steps 1 to 6: `PASS`, 2026-11-04, build `147ecce` (plus the step 6 tooltip edits, since reverted). Keith confirmed "Accessibility: granted" after the manual grant and after both signed rebuilds, with no prompt. Both rebuilds had new code hashes and the same designated requirement as the granted build.
+- Steps 7 to 9 (firmware): not run yet. Not an M0 exit criterion.

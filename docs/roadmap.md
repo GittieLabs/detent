@@ -24,7 +24,7 @@ Tasks:
 
 Exit criteria:
 
-- [ ] Two consecutive signed rebuilds keep the Accessibility grant without re prompting (manual, `acceptance.md`).
+- [x] Two consecutive signed rebuilds keep the Accessibility grant without re prompting (manual, `acceptance.md`). Keith passed it on 2026-11-04 with build `147ecce`.
 - [x] CI green on main. First green run 41943577075 on 2026-11-05 (private repo `gittielabs/detent`).
 
 ## M1 Device speaks
@@ -111,5 +111,6 @@ Multiple connected devices, Bluetooth transport, then Windows.
 
 Newest first. One or two lines per session: what landed, what's next.
 
+- 2026-11-04 (later): M0 exit criteria both pass. Keith installed a Mac Developer cert and passed acceptance steps 1 to 6; firmware steps 7 to 9 are still to run. Next: `/plan-milestone` for M1.
 - 2026-11-04: All nine M0 tasks landed; CI green and repo public. M0 closes when Keith passes `acceptance.md` M0 steps 1 to 6 (needs an Apple Development certificate first). Then `/plan-milestone` for M1. License is now urgent (repo public, no LICENSE).
 - 2026-11-04: Plan written in claude.ai and split into these docs. Next: `/start-task` on the first M0 task.
