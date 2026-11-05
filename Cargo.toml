@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = ["protocol", "app/src-tauri", "tools/ctl-probe"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+license = "UNLICENSED" # PLACEHOLDER: MIT or Apache-2.0, Keith's call (roadmap open question)
+repository = "https://github.com/gittielabs/detent"
+publish = false
+
+[workspace.lints.rust]
+# CLAUDE.md: no `unsafe` outside app/src-tauri/src/macos/. That module opts in
+# with `#![allow(unsafe_code)]`; everywhere else this lint fails the build.
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }

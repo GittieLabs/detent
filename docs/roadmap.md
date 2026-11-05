@@ -12,7 +12,7 @@ Goal: a signed, tray only Tauri app in a monorepo with CI, and proof that TCC gr
 
 Tasks:
 
-- [ ] Create the Cargo workspace with members `protocol`, `app/src-tauri`, `tools/ctl-probe`. Add `rust-toolchain.toml` (stable), `.gitignore`, `rustfmt.toml`, and a `justfile` with `fmt`, `lint`, `test`, `build-dev`, `fw` targets.
+- [x] Create the Cargo workspace with members `protocol`, `app/src-tauri`, `tools/ctl-probe`. Add `rust-toolchain.toml` (stable), `.gitignore`, `rustfmt.toml`, and a `justfile` with `fmt`, `lint`, `test`, `build-dev`, `fw` targets.
 - [ ] Scaffold the Tauri 2 app in `app/` with a TypeScript UI (Vite, no UI framework decision yet; plain TS is fine for M0). Bundle identifier `com.gittielabs.detent` (placeholder until Keith confirms). Tray only: `LSUIElement` true, no window on launch, tray menu with "Accessibility: granted / not granted", "Open Detent" (stub window), "Quit".
 - [ ] Add `app/src-tauri/src/macos/` with an `accessibility_trusted()` wrapper around `AXIsProcessTrusted`, shown in the tray menu. This is the probe for the TCC exit criterion.
 - [ ] `scripts/build-dev.sh`: builds and signs the app with `APPLE_SIGNING_IDENTITY` from the environment, fails clearly if it's unset. Document usage in `README.md`.

@@ -1,0 +1,27 @@
+# Detent tasks. Run `just` to list them.
+
+default:
+    @just --list
+
+# Format all Rust code
+fmt:
+    cargo fmt --all
+
+# Check formatting and run clippy with warnings as errors
+lint:
+    cargo fmt --all --check
+    cargo clippy --workspace --all-targets -- -D warnings
+
+# Run all Rust tests
+test:
+    cargo test --workspace
+
+# Build and sign a dev build (needs APPLE_SIGNING_IDENTITY)
+build-dev:
+    @test -x scripts/build-dev.sh || { echo "scripts/build-dev.sh not written yet (M0 task)"; exit 1; }
+    scripts/build-dev.sh
+
+# Build the ESP32-S3 firmware
+fw:
+    @test -f firmware/platformio.ini || { echo "firmware/ not scaffolded yet (M0 task)"; exit 1; }
+    pio run -d firmware

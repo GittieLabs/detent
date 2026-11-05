@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+
+# Rust
+/target/
+
+# Node / UI
+node_modules/
+app/dist/
+
+# Tauri
+app/src-tauri/target/
+app/src-tauri/gen/
+
+# PlatformIO
+firmware/.pio/
+
+# Signing material never lives in the repo (CLAUDE.md)
+*.provisionprofile
+*.mobileprovision
+*.p12
+.env
+.env.*
