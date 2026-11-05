@@ -20,6 +20,10 @@ test:
 build-dev:
     scripts/build-dev.sh
 
+# Regenerate firmware/include/detent_protocol.h from the protocol crate
+gen-header:
+    scripts/gen-header.sh
+
 # Build the ESP32-S3 firmware
 fw:
     pio run -d firmware

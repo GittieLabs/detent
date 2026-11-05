@@ -4,15 +4,12 @@
 #include <Arduino.h>
 #include <USB.h>
 
+// Generated from the protocol crate by scripts/gen-header.sh. Never edit it.
+#include "detent_protocol.h"
+
 #if ARDUINO_USB_MODE != 0
 #error "Detent needs TinyUSB on the OTG peripheral (ARDUINO_USB_MODE=0)"
 #endif
-
-// TEMPORARY copy of protocol/src/ids.rs. Moves to the generated
-// include/detent_protocol.h in the gen-header task. PID is a placeholder
-// until the Espressif usb-pids allocation (D-014, D-026).
-static const uint16_t DETENT_VID = 0x303A;
-static const uint16_t DETENT_PID = 0x8FDE;
 
 // XIAO ESP32-S3 user LED (GPIO21) is active low.
 static const uint8_t LED_PIN = LED_BUILTIN;
@@ -26,8 +23,8 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LED_OFF);
 
-  USB.VID(DETENT_VID);
-  USB.PID(DETENT_PID);
+  USB.VID(DETENT_USB_VID);
+  USB.PID(DETENT_USB_PID);  // placeholder until the usb-pids allocation (D-014)
   USB.manufacturerName("GittieLabs");
   USB.productName("Detent Dev");  // PLACEHOLDER: "Detent <model name>"
   // CDC stays in M0 so `pio run -t upload` can reset into the bootloader
