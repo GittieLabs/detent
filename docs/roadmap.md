@@ -25,7 +25,7 @@ Tasks:
 Exit criteria:
 
 - [ ] Two consecutive signed rebuilds keep the Accessibility grant without re prompting (manual, `acceptance.md`).
-- [ ] CI green on main.
+- [x] CI green on main. First green run 41943577075 on 2026-11-05 (private repo `gittielabs/detent`).
 
 ## M1 Device speaks
 
