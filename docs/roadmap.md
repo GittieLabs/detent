@@ -19,7 +19,7 @@ Tasks:
 - [x] Create the `protocol` crate with `PROTOCOL_VERSION`, message type constants, VID, and a placeholder PID constant in `src/ids.rs` (pick an unused value in `0x8000..0x8FFF`, mark it `// PLACEHOLDER: replace with Espressif usb-pids allocation`). No codec yet.
 - [x] Create the PlatformIO project in `firmware/` targeting ESP32-S3 with Arduino-ESP32, TinyUSB enabled. Board is `seeed_xiao_esp32s3` unless Keith says otherwise. It only needs to build and blink in M0.
 - [x] `scripts/gen-header.sh` stub plus a test that will compare generated header and crate constants (can assert trivially for now). Replace the temporary VID/PID copy in `firmware/src/main.cpp` with the generated header.
-- [ ] GitHub Actions on `macos-latest`: `cargo fmt --check`, `cargo clippy --workspace -- -D warnings`, `cargo test --workspace`, `pnpm -C app tsc --noEmit`, `pio run -d firmware`.
+- [x] GitHub Actions on `macos-latest`: `cargo fmt --check`, `cargo clippy --workspace -- -D warnings`, `cargo test --workspace`, `pnpm -C app tsc --noEmit`, `pio run -d firmware`.
 - [ ] Write the M0 steps in `acceptance.md` for Keith.
 
 Exit criteria:

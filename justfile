@@ -31,3 +31,9 @@ fw:
 # Flash the firmware to a connected device
 fw-upload:
     pio run -d firmware -t upload
+
+# Run every CI check locally (same as .github/workflows/ci.yml)
+ci: lint test
+    pnpm -C app install --frozen-lockfile
+    pnpm -C app tsc --noEmit
+    pio run -d firmware

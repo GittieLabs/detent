@@ -1,0 +1,75 @@
+# Definition of done checks from CLAUDE.md. `just ci` runs the same locally.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    name: Rust and UI
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Installs the channel and components from rust-toolchain.toml.
+      - name: Rust toolchain
+        run: rustup toolchain install --no-self-update
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+
+      - name: Install UI dependencies
+        run: pnpm -C app install --frozen-lockfile
+
+      - name: cargo fmt
+        run: cargo fmt --all --check
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # Includes the check that firmware/include/detent_protocol.h matches the crate.
+      - name: cargo test
+        run: cargo test --workspace
+
+      - name: TypeScript
+        run: pnpm -C app tsc --noEmit
+
+  firmware:
+    name: Firmware
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: PlatformIO cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+
+      - name: Install PlatformIO
+        run: pip install platformio==6.1.19
+
+      - name: pio run
+        run: pio run -d firmware
