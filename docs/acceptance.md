@@ -34,12 +34,12 @@ Steps 1 to 6 prove the exit criterion "two consecutive signed rebuilds keep the 
 
 Setup, once:
 
-1. Make sure you have an Apple Development identity: `security find-identity -v -p codesigning`. If none says "Apple Development" (true on the build Mac as of 2026-11-04), create one: Xcode, Settings, Accounts, select your Apple ID, Manage Certificates, +, Apple Development. Then `export APPLE_SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)"`, ideally in your shell profile.
+1. Make sure you have a valid development identity: `security find-identity -v -p codesigning` lists one starting "Apple Development:" or the older "Mac Developer:". If not, create one: Xcode, Settings, Accounts, select your team, Manage Certificates, +, Apple Development. Then `export APPLE_SIGNING_IDENTITY="<that identity, quoted exactly as listed>"`, ideally in your shell profile. Never commit it.
 2. Start from a clean grant state: `tccutil reset Accessibility com.gittielabs.detent`.
 
 Signed build and tray:
 
-3. Run `just build-dev`. It ends with `build-dev: signed with Apple Development: ...`; an ad hoc result is a failure. Note the designated requirement: `codesign -dr - target/debug/bundle/macos/Detent.app`.
+3. Run `just build-dev`. It ends with `build-dev: signed with <your identity>`; an ad hoc result is a failure. Note the designated requirement: `codesign -dr - target/debug/bundle/macos/Detent.app`.
 4. `open target/debug/bundle/macos/Detent.app`. A tray icon (knob outline) appears; no Dock icon, no window. Click the tray icon: the menu shows "Accessibility: not granted", Open Detent, Quit Detent. Choose Open Detent, close the window that opens; the tray icon stays. Leave the app running.
 
 Grant, then rebuild twice:

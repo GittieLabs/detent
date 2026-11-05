@@ -45,7 +45,8 @@ APPLE_SIGNING_IDENTITY="$identity" pnpm -C "$root/app" tauri build --debug --bun
 
 [[ -d "$app" ]] || die "expected bundle not found at $app"
 codesign --verify --deep --strict "$app" || die "signature check failed for $app"
-details="$(codesign -dv "$app" 2>&1)"
+# -vv: Authority lines only appear at verbosity 2.
+details="$(codesign -dvv "$app" 2>&1)"
 if grep -q "Signature=adhoc" <<<"$details"; then
   die "$app is ad hoc signed; the identity was not applied."
 fi
