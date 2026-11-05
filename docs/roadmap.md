@@ -20,7 +20,7 @@ Tasks:
 - [x] Create the PlatformIO project in `firmware/` targeting ESP32-S3 with Arduino-ESP32, TinyUSB enabled. Board is `seeed_xiao_esp32s3` unless Keith says otherwise. It only needs to build and blink in M0.
 - [x] `scripts/gen-header.sh` stub plus a test that will compare generated header and crate constants (can assert trivially for now). Replace the temporary VID/PID copy in `firmware/src/main.cpp` with the generated header.
 - [x] GitHub Actions on `macos-latest`: `cargo fmt --check`, `cargo clippy --workspace -- -D warnings`, `cargo test --workspace`, `pnpm -C app tsc --noEmit`, `pio run -d firmware`.
-- [ ] Write the M0 steps in `acceptance.md` for Keith.
+- [x] Write the M0 steps in `acceptance.md` for Keith.
 
 Exit criteria:
 
@@ -98,17 +98,18 @@ Multiple connected devices, Bluetooth transport, then Windows.
 
 ## Open questions (Keith's call)
 
-- [ ] GitHub and trademark check on "Detent" before the repo goes public.
+- [x] GitHub and trademark check on "Detent" before the repo goes public. Keith made the repo public on 2026-11-04 without the check; rename the app and repo later if the name doesn't hold up (D-032).
 - [ ] Bundle identifier: `com.gittielabs.detent` or another domain.
-- [ ] License for app and firmware: MIT or Apache 2.0.
+- [ ] License for app and firmware: MIT or Apache 2.0. **Now urgent:** the repo is public with no `LICENSE`, which means all rights reserved. `Cargo.toml` says `UNLICENSED` as a placeholder.
 - [ ] Button count on the first device. Doesn't block app work; HELLO reports it.
 - [ ] Exact ESP32-S3 board (assumed XIAO ESP32-S3).
 - [ ] App and tray icons are placeholders (a knob outline in `app/src-tauri/icons/`). Final artwork before v0.1.
 - [ ] Homepage container URL, once it's running.
-- [ ] File the Espressif usb-pids PR once the repo is public.
+- [ ] File the Espressif usb-pids PR once the repo is public. The repo is public now; Espressif allocates PIDs to open source projects, so this waits on the license.
 
 ## Session log
 
 Newest first. One or two lines per session: what landed, what's next.
 
+- 2026-11-04: All nine M0 tasks landed; CI green and repo public. M0 closes when Keith passes `acceptance.md` M0 steps 1 to 6 (needs an Apple Development certificate first). Then `/plan-milestone` for M1. License is now urgent (repo public, no LICENSE).
 - 2026-11-04: Plan written in claude.ai and split into these docs. Next: `/start-task` on the first M0 task.

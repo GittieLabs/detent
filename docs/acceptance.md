@@ -30,20 +30,30 @@ Record format: `PASS` or `FAIL`, date, build (git short SHA), one line of notes.
 
 ## M0
 
-1. Set `APPLE_SIGNING_IDENTITY` to your Apple Development identity (`security find-identity -v -p codesigning`).
-   If that lists no "Apple Development" identity (true on the build Mac as of 2026-11-04), create one first: Xcode, Settings, Accounts, select your Apple ID, Manage Certificates, +, Apple Development.
-2. Run `scripts/build-dev.sh` and launch the app. Confirm a tray icon appears and no Dock icon.
-   Click the tray icon, choose Open Detent, and close the window that opens. The tray icon stays and the app keeps running. Choose Quit Detent; the tray icon disappears.
-3. Tray menu shows "Accessibility: not granted". Grant it in System Settings, Privacy & Security, Accessibility. Relaunch; tray shows "granted".
-   Also check without relaunching: after granting or revoking, click the tray icon again; the line should update.
-4. Make a trivial code change, rebuild with `scripts/build-dev.sh`, relaunch. Tray still shows "granted" with no new prompt.
-5. Repeat step 4 once more.
+Steps 1 to 6 prove the exit criterion "two consecutive signed rebuilds keep the Accessibility grant". Steps 7 to 9 check the firmware; they aren't an M0 exit criterion but are worth doing while the board is handy. The app is `target/debug/bundle/macos/Detent.app` throughout.
 
-Firmware (any time; needs the XIAO ESP32-S3 on USB):
+Setup, once:
 
-6. Run `just fw-upload`. The first flash over stock firmware may need BOOT held while plugging in. The orange user LED blinks about once a second.
-7. Run `ioreg -p IOUSB -l -w0 | grep -iE '"(idVendor|idProduct|USB Product Name)"'` (or check System Information, USB). The device shows vendor `12346` (0x303A), product `36830` (0x8FDE), name `Detent Dev`. No Seeed `0x2886` entry.
-8. Run `just fw-upload` again without touching BOOT. It resets and flashes on its own.
+1. Make sure you have an Apple Development identity: `security find-identity -v -p codesigning`. If none says "Apple Development" (true on the build Mac as of 2026-11-04), create one: Xcode, Settings, Accounts, select your Apple ID, Manage Certificates, +, Apple Development. Then `export APPLE_SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)"`, ideally in your shell profile.
+2. Start from a clean grant state: `tccutil reset Accessibility com.gittielabs.detent`.
+
+Signed build and tray:
+
+3. Run `just build-dev`. It ends with `build-dev: signed with Apple Development: ...`; an ad hoc result is a failure. Note the designated requirement: `codesign -dr - target/debug/bundle/macos/Detent.app`.
+4. `open target/debug/bundle/macos/Detent.app`. A tray icon (knob outline) appears; no Dock icon, no window. Click the tray icon: the menu shows "Accessibility: not granted", Open Detent, Quit Detent. Choose Open Detent, close the window that opens; the tray icon stays. Leave the app running.
+
+Grant, then rebuild twice:
+
+5. Detent never prompts, so add it yourself: System Settings, Privacy & Security, Accessibility, +, pick `target/debug/bundle/macos/Detent.app`, make sure the toggle is on. Click the tray icon again; the line now says "Accessibility: granted" without a relaunch.
+6. Twice in a row: Quit Detent from the tray, change the tooltip text in `app/src-tauri/src/tray.rs` (for example `"Detent"` to `"Detent 1"`, then `"Detent 2"`), run `just build-dev`, open the app. Each time the tray shows "Accessibility: granted" and macOS shows no prompt. `codesign -dr -` prints the same designated requirement as step 3. Revert the tooltip change afterwards.
+
+If step 6 shows "not granted", compare the `codesign -dr -` output with step 3: a different requirement means the signing identity changed between builds.
+
+Firmware (needs the XIAO ESP32-S3 on USB):
+
+7. Run `just fw-upload`. The first flash over stock firmware may need BOOT held while plugging in. The orange user LED blinks about once a second.
+8. Run `ioreg -p IOUSB -l -w0 | grep -iE '"(idVendor|idProduct|USB Product Name)"'` (or check System Information, USB). The device shows vendor `12346` (0x303A), product `36830` (0x8FDE), name `Detent Dev`. No Seeed `0x2886` entry.
+9. Run `just fw-upload` again without touching BOOT. It resets and flashes on its own.
 
 Results:
 
