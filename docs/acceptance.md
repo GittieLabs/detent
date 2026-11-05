@@ -59,3 +59,19 @@ Results:
 
 - Steps 1 to 6: `PASS`, 2026-11-04, build `147ecce` (plus the step 6 tooltip edits, since reverted). Keith confirmed "Accessibility: granted" after the manual grant and after both signed rebuilds, with no prompt. Both rebuilds had new code hashes and the same designated requirement as the granted build.
 - Steps 7 to 9 (firmware): not run yet. Not an M0 exit criterion.
+
+## M1
+
+Needs the XIAO ESP32-S3 on USB, wired with the buttons, encoder, and OLED. Steps 3 to 6 are the M1 exit criteria; the rest check pieces as their tasks land. Exact `ctl-probe` flags are filled in by the task that adds them.
+
+1. HID layout spike (task 1). With the spike firmware flashed, run the raw `ctl-probe` mode the task names. Record whether macOS shows any permission prompt (Input Monitoring especially) when the probe opens the device, and whether the volume keys still change the volume while the probe runs.
+2. USB identity (task 5). `ioreg -p IOUSB -l -w0 | grep -iE '"(idVendor|idProduct|USB Serial Number|USB Product Name)"'` shows vendor `12346` (0x303A), product `36830` (0x8FDE), a 12 hex char serial, and `Detent <model>`. A second unit, if you have one, shows a different serial.
+3. Replug (exit criterion). Run `ctl-probe --count-hellos 20`, then unplug and replug the device 20 times, waiting for each HELLO line. The probe exits 0 after the 20th.
+4. Keyboard isolation (exit criterion). With `ctl-probe` running, type a sentence on the built in keyboard and on any external keyboard. The probe prints nothing.
+5. Controls (task 9). With `ctl-probe` running, press, hold (over 600 ms), and release each button, and turn the encoder in Mapped mode both ways. Each shows the matching BUTTON down, long press, up, and ENCODER lines with the right sign.
+6. Volume pass through (exit criterion). Quit `ctl-probe`. Put the encoder in Volume mode from the OLED menu. Turning it moves the macOS volume with the native HUD; pressing it toggles mute.
+7. OLED (task 11). The screen shows connection, paired state, and mode. The menu lists Volume, Mapped, Setup, Device info; Setup shows the same serial as step 2; leaving Setup makes `ctl-probe` print a HELLO.
+
+Results:
+
+- (none yet)
