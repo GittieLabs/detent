@@ -1,0 +1,17 @@
+{
+  "name": "detent-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "tsc": "tsc",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  }
+}
