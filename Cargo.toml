@@ -5,7 +5,7 @@ members = ["protocol", "app/src-tauri", "tools/ctl-probe"]
 [workspace.package]
 version = "0.0.0"
 edition = "2021"
-license = "UNLICENSED" # PLACEHOLDER: MIT or Apache-2.0, Keith's call (roadmap open question)
+license = "Apache-2.0"
 repository = "https://github.com/gittielabs/detent"
 publish = false
 

@@ -32,4 +32,4 @@ Other tasks: `just fmt`, `just lint`, `just test`, `just fw`. Run `just` to list
 
 ## License
 
-TBD.
+Apache License 2.0 — see [`LICENSE`](LICENSE).

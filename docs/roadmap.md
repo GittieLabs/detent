@@ -100,12 +100,12 @@ Multiple connected devices, Bluetooth transport, then Windows.
 
 - [x] GitHub and trademark check on "Detent" before the repo goes public. Keith made the repo public on 2026-11-04 without the check; rename the app and repo later if the name doesn't hold up (D-032).
 - [ ] Bundle identifier: `com.gittielabs.detent` or another domain.
-- [ ] License for app and firmware: MIT or Apache 2.0. **Now urgent:** the repo is public with no `LICENSE`, which means all rights reserved. `Cargo.toml` says `UNLICENSED` as a placeholder.
+- [x] License for app and firmware: MIT or Apache 2.0. Apache-2.0, matching GittieLabs' copperplane (D-033).
 - [ ] Button count on the first device. Doesn't block app work; HELLO reports it.
 - [ ] Exact ESP32-S3 board (assumed XIAO ESP32-S3).
 - [ ] App and tray icons are placeholders (a knob outline in `app/src-tauri/icons/`). Final artwork before v0.1.
 - [ ] Homepage container URL, once it's running.
-- [ ] File the Espressif usb-pids PR once the repo is public. The repo is public now; Espressif allocates PIDs to open source projects, so this waits on the license.
+- [ ] File the Espressif usb-pids PR once the repo is public. Unblocked: the repo is public and Apache-2.0. Keith files it (it's a PR from his GitHub account to `espressif/usb-pids`).
 
 ## Session log
 
