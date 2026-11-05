@@ -16,12 +16,19 @@ Status: pre-alpha, M0. See `docs/roadmap.md`.
 
 Requirements: Rust stable, Node with pnpm, PlatformIO CLI, Xcode command line tools, and an Apple Development signing identity.
 
+Find your identity, set it, and build:
+
 ```
+security find-identity -v -p codesigning
 export APPLE_SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)"
-scripts/build-dev.sh
+scripts/build-dev.sh        # or: just build-dev
 ```
 
-Dev builds are signed with a stable identity so macOS permission grants (Accessibility) survive rebuilds.
+The script builds a debug `Detent.app` at `target/debug/bundle/macos/Detent.app`, signs it, and checks the signature. It stops with a clear message if `APPLE_SIGNING_IDENTITY` is unset, set to `-` (ad hoc), or doesn't match an identity in your keychain.
+
+Dev builds are signed with a stable identity so macOS permission grants (Accessibility) survive rebuilds. Ad hoc signatures change every build and reset those grants. Keep the identity in your shell profile or environment; it never goes in the repo.
+
+Other tasks: `just fmt`, `just lint`, `just test`, `just fw`. Run `just` to list them.
 
 ## License
 

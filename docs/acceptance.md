@@ -31,6 +31,7 @@ Record format: `PASS` or `FAIL`, date, build (git short SHA), one line of notes.
 ## M0
 
 1. Set `APPLE_SIGNING_IDENTITY` to your Apple Development identity (`security find-identity -v -p codesigning`).
+   If that lists no "Apple Development" identity (true on the build Mac as of 2026-11-04), create one first: Xcode, Settings, Accounts, select your Apple ID, Manage Certificates, +, Apple Development.
 2. Run `scripts/build-dev.sh` and launch the app. Confirm a tray icon appears and no Dock icon.
    Click the tray icon, choose Open Detent, and close the window that opens. The tray icon stays and the app keeps running. Choose Quit Detent; the tray icon disappears.
 3. Tray menu shows "Accessibility: not granted". Grant it in System Settings, Privacy & Security, Accessibility. Relaunch; tray shows "granted".
