@@ -12,8 +12,16 @@ pub const ID_ACCESSIBILITY: &str = "accessibility";
 pub const ID_OPEN: &str = "open";
 pub const ID_QUIT: &str = "quit";
 
-/// Text of the Accessibility status line. `None` means not yet checked; the
-/// `macos::accessibility_trusted()` task wires in the real value.
+/// Accessibility status for this process. `None` off macOS, where the grant
+/// doesn't exist.
+pub fn accessibility_status() -> Option<bool> {
+    #[cfg(target_os = "macos")]
+    return Some(crate::macos::accessibility_trusted());
+    #[cfg(not(target_os = "macos"))]
+    return None;
+}
+
+/// Text of the Accessibility status line.
 pub fn accessibility_label(trusted: Option<bool>) -> &'static str {
     match trusted {
         Some(true) => "Accessibility: granted",
@@ -26,7 +34,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let accessibility = MenuItem::with_id(
         app,
         ID_ACCESSIBILITY,
-        accessibility_label(None),
+        accessibility_label(accessibility_status()),
         false,
         None::<&str>,
     )?;
@@ -47,6 +55,14 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .icon_as_template(true)
         .tooltip("Detent")
         .menu(&menu)
+        // Re-check on hover and click so a grant made in System Settings shows
+        // up without a relaunch. The call is cheap and never prompts.
+        .on_tray_icon_event(move |_tray, _event| {
+            let label = accessibility_label(accessibility_status());
+            if let Err(err) = accessibility.set_text(label) {
+                eprintln!("detent: could not update accessibility label: {err}");
+            }
+        })
         .on_menu_event(|app, event| match event.id().as_ref() {
             ID_OPEN => {
                 if let Err(err) = crate::open_settings(app) {
@@ -72,6 +88,13 @@ mod tests {
             "Accessibility: not granted"
         );
         assert_eq!(accessibility_label(None), "Accessibility: unknown");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_status_is_always_known() {
+        let label = accessibility_label(accessibility_status());
+        assert_ne!(label, accessibility_label(None));
     }
 
     #[test]

@@ -34,6 +34,7 @@ Record format: `PASS` or `FAIL`, date, build (git short SHA), one line of notes.
 2. Run `scripts/build-dev.sh` and launch the app. Confirm a tray icon appears and no Dock icon.
    Click the tray icon, choose Open Detent, and close the window that opens. The tray icon stays and the app keeps running. Choose Quit Detent; the tray icon disappears.
 3. Tray menu shows "Accessibility: not granted". Grant it in System Settings, Privacy & Security, Accessibility. Relaunch; tray shows "granted".
+   Also check without relaunching: after granting or revoking, click the tray icon again; the line should update.
 4. Make a trivial code change, rebuild with `scripts/build-dev.sh`, relaunch. Tray still shows "granted" with no new prompt.
 5. Repeat step 4 once more.
 

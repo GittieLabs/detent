@@ -14,7 +14,7 @@ Tasks:
 
 - [x] Create the Cargo workspace with members `protocol`, `app/src-tauri`, `tools/ctl-probe`. Add `rust-toolchain.toml` (stable), `.gitignore`, `rustfmt.toml`, and a `justfile` with `fmt`, `lint`, `test`, `build-dev`, `fw` targets.
 - [x] Scaffold the Tauri 2 app in `app/` with a TypeScript UI (Vite, no UI framework decision yet; plain TS is fine for M0). Bundle identifier `com.gittielabs.detent` (placeholder until Keith confirms). Tray only: `LSUIElement` true, no window on launch, tray menu with "Accessibility: granted / not granted", "Open Detent" (stub window), "Quit".
-- [ ] Add `app/src-tauri/src/macos/` with an `accessibility_trusted()` wrapper around `AXIsProcessTrusted`, shown in the tray menu. This is the probe for the TCC exit criterion.
+- [x] Add `app/src-tauri/src/macos/` with an `accessibility_trusted()` wrapper around `AXIsProcessTrusted`, shown in the tray menu. This is the probe for the TCC exit criterion.
 - [ ] `scripts/build-dev.sh`: builds and signs the app with `APPLE_SIGNING_IDENTITY` from the environment, fails clearly if it's unset. Document usage in `README.md`.
 - [ ] Create the `protocol` crate with `PROTOCOL_VERSION`, message type constants, VID, and a placeholder PID constant in `src/ids.rs` (pick an unused value in `0x8000..0x8FFF`, mark it `// PLACEHOLDER: replace with Espressif usb-pids allocation`). No codec yet.
 - [ ] Create the PlatformIO project in `firmware/` targeting ESP32-S3 with Arduino-ESP32, TinyUSB enabled. Board is `seeed_xiao_esp32s3` unless Keith says otherwise. It only needs to build and blink in M0.
