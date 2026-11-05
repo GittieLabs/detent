@@ -1,0 +1,25 @@
+# Decisions
+
+Append only. A changed decision gets a new row that supersedes the old one (say which). Newest at the bottom.
+
+| ID | Date | Decision | Rejected | Why |
+| --- | --- | --- | --- | --- |
+| D-001 | 2026-11-04 | Vendor defined HID for app traffic | Keyboard emulation; CDC serial | Keyboard leaks keystrokes and can't be told apart from a real keyboard. Serial works but shows up as a tty and is easier to collide with other tools. |
+| D-002 | 2026-11-04 | ESP32-S3 with native USB | Classic ESP32 behind a UART bridge | Native USB is required for custom HID and composite devices. |
+| D-003 | 2026-11-04 | Tauri 2, Rust backend, TypeScript UI | Native Swift; Electron | Keeps a Windows door open, small binary, Rust fits the device layer. Swift would be simpler for macOS APIs; we accept some objc bridging. |
+| D-004 | 2026-11-04 | Unit identity is VID + PID + serial; PID is the model | Mapping by PID alone | Two units of the same model must be distinguishable. |
+| D-005 | 2026-11-04 | Volume and mute pass through as Consumer Control from the device | App only volume | Works with the app closed and shows the native HUD. App volume actions still exist for remappable controls. |
+| D-006 | 2026-11-04 | Two scopes: Everywhere and Only in app, app wins | Profiles or layers | Covers the CAD case with one concept. Revisit only with real demand. |
+| D-007 | 2026-11-04 | Shortcuts via CGEventPost with Accessibility; app automation via AppleScript | AppleScript System Events for keystrokes | CGEvent is faster and more reliable; AppleScript stays the escape hatch. |
+| D-008 | 2026-11-04 | Versioned JSON config file | SQLite | Human readable, diffable, trivially exported. |
+| D-009 | 2026-11-04 | Dashboard in a Tauri window with no IPC | External browser kiosk mode | One app to manage; remote content stays sandboxed. |
+| D-010 | 2026-11-04 | Dev builds signed with Apple Development cert; releases with Developer ID and notarization | Ad hoc signing | Ad hoc signatures change per build and reset Accessibility grants. |
+| D-011 | 2026-11-04 | Transport trait from day one | Hardcode hidapi | Bluetooth and multi device later without touching the router. |
+| D-012 | 2026-11-04 | Monorepo: app, firmware, protocol | Separate repos | Protocol changes land on both sides in one commit. |
+| D-013 | 2026-11-04 | Open source under the GittieLabs GitHub org | Closed source | Matches the maker goal; others can build devices against the protocol. |
+| D-014 | 2026-11-04 | PID requested from Espressif's usb-pids program under VID 0x303A | TinyUSB default PIDs; pid.codes under VID 0x1209 | Free, keeps the Espressif VID, avoids colliding with stock firmware on default PIDs. Placeholder PID until the PR merges. |
+| D-015 | 2026-11-04 | Encoder has three device side modes: Volume, Menu, Mapped | Encoder always app driven | Volume and menu work with the app closed; Mapped gives apps a scrub or zoom wheel. |
+| D-016 | 2026-11-04 | OLED menu split into firmware owned and app owned items | Whole menu in firmware | Adding an app to the menu is a config change, not a flash. |
+| D-017 | 2026-11-04 | Plasticity is the first app scope target | FreeCAD, KiCad, Fusion | Keith's daily tool, and it's shortcut driven, which exercises Send shortcut directly. |
+| D-018 | 2026-11-04 | Dashboard URL is a per action setting with no default | Hardcoded Homepage URL | The Homepage container isn't set up yet and its address will change. |
+| D-019 | 2026-11-04 | Project name Detent, repo `gittielabs/detent` | Knurl, Switchyard, Patchbay, Pullup, Throw | Knurl is taken by an existing open source macOS macro pad app; Switchyard and Patchbay are crowded. Detent names the encoder's physical click. |
