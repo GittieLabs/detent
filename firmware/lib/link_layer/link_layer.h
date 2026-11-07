@@ -55,6 +55,12 @@ class Link {
   // Call often; sends HEARTBEAT when due.
   void tick(uint32_t now_ms);
 
+  // Input events, from real controls or TEST_INJECT. Return false, sending
+  // nothing, when unmounted or when the event is invalid (bad action, zero
+  // delta).
+  bool send_button(uint8_t control, uint8_t action);
+  bool send_encoder(uint8_t control, int8_t delta);
+
   void set_encoder_mode(uint8_t mode) { encoder_mode_ = mode; }
   uint8_t encoder_mode() const { return encoder_mode_; }
   bool mounted() const { return mounted_; }

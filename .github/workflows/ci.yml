@@ -71,8 +71,8 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio==6.1.19
 
-      - name: pio run
-        run: pio run -d firmware
+      - name: pio run (release and debug)
+        run: pio run -d firmware -e xiao_esp32s3 -e xiao_esp32s3_debug
 
       # Native C++ tests against the Rust codec's golden vectors (D-035).
       - name: pio test (native)

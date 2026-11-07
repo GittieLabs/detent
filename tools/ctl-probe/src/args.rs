@@ -1,4 +1,8 @@
-//! Command line parsing. No dependencies; the surface is small.
+//! Command line parsing. No dependencies; the surface is small (D-041).
+
+use detent_protocol::codec::InjectEvent;
+
+use crate::inject;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Command {
@@ -7,6 +11,10 @@ pub enum Command {
     Watch {
         raw: bool,
         count_hellos: Option<u32>,
+        /// Sent as TEST_INJECT after each connect (debug firmware only).
+        inject: Option<Vec<InjectEvent>>,
+        /// Exit 0 after this many seconds.
+        exit_after: Option<u64>,
     },
     /// List every HID entry with Detent's VID.
     List,
@@ -16,6 +24,9 @@ pub enum Command {
 
 pub const USAGE: &str = "usage:
   ctl-probe [--raw] [--count-hellos N]   print decoded events; reopen after unplug
+            [--inject SCRIPT]            after connecting, send TEST_INJECT (debug firmware)
+            [--exit-after SECS]          exit 0 after SECS (not with --count-hellos)
+  SCRIPT: \"B1:down B1:up@120 E5:+2@50\"; B<id>:<down|up|long>, E<id>:<+n|-n>, @ms waits after the previous event
   ctl-probe list                         list HID entries with Detent's VID
   ctl-probe raw [--secs N]               print undecoded reports (default 10 s)";
 
@@ -30,6 +41,8 @@ pub fn parse(args: &[String]) -> Result<Command, String> {
     };
     let mut raw = false;
     let mut count_hellos = None;
+    let mut inject = None;
+    let mut exit_after = None;
     let mut secs = 10;
     while let Some(arg) = it.next() {
         match (sub, arg) {
@@ -44,6 +57,17 @@ pub fn parse(args: &[String]) -> Result<Command, String> {
                 }
                 count_hellos = Some(n);
             }
+            ("watch", "--inject") => {
+                let v = it.next().ok_or("--inject needs a script")?;
+                inject = Some(inject::parse(v)?);
+            }
+            ("watch", "--exit-after") => {
+                let v = it.next().ok_or("--exit-after needs a value")?;
+                exit_after = Some(
+                    v.parse()
+                        .map_err(|_| format!("bad --exit-after value: {v}"))?,
+                );
+            }
             ("raw", "--secs") => {
                 let v = it.next().ok_or("--secs needs a value")?;
                 secs = v.parse().map_err(|_| format!("bad --secs value: {v}"))?;
@@ -52,7 +76,15 @@ pub fn parse(args: &[String]) -> Result<Command, String> {
         }
     }
     match sub {
-        "watch" => Ok(Command::Watch { raw, count_hellos }),
+        "watch" if count_hellos.is_some() && exit_after.is_some() => {
+            Err("--exit-after can't be combined with --count-hellos".into())
+        }
+        "watch" => Ok(Command::Watch {
+            raw,
+            count_hellos,
+            inject,
+            exit_after,
+        }),
         "list" => Ok(Command::List),
         "raw" => Ok(Command::Raw { secs }),
         other => Err(format!("unknown command: {other}")),
@@ -68,29 +100,41 @@ mod tests {
         parse(&args)
     }
 
+    fn watch(raw: bool, count_hellos: Option<u32>) -> Command {
+        Command::Watch {
+            raw,
+            count_hellos,
+            inject: None,
+            exit_after: None,
+        }
+    }
+
     #[test]
     fn watch_is_the_default() {
-        assert_eq!(
-            p(""),
-            Ok(Command::Watch {
-                raw: false,
-                count_hellos: None
-            })
-        );
-        assert_eq!(
-            p("--raw"),
-            Ok(Command::Watch {
-                raw: true,
-                count_hellos: None
-            })
-        );
-        assert_eq!(
-            p("--count-hellos 20 --raw"),
-            Ok(Command::Watch {
-                raw: true,
-                count_hellos: Some(20)
-            })
-        );
+        assert_eq!(p(""), Ok(watch(false, None)));
+        assert_eq!(p("--raw"), Ok(watch(true, None)));
+        assert_eq!(p("--count-hellos 20 --raw"), Ok(watch(true, Some(20))));
+    }
+
+    #[test]
+    fn inject_and_exit_after() {
+        // The script is one argument, as the shell passes a quoted string.
+        let args: Vec<String> = ["--inject", "B1:down B1:up@120", "--exit-after", "3"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let Ok(Command::Watch {
+            inject: Some(evs),
+            exit_after: Some(3),
+            ..
+        }) = parse(&args)
+        else {
+            panic!("{:?}", parse(&args));
+        };
+        assert_eq!(evs.len(), 2);
+        assert!(p("--inject B1:press").is_err());
+        assert!(p("--exit-after x").is_err());
+        assert!(p("--count-hellos 2 --exit-after 3").is_err());
     }
 
     #[test]

@@ -54,7 +54,7 @@ Device sends HELLO when the host mounts it, on REQUEST_HELLO, and after leaving 
 | `0x82` | MENU | `total u8, index u8, item_id u8, label_len u8, label [u8; 16]`. One app owned item per report, index `0..total-1`. `total = 0` clears the app owned items, and then every other byte is zero. Otherwise `label_len` is 1 to 16 and the label is printable ASCII (`0x20..0x7E`), zero padded to 16 bytes. Payload is always 20 bytes. |
 | `0x83` | STATUS | `text_len u8, text [u8; 20]`. Short status line for the OLED, for example the dashboard now showing. `text_len` 0 to 20 (0 clears the line), printable ASCII, zero padded to 20 bytes. Payload is always 21 bytes. |
 | `0x84` | REQUEST_HELLO | Empty. |
-| `0xF0` | TEST_INJECT | Debug firmware only. `count u8`, then `count` events of `(type u8, a u8, b u8, delay_ms u16)` where `type/a/b` are a BUTTON or ENCODER message's type and first two payload bytes. Device replays them through the real USB path. Release firmware ignores this type. 1 to 11 events; each must be a valid BUTTON or ENCODER (defined action, nonzero delta). `delay_ms` is little endian. |
+| `0xF0` | TEST_INJECT | Debug firmware only. `count u8`, then `count` events of `(type u8, a u8, b u8, delay_ms u16)` where `type/a/b` are a BUTTON or ENCODER message's type and first two payload bytes. Device replays them through the real USB path. Release firmware ignores this type. Each event fires `delay_ms` after the previous one (the first, after the report arrives); a new TEST_INJECT replaces any script still running; replayed events use the same seq counter as real input. 1 to 11 events; each must be a valid BUTTON or ENCODER (defined action, nonzero delta). `delay_ms` is little endian. |
 
 ## Identity
 

@@ -20,6 +20,10 @@ test:
 build-dev:
     scripts/build-dev.sh
 
+# Hardware in the loop test: flashes debug then release firmware (board on USB)
+hil:
+    scripts/hil.sh
+
 # Run ctl-probe, e.g. `just probe`, `just probe --raw`, `just probe --count-hellos 20`
 probe *ARGS:
     cargo run -q -p ctl-probe -- {{ARGS}}
@@ -31,6 +35,10 @@ gen-header:
 # Build the ESP32-S3 firmware
 fw:
     pio run -d firmware
+
+# Build the debug firmware (TEST_INJECT enabled; never ship it)
+fw-debug:
+    pio run -d firmware -e xiao_esp32s3_debug
 
 # Run the firmware's native C++ tests (no hardware)
 fw-test:
@@ -44,5 +52,5 @@ fw-upload:
 ci: lint test
     pnpm -C app install --frozen-lockfile
     pnpm -C app tsc --noEmit
-    pio run -d firmware
+    pio run -d firmware -e xiao_esp32s3 -e xiao_esp32s3_debug
     pio test -d firmware -e native

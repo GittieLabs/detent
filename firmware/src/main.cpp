@@ -7,10 +7,16 @@
 #include <Arduino.h>
 
 #include "detent_protocol.h"
+#include "injector.h"
 #include "link_layer.h"
 #include "report.h"
 #include "usb_device.h"
 #include "version.h"
+
+// Set by the xiao_esp32s3_debug env only. Release firmware ignores TEST_INJECT.
+#ifndef DETENT_TEST_INJECT
+#define DETENT_TEST_INJECT 0
+#endif
 
 namespace {
 
@@ -37,6 +43,7 @@ struct UsbTransport : detent::LinkTransport {
 
 UsbTransport transport;
 detent::Link device_link(kLinkConfig, transport);
+detent::Injector injector(DETENT_TEST_INJECT != 0);
 
 // XIAO ESP32-S3 user LED (GPIO21) is active low. Off: no host. Blinking:
 // mounted, not paired. Solid: paired.
@@ -66,8 +73,15 @@ void handle_report(const uint8_t* report, uint32_t now) {
     case DETENT_MSG_REQUEST_HELLO:
     case DETENT_MSG_HELLO_ACK:
       break;  // handled by the link
+    case DETENT_MSG_TEST_INJECT:
+      if (injector.load(msg, now)) {
+        detent::usb::log().printf("inject: %u events\n", msg.inject_count);
+      } else {
+        detent::usb::log().print("inject: ignored (release firmware)\n");
+      }
+      break;
     default:
-      // MENU, STATUS, TEST_INJECT: later M1 tasks.
+      // MENU, STATUS: later M1 tasks.
       detent::usb::log().printf("link: type 0x%02X not handled yet\n", msg.type);
       break;
   }
@@ -96,6 +110,15 @@ void loop() {
   uint8_t report[DETENT_REPORT_LEN];
   while (detent::usb::poll_report(report)) {
     handle_report(report, now);
+  }
+
+  detent::InjectEvent ev;
+  while (injector.next_due(now, &ev)) {
+    if (ev.type == DETENT_MSG_BUTTON) {
+      device_link.send_button(ev.control, ev.value);
+    } else {
+      device_link.send_encoder(ev.control, static_cast<int8_t>(ev.value));
+    }
   }
 
   device_link.tick(now);

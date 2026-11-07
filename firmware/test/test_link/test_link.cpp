@@ -206,6 +206,24 @@ static void test_other_messages_are_handed_back() {
   TEST_ASSERT_EQUAL_size_t(1, tx->count);
 }
 
+static void test_input_events_go_out_with_the_shared_seq() {
+  lnk->on_mount(0);  // HELLO, seq 0
+  TEST_ASSERT_TRUE(lnk->send_button(4, DETENT_ACTION_DOWN));
+  detent::pack_button(expected, 1, 4, DETENT_ACTION_DOWN);
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, tx->last(), DETENT_REPORT_LEN);
+  TEST_ASSERT_TRUE(lnk->send_encoder(5, -2));
+  detent::pack_encoder(expected, 2, 5, -2);
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, tx->last(), DETENT_REPORT_LEN);
+}
+
+static void test_input_events_refused_when_invalid_or_unmounted() {
+  TEST_ASSERT_FALSE(lnk->send_button(4, DETENT_ACTION_DOWN));
+  lnk->on_mount(0);
+  TEST_ASSERT_FALSE(lnk->send_button(4, 9));
+  TEST_ASSERT_FALSE(lnk->send_encoder(5, 0));
+  TEST_ASSERT_EQUAL_size_t(1, tx->count);
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_silent_until_mounted);
@@ -221,5 +239,7 @@ int main() {
   RUN_TEST(test_no_heartbeat_after_unmount_and_hello_again_on_remount);
   RUN_TEST(test_malformed_reports_are_counted_and_dropped);
   RUN_TEST(test_other_messages_are_handed_back);
+  RUN_TEST(test_input_events_go_out_with_the_shared_seq);
+  RUN_TEST(test_input_events_refused_when_invalid_or_unmounted);
   return UNITY_END();
 }

@@ -64,4 +64,18 @@ void Link::tick(uint32_t now_ms) {
   if (pack_heartbeat(r, seq_, now_ms / 1000, encoder_mode_)) send(r);
 }
 
+bool Link::send_button(uint8_t control, uint8_t action) {
+  uint8_t r[DETENT_REPORT_LEN];
+  if (!mounted_ || !pack_button(r, seq_, control, action)) return false;
+  send(r);
+  return true;
+}
+
+bool Link::send_encoder(uint8_t control, int8_t delta) {
+  uint8_t r[DETENT_REPORT_LEN];
+  if (!mounted_ || !pack_encoder(r, seq_, control, delta)) return false;
+  send(r);
+  return true;
+}
+
 }  // namespace detent

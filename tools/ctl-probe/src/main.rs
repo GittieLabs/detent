@@ -12,13 +12,14 @@
 mod args;
 mod format;
 mod hellos;
+mod inject;
 
 use std::ffi::CString;
 use std::process::ExitCode;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use detent_protocol::codec::{encode_app, AppMessage, DeviceMessage};
+use detent_protocol::codec::{encode_app, AppMessage, DeviceMessage, InjectEvent};
 use detent_protocol::{ids, REPORT_LEN, USAGE, USAGE_PAGE, VENDOR_REPORT_ID};
 use hidapi::{DeviceInfo, HidApi, HidDevice};
 
@@ -94,9 +95,9 @@ fn raw(api: &mut HidApi, secs: u64) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// Sends REQUEST_HELLO: report ID, then the 63 byte report.
-fn request_hello(dev: &HidDevice, seq: u8) -> Result<(), String> {
-    let report = encode_app(seq, &AppMessage::RequestHello).map_err(|e| e.to_string())?;
+/// Sends one app to device message: report ID, then the 63 byte report.
+fn send(dev: &HidDevice, seq: u8, msg: &AppMessage) -> Result<(), String> {
+    let report = encode_app(seq, msg).map_err(|e| e.to_string())?;
     let mut out = [0u8; 1 + REPORT_LEN];
     out[0] = VENDOR_REPORT_ID;
     out[1..].copy_from_slice(&report);
@@ -122,8 +123,16 @@ fn on_progress(p: Progress) -> Option<ExitCode> {
     }
 }
 
-fn watch(api: &mut HidApi, raw: bool, count_hellos: Option<u32>) -> Result<ExitCode, String> {
+fn watch(
+    api: &mut HidApi,
+    raw: bool,
+    count_hellos: Option<u32>,
+    inject: Option<Vec<InjectEvent>>,
+    exit_after: Option<u64>,
+) -> Result<ExitCode, String> {
     let start = Instant::now();
+    let deadline = exit_after.map(|s| start + Duration::from_secs(s));
+    let expired = || deadline.is_some_and(|d| Instant::now() >= d);
     let stamp = || format!("{:>8.3}s", start.elapsed().as_secs_f64());
     let mut counter = count_hellos.map(HelloCounter::new);
     let mut seq_out: u8 = 0;
@@ -136,6 +145,9 @@ fn watch(api: &mut HidApi, raw: bool, count_hellos: Option<u32>) -> Result<ExitC
         // Wait for the device and open it.
         let mut announced = false;
         let (dev, serial) = loop {
+            if expired() {
+                return Ok(ExitCode::SUCCESS);
+            }
             if let Some((path, serial)) = find_channel(api) {
                 match api.open_path(&path) {
                     Ok(dev) => break (dev, serial),
@@ -155,13 +167,28 @@ fn watch(api: &mut HidApi, raw: bool, count_hellos: Option<u32>) -> Result<ExitC
         if let Some(c) = counter.as_mut() {
             c.on_connect(Instant::now());
         }
-        match request_hello(&dev, seq_out) {
+        match send(&dev, seq_out, &AppMessage::RequestHello) {
             Ok(()) => seq_out = seq_out.wrapping_add(1),
             Err(e) => eprintln!("{}  REQUEST_HELLO failed: {e}", stamp()),
+        }
+        if let Some(events) = &inject {
+            let msg = AppMessage::TestInject {
+                events: events.clone(),
+            };
+            match send(&dev, seq_out, &msg) {
+                Ok(()) => {
+                    seq_out = seq_out.wrapping_add(1);
+                    println!("{}  sent TEST_INJECT, {} events", stamp(), events.len());
+                }
+                Err(e) => eprintln!("{}  TEST_INJECT failed: {e}", stamp()),
+            }
         }
 
         // Read until the device goes away.
         loop {
+            if expired() {
+                return Ok(ExitCode::SUCCESS);
+            }
             match dev.read_timeout(&mut buf, READ_TIMEOUT_MS) {
                 Ok(n) => {
                     let read = &buf[..n];
@@ -206,7 +233,12 @@ fn run(cmd: Command) -> Result<ExitCode, String> {
             Ok(ExitCode::SUCCESS)
         }
         Command::Raw { secs } => raw(&mut api, secs),
-        Command::Watch { raw, count_hellos } => watch(&mut api, raw, count_hellos),
+        Command::Watch {
+            raw,
+            count_hellos,
+            inject,
+            exit_after,
+        } => watch(&mut api, raw, count_hellos, inject, exit_after),
     }
 }
 
