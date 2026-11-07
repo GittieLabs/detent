@@ -30,6 +30,8 @@ Dev builds are signed with a stable identity so macOS permission grants (Accessi
 
 Other tasks: `just fmt`, `just lint`, `just test`, `just fw`. Run `just` to list them.
 
+To watch a device: `just probe` prints decoded events and reopens after unplug; `just probe --raw` adds hex; `just probe list` shows what's attached.
+
 ## License
 
 Apache License 2.0 — see [`LICENSE`](LICENSE).

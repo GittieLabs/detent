@@ -20,6 +20,10 @@ test:
 build-dev:
     scripts/build-dev.sh
 
+# Run ctl-probe, e.g. `just probe`, `just probe --raw`, `just probe --count-hellos 20`
+probe *ARGS:
+    cargo run -q -p ctl-probe -- {{ARGS}}
+
 # Regenerate firmware/include/detent_protocol.h from the protocol crate
 gen-header:
     scripts/gen-header.sh

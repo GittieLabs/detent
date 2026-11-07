@@ -66,7 +66,7 @@ Needs the XIAO ESP32-S3 on USB, wired with the buttons, encoder, and OLED. Steps
 
 1. HID layout spike (task 1). With the spike firmware flashed, run the raw `ctl-probe` mode the task names. Record whether macOS shows any permission prompt (Input Monitoring especially) when the probe opens the device, and whether the volume keys still change the volume while the probe runs.
 2. USB identity (task 5). `ioreg -p IOUSB -l -w0 | grep -iE '"(idVendor|idProduct|USB Serial Number|USB Product Name)"'` shows vendor `12346` (0x303A), product `36830` (0x8FDE), a 12 hex char serial, and `Detent <model>`. A second unit, if you have one, shows a different serial.
-3. Replug (exit criterion). Run `ctl-probe --count-hellos 20`, then unplug and replug the device 20 times, waiting for each HELLO line. The probe exits 0 after the 20th.
+3. Replug (exit criterion). Run `just probe --count-hellos 20`, then unplug and replug the device 20 times, waiting for each HELLO line. The probe exits 0 after the 20th.
 4. Keyboard isolation (exit criterion). With `ctl-probe` running, type a sentence on the built in keyboard and on any external keyboard. The probe prints nothing.
 5. Controls (task 9). With `ctl-probe` running, press, hold (over 600 ms), and release each button, and turn the encoder in Mapped mode both ways. Each shows the matching BUTTON down, long press, up, and ENCODER lines with the right sign.
 6. Volume pass through (exit criterion). Quit `ctl-probe`. Put the encoder in Volume mode from the OLED menu. Turning it moves the macOS volume with the native HUD; pressing it toggles mute.
