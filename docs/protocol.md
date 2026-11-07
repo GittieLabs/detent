@@ -62,5 +62,5 @@ Device sends HELLO on enumeration, on REQUEST_HELLO, and after leaving Setup.
 | --- | --- |
 | VID | `0x303A` (Espressif) |
 | PID | Placeholder `0x8XXX` in `protocol/src/ids.rs` until the Espressif usb-pids PR merges (D-014). Never `0x4001` or other default TinyUSB PIDs. |
-| Serial | 12 hex chars from the chip's base MAC |
-| Product string | `Detent <model name>` |
+| Serial | 12 uppercase hex chars from the chip's base MAC (`esp_efuse_mac_get_default`), formatted by the firmware, not the core |
+| Product string | `Detent <model name>` (placeholder `Detent Dev`). Manufacturer string `GittieLabs`. |
