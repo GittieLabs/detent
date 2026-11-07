@@ -69,7 +69,7 @@ jobs:
           key: pio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
 
       - name: Install PlatformIO
-        run: pip install platformio==6.1.19
+        run: pip install platformio==6.2.0  # pioarduino needs 6.2+ (D-045)
 
       - name: pio run (release and debug)
         run: pio run -d firmware -e xiao_esp32s3 -e xiao_esp32s3_debug

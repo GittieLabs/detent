@@ -37,6 +37,36 @@ const char* serial();
 // CDC serial, for logs.
 Print& log();
 
+// Receive path counters, for diagnostics.
+struct RxStats {
+  uint32_t events;   // vendor output events seen
+  uint32_t short_;   // events with fewer than DETENT_REPORT_LEN bytes
+  uint32_t dropped;  // events dropped because our queue was full
+  uint16_t min_len;
+};
+RxStats rx_stats();
+
+struct TxStats {
+  uint32_t attempts;
+  uint32_t failures;
+  uint32_t max_ms;     // longest single send
+  uint32_t first_fail_ms;  // millis() of the first failure, 0 if none
+};
+TxStats tx_stats();
+
+// Debug timeline: a ring of timestamped events, oldest first.
+// kind: 'M' mount, 'U' unmount, 'R' rx event (a = len, b = type byte),
+// 'S' send start (b = type byte), 'K' send ok (a = ms), 'F' send fail (a = ms).
+struct TimelineEntry {
+  uint32_t ms;
+  char kind;
+  uint16_t a;
+  uint8_t b;
+};
+const int kTimelineLen = 48;
+int timeline(TimelineEntry* out);  // returns the count copied
+void timeline_note(char kind, uint16_t a, uint8_t b);
+
 }  // namespace usb
 }  // namespace detent
 

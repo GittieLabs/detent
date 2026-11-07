@@ -13,10 +13,9 @@
 # so a flash counts as good when the upload log shows all four regions verified
 # and the vendor channel re-enumerates, whatever the exit code.
 #
-# KNOWN BUG (docs/roadmap.md, M1): two host writes within about a second of
-# the device booting make it reset, and a host that reconnects and writes
-# straight away keeps it in that loop. Until it's fixed, this script waits
-# SETTLE_S after each boot before writing.
+# It writes to the device the moment it re-enumerates, on purpose: on
+# Arduino-ESP32 2.0.17 that tripped a TinyUSB stall (D-045), and this script is
+# the regression test for it.
 #
 # Logs are kept on failure; the script prints where.
 set -euo pipefail
@@ -24,7 +23,6 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 probe="$root/target/debug/ctl-probe"
 work="$(mktemp -d)"
-SETTLE_S=5
 
 # Button 1 down, up 120 ms later, then the encoder (control 5) +2 and -1.
 script="B1:down B1:up@120 E5:+2@50 E5:-1@50"
@@ -55,7 +53,6 @@ flash() {
   fi
   for _ in $(seq 1 40); do
     if channel_up; then
-      sleep "$SETTLE_S"  # known bug: no writes in the first seconds after boot
       return 0
     fi
     sleep 0.5

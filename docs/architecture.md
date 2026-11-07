@@ -19,9 +19,9 @@ ESP32-S3 device                         Detent app (Tauri 2, Rust)
 
 ## Device
 
-**Hardware (first device).** ESP32-S3, a 0.96 inch 128x64 OLED (SSD1306 class, I2C), one push encoder, and some number of buttons. The count isn't fixed; HELLO reports whatever exists and the app adapts. Firmware is PlatformIO with Arduino-ESP32 and TinyUSB.
+**Hardware (first device).** ESP32-S3, a 0.96 inch 128x64 OLED (SSD1306 class, I2C), one push encoder, and some number of buttons. The count isn't fixed; HELLO reports whatever exists and the app adapts. Firmware is PlatformIO (Core 6.2+) with Arduino-ESP32 3.3 (pioarduino platform, D-045) and TinyUSB.
 
-**USB.** Composite device: one HID interface with two top level collections, plus a CDC serial interface for uploads and logs (D-036). The precompiled TinyUSB in Arduino-ESP32 2.0.17 allows one HID interface, so the collections share it and are told apart by report ID:
+**USB.** Composite device: one HID interface with two top level collections, plus a CDC serial interface for uploads and logs (D-036). The Arduino core's HID class puts every HID device on one interface (established on 2.0.17, D-036, and unchanged in our use of 3.3), so the collections share it and are told apart by report ID:
 
 1. Vendor defined HID (usage page `0xFF00`, report ID 6), 63 byte reports, carrying all app traffic. See `protocol.md`.
 2. Standard Consumer Control (report ID 4) for volume up, down, and mute.

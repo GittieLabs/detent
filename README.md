@@ -14,7 +14,9 @@ Status: pre-alpha, M0. See `docs/roadmap.md`.
 
 ## Building (macOS)
 
-Requirements: Rust stable, Node with pnpm, PlatformIO CLI, Xcode command line tools, and an Apple Development signing identity.
+Requirements: Rust stable, Node with pnpm, PlatformIO Core 6.2 or newer, Xcode command line tools, and an Apple Development signing identity.
+
+PlatformIO: CI pins 6.2.0. If `pio --version` shows `6.2.0.post1`, the firmware platform refuses to install (it reads `.post1` as a pre-release); fix it with `~/.platformio/penv/bin/pip install --force-reinstall --no-deps platformio==6.2.0`.
 
 Find your identity, set it, and build:
 

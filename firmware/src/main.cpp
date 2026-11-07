@@ -13,6 +13,14 @@
 #include "usb_device.h"
 #include "version.h"
 
+// Set by the xiao_esp32s3_debug env only: boot and reset diagnostics on CDC.
+#ifndef DETENT_DIAG
+#define DETENT_DIAG 0
+#endif
+#if DETENT_DIAG
+#include "diag.h"
+#endif
+
 // Set by the xiao_esp32s3_debug env only. Release firmware ignores TEST_INJECT.
 #ifndef DETENT_TEST_INJECT
 #define DETENT_TEST_INJECT 0
@@ -90,6 +98,9 @@ void handle_report(const uint8_t* report, uint32_t now) {
 }  // namespace
 
 void setup() {
+#if DETENT_DIAG
+  detent::diag::on_boot();
+#endif
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LED_OFF);
   detent::usb::begin();
@@ -105,6 +116,9 @@ void loop() {
     } else {
       device_link.on_unmount();
     }
+#if DETENT_DIAG
+    mounted ? detent::diag::on_mount() : detent::diag::on_unmount();
+#endif
   }
 
   uint8_t report[DETENT_REPORT_LEN];
@@ -123,4 +137,7 @@ void loop() {
 
   device_link.tick(now);
   update_led(now);
+#if DETENT_DIAG
+  detent::diag::tick(now, device_link.rejected());
+#endif
 }
