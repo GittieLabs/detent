@@ -1,6 +1,10 @@
 //! Generates `firmware/include/detent_protocol.h` from this crate's constants.
 //! Run `scripts/gen-header.sh`; a test fails if the committed header drifts.
 
+use crate::codec::{
+    ButtonAction, ControlKind, EncoderMode, MAX_CONTROLS, MAX_INJECT_EVENTS, MAX_LABEL_LEN,
+    MAX_STATUS_LEN,
+};
 use crate::{ids, msg, HEADER_LEN, MAX_PAYLOAD_LEN, PROTOCOL_VERSION, REPORT_LEN};
 use crate::{CONSUMER_REPORT_ID, USAGE, USAGE_PAGE, VENDOR_REPORT_ID};
 
@@ -12,6 +16,17 @@ pub fn c_header() -> String {
         .collect();
     let vid = ids::VID;
     let pid = ids::PID;
+    let (mode_volume, mode_menu, mode_mapped) = (
+        EncoderMode::Volume as u8,
+        EncoderMode::Menu as u8,
+        EncoderMode::Mapped as u8,
+    );
+    let (kind_button, kind_encoder) = (ControlKind::Button as u8, ControlKind::Encoder as u8);
+    let (action_down, action_up, action_long) = (
+        ButtonAction::Down as u8,
+        ButtonAction::Up as u8,
+        ButtonAction::LongPress as u8,
+    );
 
     format!(
         "\
@@ -38,6 +53,21 @@ pub fn c_header() -> String {
 
 // Message types: device to app 0x01..0x7F, app to device 0x80..0xFF
 {types}
+// Codec limits
+#define DETENT_MAX_CONTROLS {MAX_CONTROLS}
+#define DETENT_MAX_LABEL_LEN {MAX_LABEL_LEN}
+#define DETENT_MAX_STATUS_LEN {MAX_STATUS_LEN}
+#define DETENT_MAX_INJECT_EVENTS {MAX_INJECT_EVENTS}
+
+// Field values
+#define DETENT_ENCODER_MODE_VOLUME {mode_volume}
+#define DETENT_ENCODER_MODE_MENU {mode_menu}
+#define DETENT_ENCODER_MODE_MAPPED {mode_mapped}
+#define DETENT_KIND_BUTTON {kind_button}
+#define DETENT_KIND_ENCODER {kind_encoder}
+#define DETENT_ACTION_DOWN {action_down}
+#define DETENT_ACTION_UP {action_up}
+#define DETENT_ACTION_LONG_PRESS {action_long}
 #endif  // DETENT_PROTOCOL_H
 "
     )

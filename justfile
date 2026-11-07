@@ -28,6 +28,10 @@ gen-header:
 fw:
     pio run -d firmware
 
+# Run the firmware's native C++ tests (no hardware)
+fw-test:
+    pio test -d firmware -e native
+
 # Flash the firmware to a connected device
 fw-upload:
     pio run -d firmware -t upload
@@ -37,3 +41,4 @@ ci: lint test
     pnpm -C app install --frozen-lockfile
     pnpm -C app tsc --noEmit
     pio run -d firmware
+    pio test -d firmware -e native

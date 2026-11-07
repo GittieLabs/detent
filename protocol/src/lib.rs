@@ -11,6 +11,7 @@ pub mod codec;
 pub mod header;
 pub mod ids;
 pub mod msg;
+pub mod vectors;
 
 /// Wire format version, byte 0 of every report. Receivers drop any other value.
 pub const PROTOCOL_VERSION: u8 = 1;

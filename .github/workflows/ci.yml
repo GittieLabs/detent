@@ -73,3 +73,7 @@ jobs:
 
       - name: pio run
         run: pio run -d firmware
+
+      # Native C++ tests against the Rust codec's golden vectors (D-035).
+      - name: pio test (native)
+        run: pio test -d firmware -e native

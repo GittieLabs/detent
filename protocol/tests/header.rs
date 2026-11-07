@@ -42,3 +42,24 @@ fn header_carries_version_and_usb_ids() {
     assert!(header.contains("#define DETENT_VENDOR_REPORT_ID 6\n"));
     assert!(header.contains("#define DETENT_CONSUMER_REPORT_ID 4\n"));
 }
+
+#[test]
+fn header_carries_codec_limits_and_enum_values() {
+    let header = detent_protocol::header::c_header();
+    for line in [
+        "#define DETENT_MAX_CONTROLS 27\n",
+        "#define DETENT_MAX_LABEL_LEN 16\n",
+        "#define DETENT_MAX_STATUS_LEN 20\n",
+        "#define DETENT_MAX_INJECT_EVENTS 11\n",
+        "#define DETENT_ENCODER_MODE_VOLUME 0\n",
+        "#define DETENT_ENCODER_MODE_MENU 1\n",
+        "#define DETENT_ENCODER_MODE_MAPPED 2\n",
+        "#define DETENT_KIND_BUTTON 1\n",
+        "#define DETENT_KIND_ENCODER 2\n",
+        "#define DETENT_ACTION_DOWN 1\n",
+        "#define DETENT_ACTION_UP 2\n",
+        "#define DETENT_ACTION_LONG_PRESS 3\n",
+    ] {
+        assert!(header.contains(line), "missing: {line}");
+    }
+}

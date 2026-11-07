@@ -20,6 +20,8 @@
 
 // Generated from the protocol crate by scripts/gen-header.sh. Never edit it.
 #include "detent_protocol.h"
+// Not used by the spike yet; included so the ESP32 build compiles the codec.
+#include "report.h"
 
 #if ARDUINO_USB_MODE != 0
 #error "Detent needs TinyUSB on the OTG peripheral (ARDUINO_USB_MODE=0)"
