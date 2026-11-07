@@ -30,7 +30,7 @@ On the host (hidapi):
 | 3 | 1 | `len` | Payload length in bytes, 0 to 59. |
 | 4 | 59 | `payload` | Type specific, little endian. |
 
-Offsets are within the 63 byte report, after the report ID. A report with `len > 59`, an unknown `type`, or the wrong `version` is rejected. The codec must never panic on any input (property tested).
+Offsets are within the 63 byte report, after the report ID. A report with `len > 59`, an unknown `type`, or the wrong `version` is rejected. Decoding is strict (D-037): `len` must equal the message's exact size, enum values must be defined, and unused bytes (after the payload, and inside fixed width text fields) must be zero. The codec must never panic on any input (property tested).
 
 ## Device to app
 
@@ -51,10 +51,10 @@ Device sends HELLO on enumeration, on REQUEST_HELLO, and after leaving Setup.
 | Type | Name | Payload |
 | --- | --- | --- |
 | `0x81` | HELLO_ACK | `paired u8` (`0` or `1`). Device shows pairing status on the OLED. |
-| `0x82` | MENU | `total u8, index u8, item_id u8, label_len u8, label [u8; 16]`. One app owned item per report, index `0..total-1`. `total = 0` clears the app owned items. Label is ASCII. |
-| `0x83` | STATUS | `text_len u8, text [u8; 20]`. Short status line for the OLED, for example the dashboard now showing. |
+| `0x82` | MENU | `total u8, index u8, item_id u8, label_len u8, label [u8; 16]`. One app owned item per report, index `0..total-1`. `total = 0` clears the app owned items, and then every other byte is zero. Otherwise `label_len` is 1 to 16 and the label is printable ASCII (`0x20..0x7E`), zero padded to 16 bytes. Payload is always 20 bytes. |
+| `0x83` | STATUS | `text_len u8, text [u8; 20]`. Short status line for the OLED, for example the dashboard now showing. `text_len` 0 to 20 (0 clears the line), printable ASCII, zero padded to 20 bytes. Payload is always 21 bytes. |
 | `0x84` | REQUEST_HELLO | Empty. |
-| `0xF0` | TEST_INJECT | Debug firmware only. `count u8`, then `count` events of `(type u8, a u8, b u8, delay_ms u16)` where `type/a/b` are a BUTTON or ENCODER message's type and first two payload bytes. Device replays them through the real USB path. Release firmware ignores this type. Max 11 events. |
+| `0xF0` | TEST_INJECT | Debug firmware only. `count u8`, then `count` events of `(type u8, a u8, b u8, delay_ms u16)` where `type/a/b` are a BUTTON or ENCODER message's type and first two payload bytes. Device replays them through the real USB path. Release firmware ignores this type. 1 to 11 events; each must be a valid BUTTON or ENCODER (defined action, nonzero delta). `delay_ms` is little endian. |
 
 ## Identity
 

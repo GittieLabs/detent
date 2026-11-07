@@ -7,12 +7,17 @@
 //! bytes must be known values, and bytes after the payload must be zero.
 //! Nothing in this module panics on any input.
 
+mod app;
 mod device;
 
 use std::fmt;
 
 use crate::{MAX_PAYLOAD_LEN, PROTOCOL_VERSION, REPORT_LEN};
 
+pub use app::{
+    decode_app, encode_app, AppMessage, InjectEvent, Injected, Label, StatusText, TextError,
+    MAX_INJECT_EVENTS, MAX_LABEL_LEN, MAX_STATUS_LEN,
+};
 pub use device::{
     decode_device, encode_device, ButtonAction, Control, ControlKind, DeviceMessage, EncoderMode,
     FirmwareVersion, Hello, MAX_CONTROLS,
@@ -57,6 +62,8 @@ pub enum DecodeError {
     TooManyControls { count: u8 },
     /// HELLO lists the same control ID twice.
     DuplicateControl { id: u8 },
+    /// TEST_INJECT carries more than [`MAX_INJECT_EVENTS`] events.
+    TooManyEvents { count: u8 },
 }
 
 impl fmt::Display for DecodeError {
@@ -90,6 +97,12 @@ impl fmt::Display for DecodeError {
                 write!(f, "HELLO lists {count} controls, max {MAX_CONTROLS}")
             }
             Self::DuplicateControl { id } => write!(f, "HELLO lists control {id} twice"),
+            Self::TooManyEvents { count } => {
+                write!(
+                    f,
+                    "TEST_INJECT carries {count} events, max {MAX_INJECT_EVENTS}"
+                )
+            }
         }
     }
 }
@@ -100,9 +113,23 @@ impl std::error::Error for DecodeError {}
 /// decoder would reject.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EncodeError {
-    TooManyControls { count: usize },
-    DuplicateControl { id: u8 },
+    TooManyControls {
+        count: usize,
+    },
+    DuplicateControl {
+        id: u8,
+    },
     ZeroDelta,
+    /// MENU item with `index >= total` (including `total = 0`).
+    MenuIndex {
+        index: u8,
+        total: u8,
+    },
+    /// TEST_INJECT with no events.
+    NoEvents,
+    TooManyEvents {
+        count: usize,
+    },
 }
 
 impl fmt::Display for EncodeError {
@@ -112,7 +139,14 @@ impl fmt::Display for EncodeError {
                 write!(f, "HELLO has {count} controls, max {MAX_CONTROLS}")
             }
             Self::DuplicateControl { id } => write!(f, "HELLO lists control {id} twice"),
-            Self::ZeroDelta => write!(f, "ENCODER delta can't be zero"),
+            Self::ZeroDelta => write!(f, "encoder delta can't be zero"),
+            Self::MenuIndex { index, total } => {
+                write!(f, "menu index {index} isn't below total {total}")
+            }
+            Self::NoEvents => write!(f, "TEST_INJECT needs at least one event"),
+            Self::TooManyEvents { count } => {
+                write!(f, "TEST_INJECT has {count} events, max {MAX_INJECT_EVENTS}")
+            }
         }
     }
 }

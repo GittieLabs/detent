@@ -53,7 +53,7 @@ pub enum ButtonAction {
 }
 
 impl ButtonAction {
-    fn from_byte(b: u8) -> Option<Self> {
+    pub(super) fn from_byte(b: u8) -> Option<Self> {
         match b {
             1 => Some(Self::Down),
             2 => Some(Self::Up),
