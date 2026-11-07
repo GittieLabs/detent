@@ -38,4 +38,7 @@ fn header_carries_version_and_usb_ids() {
     assert!(header.contains("#define DETENT_PROTOCOL_VERSION 1\n"));
     assert!(header.contains("#define DETENT_USB_VID 0x303A"));
     assert!(header.contains("#define DETENT_USB_PID 0x8FDE"));
+    assert!(header.contains("#define DETENT_REPORT_LEN 63\n"));
+    assert!(header.contains("#define DETENT_VENDOR_REPORT_ID 6\n"));
+    assert!(header.contains("#define DETENT_CONSUMER_REPORT_ID 4\n"));
 }

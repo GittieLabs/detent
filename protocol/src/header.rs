@@ -2,7 +2,7 @@
 //! Run `scripts/gen-header.sh`; a test fails if the committed header drifts.
 
 use crate::{ids, msg, HEADER_LEN, MAX_PAYLOAD_LEN, PROTOCOL_VERSION, REPORT_LEN};
-use crate::{USAGE, USAGE_PAGE};
+use crate::{CONSUMER_REPORT_ID, USAGE, USAGE_PAGE, VENDOR_REPORT_ID};
 
 /// The full text of `detent_protocol.h`.
 pub fn c_header() -> String {
@@ -29,6 +29,8 @@ pub fn c_header() -> String {
 #define DETENT_MAX_PAYLOAD_LEN {MAX_PAYLOAD_LEN}
 #define DETENT_USAGE_PAGE 0x{USAGE_PAGE:04X}
 #define DETENT_USAGE 0x{USAGE:02X}
+#define DETENT_VENDOR_REPORT_ID {VENDOR_REPORT_ID}
+#define DETENT_CONSUMER_REPORT_ID {CONSUMER_REPORT_ID}
 
 // USB identity
 #define DETENT_USB_VID 0x{vid:04X}

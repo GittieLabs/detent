@@ -21,10 +21,10 @@ ESP32-S3 device                         Detent app (Tauri 2, Rust)
 
 **Hardware (first device).** ESP32-S3, a 0.96 inch 128x64 OLED (SSD1306 class, I2C), one push encoder, and some number of buttons. The count isn't fixed; HELLO reports whatever exists and the app adapts. Firmware is PlatformIO with Arduino-ESP32 and TinyUSB.
 
-**USB.** Composite device with two interfaces:
+**USB.** Composite device: one HID interface with two top level collections, plus a CDC serial interface for uploads and logs (D-036). The precompiled TinyUSB in Arduino-ESP32 2.0.17 allows one HID interface, so the collections share it and are told apart by report ID:
 
-1. Vendor defined HID (usage page `0xFF00`), 64 byte reports, carrying all app traffic. See `protocol.md`.
-2. Standard Consumer Control HID for volume up, down, and mute.
+1. Vendor defined HID (usage page `0xFF00`, report ID 6), 63 byte reports, carrying all app traffic. See `protocol.md`.
+2. Standard Consumer Control (report ID 4) for volume up, down, and mute.
 
 VID is Espressif's `0x303A`. The PID comes from Espressif's free usb-pids program (D-014); until that PR merges, firmware uses the placeholder in `protocol/src/ids.rs`. **Never use TinyUSB or IDF default PIDs** (for example `0x4001`); they collide with stock firmware.
 
@@ -48,7 +48,7 @@ Every event inside the app carries a `DeviceId` from day one, even though v1 sup
 
 ## App modules (`app/src-tauri/src/`)
 
-1. **`transport`** A `DeviceTransport` trait. `UsbHid` implementation over the `hidapi` crate. A `MockTransport` for tests. Bluetooth later is another implementation; nothing above this changes. Note: on macOS, writes through hidapi need a leading report ID byte (`0x00` when the descriptor has no report IDs).
+1. **`transport`** A `DeviceTransport` trait. `UsbHid` implementation over the `hidapi` crate. A `MockTransport` for tests. Bluetooth later is another implementation; nothing above this changes. Note: on macOS, open the vendor entry non exclusive (hidapi's default is exclusive, which swallows the volume keys), and every read and write carries the leading report ID `0x06`; drop reads with any other ID.
 2. **`devices`** Watches attach and detach (poll the device list once a second unless an IOKit notification path proves reliable), checks the allowlist of paired units and the ignore list, opens paired units, tracks HEARTBEAT (6 s without one means disconnected), and tags events with a `DeviceId`. Unknown devices raise a "new device found" tray badge and nothing else.
 3. **`router`** Takes an event plus the frontmost app's bundle ID (NSWorkspace, no permission needed) and resolves exactly one mapping: app scope first, then Everywhere, else nothing.
 4. **`actions`** One executor per action type behind an `Action` trait. Each returns a result the Test and Debug views can show. A `RecordingExecutor` for tests and Dry run.

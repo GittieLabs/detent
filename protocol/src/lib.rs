@@ -14,8 +14,9 @@ pub mod msg;
 /// Wire format version, byte 0 of every report. Receivers drop any other value.
 pub const PROTOCOL_VERSION: u8 = 1;
 
-/// Every report is exactly this many bytes, in both directions.
-pub const REPORT_LEN: usize = 64;
+/// Every vendor report is exactly this many bytes after the report ID, in
+/// both directions. The 64 byte endpoint minus the report ID (D-036).
+pub const REPORT_LEN: usize = 63;
 
 /// `version`, `type`, `seq`, `len`.
 pub const HEADER_LEN: usize = 4;
@@ -28,3 +29,12 @@ pub const USAGE_PAGE: u16 = 0xFF00;
 
 /// HID usage of the app traffic interface.
 pub const USAGE: u16 = 0x01;
+
+/// Report ID of the vendor channel. Fixed by the Arduino-ESP32 core
+/// (`HID_REPORT_ID_VENDOR`). Hosts prefix every write with it and drop reads
+/// that don't start with it.
+pub const VENDOR_REPORT_ID: u8 = 6;
+
+/// Report ID of the Consumer Control collection on the same interface
+/// (`HID_REPORT_ID_CONSUMER_CONTROL`). Not app traffic; hosts ignore it.
+pub const CONSUMER_REPORT_ID: u8 = 4;

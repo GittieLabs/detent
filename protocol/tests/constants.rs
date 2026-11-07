@@ -3,7 +3,7 @@
 //! bump (CLAUDE.md: protocol changes are atomic).
 
 use detent_protocol::{ids, msg, HEADER_LEN, MAX_PAYLOAD_LEN, PROTOCOL_VERSION, REPORT_LEN};
-use detent_protocol::{USAGE, USAGE_PAGE};
+use detent_protocol::{CONSUMER_REPORT_ID, USAGE, USAGE_PAGE, VENDOR_REPORT_ID};
 
 #[test]
 fn version_is_one() {
@@ -12,9 +12,11 @@ fn version_is_one() {
 
 #[test]
 fn report_layout_adds_up() {
-    assert_eq!(REPORT_LEN, 64);
+    // One HID interface shared with Consumer Control (D-036): 64 byte
+    // endpoint, minus the report ID byte.
+    assert_eq!(REPORT_LEN, 63);
     assert_eq!(HEADER_LEN, 4);
-    assert_eq!(MAX_PAYLOAD_LEN, 60);
+    assert_eq!(MAX_PAYLOAD_LEN, 59);
     assert_eq!(HEADER_LEN + MAX_PAYLOAD_LEN, REPORT_LEN);
 }
 
@@ -22,6 +24,13 @@ fn report_layout_adds_up() {
 fn vendor_hid_usage() {
     assert_eq!(USAGE_PAGE, 0xFF00);
     assert_eq!(USAGE, 0x01);
+}
+
+#[test]
+fn report_ids_match_the_arduino_core() {
+    // Fixed by Arduino-ESP32's USBHID report ID enum; firmware asserts the same.
+    assert_eq!(VENDOR_REPORT_ID, 6);
+    assert_eq!(CONSUMER_REPORT_ID, 4);
 }
 
 #[test]

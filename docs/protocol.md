@@ -6,9 +6,19 @@ Changes only with a version bump. The Rust crate in `protocol/` is the source of
 
 ## Transport
 
-Vendor defined HID interface, usage page `0xFF00`, usage `0x01`, no report IDs. Every report is exactly 64 bytes in both directions. Unused payload bytes are zero.
+One HID interface carries two top level collections (D-036):
 
-On macOS, hidapi `write()` takes a leading report ID byte: send `0x00` followed by the 64 bytes.
+1. **Vendor channel**, usage page `0xFF00`, usage `0x01`, report ID `6`. All app traffic. Every vendor report is the report ID plus exactly 63 bytes, in both directions. Unused bytes are zero.
+2. **Consumer Control**, usage page `0x000C`, report ID `4`. Volume and mute pass through from the device (D-005). Not part of this protocol.
+
+The report IDs are fixed by the Arduino-ESP32 core (`HID_REPORT_ID_VENDOR`, `HID_REPORT_ID_CONSUMER_CONTROL`); the firmware asserts they match.
+
+On the host (hidapi):
+
+- Open the `0xFF00` entry **non exclusive**. hidapi opens exclusively by default on macOS, which swallows Consumer Control and stops the volume keys.
+- A read returns 64 bytes: `0x06`, then the 63 byte report. Consumer Control reports (`0x04`, 3 bytes) arrive on the same handle; drop anything whose first byte isn't `0x06`.
+- A write is 64 bytes: `0x06`, then the 63 byte report. A write with any other report ID reports success but never reaches the device.
+- Opening the vendor channel needs no macOS permission (Input Monitoring included), verified on macOS with a process that had never been granted it.
 
 ## Report layout
 
@@ -17,10 +27,10 @@ On macOS, hidapi `write()` takes a leading report ID byte: send `0x00` followed 
 | 0 | 1 | `version` | `PROTOCOL_VERSION`. Receiver drops and logs any other value. |
 | 1 | 1 | `type` | Message type below. Device to app `0x01..0x7F`, app to device `0x80..0xFF`. |
 | 2 | 1 | `seq` | Per direction, wraps at 255. Lets Debug spot dropped reports. |
-| 3 | 1 | `len` | Payload length in bytes, 0 to 60. |
-| 4 | 60 | `payload` | Type specific, little endian. |
+| 3 | 1 | `len` | Payload length in bytes, 0 to 59. |
+| 4 | 59 | `payload` | Type specific, little endian. |
 
-A report with `len > 60`, an unknown `type`, or the wrong `version` is rejected. The codec must never panic on any 64 byte input (property tested).
+Offsets are within the 63 byte report, after the report ID. A report with `len > 59`, an unknown `type`, or the wrong `version` is rejected. The codec must never panic on any input (property tested).
 
 ## Device to app
 

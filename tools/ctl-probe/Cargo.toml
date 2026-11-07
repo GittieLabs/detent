@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 detent-protocol = { path = "../../protocol" }
+hidapi = "2.6.7"
 
 [lints]
 workspace = true
