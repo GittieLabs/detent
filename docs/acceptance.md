@@ -74,4 +74,4 @@ Needs the XIAO ESP32-S3 on USB, wired with the buttons, encoder, and OLED. Steps
 
 Results:
 
-- Step 1, run by Claude on 2026-11-07 (spike firmware, build after `31a5fc6`): `ctl-probe` launched through Terminal.app, whose Input Monitoring status was `unknown` (never granted), opened the vendor channel non exclusive and read reports; the status was still `unknown` afterwards, so no prompt was raised. Volume keys (Consumer Control) changed the macOS volume while the probe held the device open shared, and didn't when it was open exclusive. Not marked PASS: Keith to confirm he saw no prompt.
+- Step 1: `PASS`, 2026-11-07, build `da68b77` (spike firmware). Keith confirmed no macOS permission dialog appeared. Evidence, run by Claude (spike firmware, build after `31a5fc6`): `ctl-probe` launched through Terminal.app, whose Input Monitoring status was `unknown` (never granted), opened the vendor channel non exclusive and read reports; the status was still `unknown` afterwards, so no prompt was raised. Volume keys (Consumer Control) changed the macOS volume while the probe held the device open shared, and didn't when it was open exclusive.

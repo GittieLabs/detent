@@ -7,6 +7,7 @@
 //!
 //! Constants only for now; the codec lands in M1.
 
+pub mod codec;
 pub mod header;
 pub mod ids;
 pub mod msg;
