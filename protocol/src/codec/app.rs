@@ -266,8 +266,10 @@ fn decode_inject(p: &[u8]) -> Result<AppMessage, DecodeError> {
     expect_size(t, p, 1 + INJECT_EVENT_LEN * usize::from(count))?;
 
     let mut events = Vec::with_capacity(usize::from(count));
-    for e in p[1..].chunks_exact(INJECT_EVENT_LEN) {
-        let (kind, a, b) = (e[0], e[1], e[2]);
+    // Size checked above, so there is no remainder.
+    let (chunks, _) = p[1..].as_chunks::<INJECT_EVENT_LEN>();
+    for e in chunks {
+        let &[kind, a, b, d0, d1] = e;
         let event = match kind {
             msg::BUTTON => Injected::Button {
                 control: a,
@@ -282,7 +284,7 @@ fn decode_inject(p: &[u8]) -> Result<AppMessage, DecodeError> {
         };
         events.push(InjectEvent {
             event,
-            delay_ms: u16::from_le_bytes([e[3], e[4]]),
+            delay_ms: u16::from_le_bytes([d0, d1]),
         });
     }
     Ok(AppMessage::TestInject { events })

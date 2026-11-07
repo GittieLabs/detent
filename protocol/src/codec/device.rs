@@ -176,8 +176,9 @@ fn decode_hello(p: &[u8]) -> Result<Hello, DecodeError> {
 
     let mut seen = [false; 256];
     let mut controls = Vec::with_capacity(usize::from(count));
-    for pair in p[HELLO_FIXED..].chunks_exact(2) {
-        let (id, kind) = (pair[0], pair[1]);
+    // Size checked above, so there is no remainder.
+    let (pairs, _) = p[HELLO_FIXED..].as_chunks::<2>();
+    for &[id, kind] in pairs {
         let kind = ControlKind::from_byte(kind).ok_or(DecodeError::InvalidField {
             msg_type: t,
             field: "kind",
