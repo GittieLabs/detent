@@ -35,6 +35,23 @@ char serial_number[kSerialBufLen];
 const UBaseType_t kRxDepth = 4;
 QueueHandle_t rx_queue = nullptr;
 
+// Mount and unmount events, in order.
+const UBaseType_t kConnDepth = 8;
+QueueHandle_t conn_queue = nullptr;
+
+void on_usb_event(void*, esp_event_base_t, int32_t id, void*) {
+  if (conn_queue == nullptr) return;
+  uint8_t mounted;
+  if (id == ARDUINO_USB_STARTED_EVENT) {
+    mounted = 1;
+  } else if (id == ARDUINO_USB_STOPPED_EVENT) {
+    mounted = 0;
+  } else {
+    return;
+  }
+  xQueueSend(conn_queue, &mounted, 0);
+}
+
 void on_vendor_event(void*, esp_event_base_t, int32_t id, void* data) {
   if (id != ARDUINO_USB_HID_VENDOR_OUTPUT_EVENT || rx_queue == nullptr) {
     return;
@@ -60,6 +77,8 @@ void begin() {
   USB.serialNumber(serial_number);
 
   rx_queue = xQueueCreate(kRxDepth, DETENT_REPORT_LEN);
+  conn_queue = xQueueCreate(kConnDepth, sizeof(uint8_t));
+  USB.onEvent(on_usb_event);
   vendor.onEvent(on_vendor_event);
   vendor.begin();
   consumer.begin();
@@ -74,6 +93,13 @@ bool send_report(const uint8_t report[DETENT_REPORT_LEN]) {
 
 bool poll_report(uint8_t report[DETENT_REPORT_LEN]) {
   return rx_queue != nullptr && xQueueReceive(rx_queue, report, 0) == pdTRUE;
+}
+
+bool poll_connection(bool* mounted) {
+  uint8_t m;
+  if (conn_queue == nullptr || xQueueReceive(conn_queue, &m, 0) != pdTRUE) return false;
+  *mounted = m != 0;
+  return true;
 }
 
 void consumer_tap(uint16_t usage) {

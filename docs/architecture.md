@@ -30,6 +30,8 @@ VID is Espressif's `0x303A`. The PID comes from Espressif's free usb-pids progra
 
 The USB serial number string is derived from the chip's MAC address, so two identical devices are distinguishable.
 
+**Status LED** (the XIAO's user LED): off with no host, blinking once a second while mounted but not paired, solid once the app has sent HELLO_ACK paired.
+
 **Encoder modes** (switched from the OLED menu, owned by firmware):
 
 - **Volume.** Turns send Consumer Control volume steps; a press toggles mute. Runs entirely on the device.

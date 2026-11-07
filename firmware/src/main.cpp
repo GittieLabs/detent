@@ -1,44 +1,79 @@
 // Detent firmware.
 //
-// USB identity and the composite device live in usb_device. The loop below is
-// TEMPORARY, kept from the M1 HID layout spike so the channel can be tested
-// on hardware until the link layer task replaces it with HELLO, HEARTBEAT,
-// REQUEST_HELLO, and HELLO_ACK. Spike commands (byte 0 of a vendor report):
-//   'E'  echo the report back
-//   'U'  Consumer Control volume up
-//   'W'  Consumer Control volume down
-// Every second the device sends 'D', <counter>.
+// usb_device owns the composite USB device; lib/link_layer owns the
+// conversation (HELLO, HEARTBEAT, REQUEST_HELLO, HELLO_ACK). This file wires
+// them together. Input, encoder modes, and the OLED arrive in later M1 tasks.
 
 #include <Arduino.h>
-#include <USBHIDConsumerControl.h>
-#include <string.h>
 
 #include "detent_protocol.h"
-#include "usb_device.h"
-// Not used yet; included so the ESP32 build compiles the codec.
+#include "link_layer.h"
 #include "report.h"
+#include "usb_device.h"
+#include "version.h"
 
-// XIAO ESP32-S3 user LED (GPIO21) is active low.
-static const uint8_t LED_PIN = LED_BUILTIN;
-static const uint8_t LED_ON = LOW;
-static const uint8_t LED_OFF = HIGH;
+namespace {
 
-static void handle_spike_command(const uint8_t* report) {
-  detent::usb::log().printf("spike: command 0x%02X\n", report[0]);
-  switch (report[0]) {
-    case 'E':
-      detent::usb::send_report(report);
-      break;
-    case 'U':
-      detent::usb::consumer_tap(CONSUMER_CONTROL_VOLUME_INCREMENT);
-      break;
-    case 'W':
-      detent::usb::consumer_tap(CONSUMER_CONTROL_VOLUME_DECREMENT);
-      break;
+// PLACEHOLDER: what HELLO reports until Keith's wiring is known (open question
+// in docs/roadmap.md); the input task replaces this with board_pins.h.
+const detent::Control kControls[] = {
+    {1, DETENT_KIND_BUTTON},
+    {2, DETENT_KIND_BUTTON},
+    {3, DETENT_KIND_BUTTON},
+    {4, DETENT_KIND_BUTTON},
+    {5, DETENT_KIND_ENCODER},
+};
+
+const detent::LinkConfig kLinkConfig = {
+    DETENT_FW_MAJOR, DETENT_FW_MINOR, DETENT_FW_PATCH,
+    kControls, sizeof kControls / sizeof kControls[0],
+};
+
+struct UsbTransport : detent::LinkTransport {
+  bool send(const uint8_t report[DETENT_REPORT_LEN]) override {
+    return detent::usb::send_report(report);
+  }
+};
+
+UsbTransport transport;
+detent::Link device_link(kLinkConfig, transport);
+
+// XIAO ESP32-S3 user LED (GPIO21) is active low. Off: no host. Blinking:
+// mounted, not paired. Solid: paired.
+const uint8_t LED_PIN = LED_BUILTIN;
+const uint8_t LED_ON = LOW;
+const uint8_t LED_OFF = HIGH;
+
+void update_led(uint32_t now) {
+  bool on = false;
+  if (device_link.paired()) {
+    on = true;
+  } else if (device_link.mounted()) {
+    on = (now / 500) % 2 == 0;
+  }
+  digitalWrite(LED_PIN, on ? LED_ON : LED_OFF);
+}
+
+void handle_report(const uint8_t* report, uint32_t now) {
+  detent::AppMessage msg;
+  const detent::ParseError err = device_link.on_report(report, DETENT_REPORT_LEN, now, &msg);
+  if (err != detent::ParseError::None) {
+    detent::usb::log().printf("link: rejected report (%s), type 0x%02X\n",
+                              detent::parse_error_name(err), report[1]);
+    return;
+  }
+  switch (msg.type) {
+    case DETENT_MSG_REQUEST_HELLO:
+    case DETENT_MSG_HELLO_ACK:
+      break;  // handled by the link
     default:
+      // MENU, STATUS, TEST_INJECT: later M1 tasks.
+      detent::usb::log().printf("link: type 0x%02X not handled yet\n", msg.type);
       break;
   }
 }
+
+}  // namespace
 
 void setup() {
   pinMode(LED_PIN, OUTPUT);
@@ -47,21 +82,22 @@ void setup() {
 }
 
 void loop() {
-  static uint32_t last = 0;
-  static uint8_t counter = 0;
-  static bool on = false;
+  const uint32_t now = millis();
+
+  bool mounted;
+  while (detent::usb::poll_connection(&mounted)) {
+    if (mounted) {
+      device_link.on_mount(now);
+    } else {
+      device_link.on_unmount();
+    }
+  }
 
   uint8_t report[DETENT_REPORT_LEN];
   while (detent::usb::poll_report(report)) {
-    handle_spike_command(report);
+    handle_report(report, now);
   }
 
-  const uint32_t now = millis();
-  if (now - last >= 1000) {
-    last = now;
-    on = !on;
-    digitalWrite(LED_PIN, on ? LED_ON : LED_OFF);
-    uint8_t beat[DETENT_REPORT_LEN] = {'D', counter++};
-    detent::usb::send_report(beat);
-  }
+  device_link.tick(now);
+  update_led(now);
 }

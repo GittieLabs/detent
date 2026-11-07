@@ -23,6 +23,11 @@ bool send_report(const uint8_t report[DETENT_REPORT_LEN]);
 // USB event task and wait here for loop(). Returns false when none is queued.
 bool poll_report(uint8_t report[DETENT_REPORT_LEN]);
 
+// Takes the oldest host connection change, if any: true when the host
+// mounted (configured) the device, false when it unmounted it. Changes arrive
+// on the USB event task and wait here for loop(), in order.
+bool poll_connection(bool* mounted);
+
 // Presses and releases one Consumer Control usage (volume, mute).
 void consumer_tap(uint16_t usage);
 

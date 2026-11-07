@@ -40,11 +40,11 @@ Offsets are within the 63 byte report, after the report ID. A report with `len >
 | `0x02` | BUTTON | `control_id u8, action u8`. Action: `1` down, `2` up, `3` long press (fires once at 600 ms held, before up). |
 | `0x03` | ENCODER | `control_id u8, delta i8`. Sent only in Mapped mode. Positive is clockwise. Device may coalesce detents within 20 ms. |
 | `0x04` | MENU_SELECT | `item_id u8`. An app owned OLED menu item was picked. |
-| `0x05` | HEARTBEAT | `uptime_s u32, encoder_mode u8`. Every 2 s. |
+| `0x05` | HEARTBEAT | `uptime_s u32, encoder_mode u8`. Every 2 s while the host has the device mounted, measured from the previous one. `uptime_s` is seconds since boot and restarts at 0 after about 49.7 days (the device's 32 bit millisecond clock). |
 
 Encoder mode values: `0` Volume, `1` Menu, `2` Mapped.
 
-Device sends HELLO on enumeration, on REQUEST_HELLO, and after leaving Setup.
+Device sends HELLO when the host mounts it, on REQUEST_HELLO, and after leaving Setup. The mount HELLO usually goes out before any app has the channel open, so hosts send REQUEST_HELLO after opening. Seq numbers advance even when a send fails, so gaps are visible. Paired (from HELLO_ACK) resets when the host unmounts the device.
 
 ## App to device
 
