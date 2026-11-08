@@ -15,6 +15,9 @@ namespace display {
 bool begin();
 bool present();
 
+// Addresses that answered an I2C bus scan at begin(), for diagnostics.
+int scanned(const uint8_t** addresses);
+
 // Redraws only when the lines changed.
 void draw(const char lines[kScreenLines][kLineChars + 1]);
 

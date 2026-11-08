@@ -225,7 +225,12 @@ struct SparePin {
   const char* label;
   uint8_t gpio;
 };
-const SparePin kSpare[] = {{"D4", 5}, {"D5", 6}, {"D6", 43}, {"D7", 44}};
+// Only pins board_pins.h doesn't use: the finder turns them into plain inputs,
+// which would cut off any peripheral on them (it once took the OLED's I2C).
+const SparePin kSpare[] = {{"D6", 43}, {"D7", 44}};
+static_assert(board::kOledSda != 43 && board::kOledSda != 44 && board::kOledScl != 43 &&
+                  board::kOledScl != 44,
+              "pin finder must not touch the OLED's I2C pins");
 const uint8_t kSpareCount = sizeof kSpare / sizeof kSpare[0];
 
 int spare_levels() {
@@ -265,8 +270,8 @@ void trace_pins() {
     }
     detent::usb::log().printf(" A=%d B=%d edges=%lu", (levels >> 1) & 1, levels & 1,
                               static_cast<unsigned long>(edges));
-    // Pin finder: the XIAO pins nothing uses yet, with pull ups, so a wire on
-    // the wrong pin shows up by name.
+    // Pin finder: XIAO pins nothing uses (see kSpare), with pull ups, so a
+    // wire on the wrong pin shows up by name.
     for (uint8_t i = 0; i < kSpareCount; i++) {
       detent::usb::log().printf(" %s=%d", kSpare[i].label, digitalRead(kSpare[i].gpio) ? 1 : 0);
     }
