@@ -24,9 +24,21 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 probe="$root/target/debug/ctl-probe"
 work="$(mktemp -d)"
 
-# Button 1 down, up 120 ms later, then the encoder (control 5) +2 and -1.
-script="B1:down B1:up@120 E5:+2@50 E5:-1@50"
-expected=$'BUTTON 1 down\nBUTTON 1 up\nENCODER 5 +2\nENCODER 5 -1'
+# Button 1 down, then up 120 ms later.
+script="B1:down B1:up@120"
+expected=$'BUTTON 1 down\nBUTTON 1 up'
+
+# The encoder (control 5) and its push switch (control 6) go through the mode
+# router: the device boots in Volume mode, where turns move the Mac's volume
+# and a short press toggles mute, and a long press opens the menu (D-048).
+vol() { osascript -e 'output volume of (get volume settings)'; }
+muted() { osascript -e 'output muted of (get volume settings)'; }
+VOL0="$(vol)"
+MUTED0="$(muted)"
+restore_audio() {
+  osascript -e "set volume output volume $VOL0" -e "set volume output muted $MUTED0" >/dev/null
+}
+trap restore_audio EXIT
 
 fail() {
   echo "hil: FAIL: $*" >&2
@@ -91,7 +103,37 @@ gap_ms="$(awk '/BUTTON 1 down/ {d=$1} /BUTTON 1 up/ {u=$1} END {sub("s","",d); s
 if (( gap_ms < 100 || gap_ms > 300 )); then
   fail "down to up took ${gap_ms} ms, expected about 120"
 fi
-echo "hil: debug firmware replayed 4 events in order; down to up ${gap_ms} ms"
+echo "hil: debug firmware replayed buttons in order; down to up ${gap_ms} ms"
+
+# Volume mode: one detent moves the volume, one back restores it.
+inject() { "$probe" --inject "$1" --exit-after "$2" >"$3" 2>&1 || fail "ctl-probe exited nonzero; see $3"; }
+first=+1; second=-1
+if (( VOL0 > 90 )); then first=-1; second=+1; fi
+inject "E5:$first" 1 "$work/vol1.log"
+v1="$(vol)"
+inject "E5:$second" 1 "$work/vol2.log"
+v2="$(vol)"
+if [[ "$first" == "+1" ]]; then (( v1 > VOL0 )) || fail "volume didn't rise: $VOL0 -> $v1"; else (( v1 < VOL0 )) || fail "volume didn't fall: $VOL0 -> $v1"; fi
+(( v2 == VOL0 )) || fail "volume didn't return: $VOL0 -> $v1 -> $v2"
+grep -q "ENCODER" "$work/vol1.log" && fail "Volume mode sent ENCODER to the app"
+echo "hil: Volume mode turns moved the volume $VOL0 -> $v1 -> $v2"
+
+# Short press toggles mute; a second one toggles it back.
+inject "B6:down B6:up@50" 1 "$work/mute1.log"
+m1="$(muted)"
+inject "B6:down B6:up@50" 1 "$work/mute2.log"
+m2="$(muted)"
+[[ "$m1" != "$MUTED0" && "$m2" == "$MUTED0" ]] || fail "mute didn't toggle: $MUTED0 -> $m1 -> $m2"
+grep -q "BUTTON 6" "$work/mute1.log" && fail "Volume mode sent the push switch to the app"
+echo "hil: short press toggled mute $MUTED0 -> $m1 -> $m2"
+
+# Long press opens the menu (HEARTBEAT reports it), another closes it.
+inject "B6:down B6:long@50 B6:up@50" 3 "$work/menu1.log"
+grep -q "HEARTBEAT .*mode menu" "$work/menu1.log" || { cat "$work/menu1.log" >&2; fail "long press didn't open the menu"; }
+inject "B6:down B6:long@50 B6:up@50" 3 "$work/menu2.log"
+grep -q "HEARTBEAT .*mode volume" "$work/menu2.log" || { cat "$work/menu2.log" >&2; fail "long press didn't close the menu"; }
+[[ "$(muted)" == "$MUTED0" ]] || fail "a long press toggled mute"
+echo "hil: long press opened the menu and closed it, without muting"
 
 # --- release firmware: TEST_INJECT ignored ---
 flash xiao_esp32s3
@@ -103,5 +145,6 @@ if [[ -n "$got" ]]; then
 fi
 echo "hil: release firmware ignored TEST_INJECT; HELLO still arrives"
 
+restore_audio
 echo "hil: PASS (board left on release firmware)"
 rm -rf "$work"

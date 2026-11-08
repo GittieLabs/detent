@@ -5,12 +5,14 @@
 // them together. Input, encoder modes, and the OLED arrive in later M1 tasks.
 
 #include <Arduino.h>
+#include <USBHIDConsumerControl.h>
 
 #include "board_pins.h"
 #include "detent_protocol.h"
 #include "injector.h"
 #include "input.h"
 #include "link_layer.h"
+#include "modes.h"
 #include "report.h"
 #include "usb_device.h"
 #include "version.h"
@@ -36,6 +38,24 @@ namespace board = detent::board;
 // setup(), before USB starts.
 const uint8_t kControlCount = board::kButtonCount + 1;
 detent::Control controls[kControlCount];
+
+uint8_t action_of(detent::ButtonEvent e) {
+  switch (e) {
+    case detent::ButtonEvent::Down: return DETENT_ACTION_DOWN;
+    case detent::ButtonEvent::Up: return DETENT_ACTION_UP;
+    case detent::ButtonEvent::LongPress: return DETENT_ACTION_LONG_PRESS;
+    default: return 0;
+  }
+}
+
+detent::ButtonEvent event_of(uint8_t action) {
+  switch (action) {
+    case DETENT_ACTION_DOWN: return detent::ButtonEvent::Down;
+    case DETENT_ACTION_UP: return detent::ButtonEvent::Up;
+    case DETENT_ACTION_LONG_PRESS: return detent::ButtonEvent::LongPress;
+    default: return detent::ButtonEvent::None;
+  }
+}
 
 const detent::LinkConfig kLinkConfig = {
     DETENT_FW_MAJOR, DETENT_FW_MINOR, DETENT_FW_PATCH, controls, kControlCount,
@@ -66,6 +86,46 @@ UsbTransport transport;
 detent::Link device_link(kLinkConfig, transport);
 detent::Injector injector(DETENT_TEST_INJECT != 0);
 
+// What the encoder and its push switch do, by mode.
+struct FirmwareModeSink : detent::ModeSink {
+  void volume_steps(int8_t delta) override {
+    const uint16_t usage = delta > 0 ? CONSUMER_CONTROL_VOLUME_INCREMENT
+                                     : CONSUMER_CONTROL_VOLUME_DECREMENT;
+    for (int i = 0; i < (delta > 0 ? delta : -delta); i++) detent::usb::consumer_tap(usage);
+  }
+  void mute_toggle() override { detent::usb::consumer_tap(CONSUMER_CONTROL_MUTE); }
+  void encoder(uint8_t control, int8_t delta) override { device_link.send_encoder(control, delta); }
+  void button(uint8_t control, uint8_t action) override { device_link.send_button(control, action); }
+  // The OLED menu arrives with the display task.
+  void menu_scroll(int8_t delta) override { detent::usb::log().printf("menu: scroll %d\n", delta); }
+  void menu_select() override { detent::usb::log().print("menu: select\n"); }
+  void mode_changed(uint8_t mode) override {
+    device_link.set_encoder_mode(mode);
+    detent::usb::log().printf("mode: %u\n", mode);
+  }
+};
+
+FirmwareModeSink mode_sink;
+detent::ModeRouter modes(board::kEncoderControl, board::kEncoderPushControl, mode_sink);
+
+// Routes one control event, physical or injected (TEST_INJECT replays through
+// here so it exercises the real path).
+void on_button(uint8_t control, detent::ButtonEvent e) {
+  if (control == board::kEncoderPushControl) {
+    modes.on_push(e);
+  } else {
+    device_link.send_button(control, action_of(e));
+  }
+}
+
+void on_turn(uint8_t control, int8_t delta) {
+  if (control == board::kEncoderControl) {
+    modes.on_turn(delta);
+  } else {
+    device_link.send_encoder(control, delta);
+  }
+}
+
 // XIAO ESP32-S3 user LED (GPIO21) is active low. Off: no host. Blinking:
 // mounted, not paired. Solid: paired.
 const uint8_t LED_PIN = LED_BUILTIN;
@@ -80,15 +140,6 @@ void update_led(uint32_t now) {
     on = (now / 500) % 2 == 0;
   }
   digitalWrite(LED_PIN, on ? LED_ON : LED_OFF);
-}
-
-uint8_t action_of(detent::ButtonEvent e) {
-  switch (e) {
-    case detent::ButtonEvent::Down: return DETENT_ACTION_DOWN;
-    case detent::ButtonEvent::Up: return DETENT_ACTION_UP;
-    case detent::ButtonEvent::LongPress: return DETENT_ACTION_LONG_PRESS;
-    default: return 0;
-  }
 }
 
 void setup_controls() {
@@ -108,16 +159,13 @@ void poll_controls(uint32_t now) {
   for (uint8_t i = 0; i < board::kButtonCount; i++) {
     const bool pressed = digitalRead(board::kButtons[i].gpio) == LOW;
     const detent::ButtonEvent e = buttons[i].update(pressed, now);
-    if (e != detent::ButtonEvent::None) {
-      device_link.send_button(board::kButtons[i].control, action_of(e));
-    }
+    if (e != detent::ButtonEvent::None) on_button(board::kButtons[i].control, e);
   }
   int8_t delta;
   portENTER_CRITICAL(&encoder_mux);
   const bool turned = encoder.poll(now, &delta);
   portEXIT_CRITICAL(&encoder_mux);
-  // Mapped mode for now; the encoder modes task routes by mode.
-  if (turned) device_link.send_encoder(board::kEncoderControl, delta);
+  if (turned) on_turn(board::kEncoderControl, delta);
 }
 
 void handle_report(const uint8_t* report, uint32_t now) {
@@ -183,9 +231,9 @@ void loop() {
   detent::InjectEvent ev;
   while (injector.next_due(now, &ev)) {
     if (ev.type == DETENT_MSG_BUTTON) {
-      device_link.send_button(ev.control, ev.value);
+      on_button(ev.control, event_of(ev.value));
     } else {
-      device_link.send_encoder(ev.control, static_cast<int8_t>(ev.value));
+      on_turn(ev.control, static_cast<int8_t>(ev.value));
     }
   }
 

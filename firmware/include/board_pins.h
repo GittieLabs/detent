@@ -23,12 +23,14 @@ struct ButtonPin {
 
 // XIAO pin labels: D0=GPIO1 D1=GPIO2 D2=GPIO3 D3=GPIO4 D4=GPIO5 D5=GPIO6
 // D6=GPIO43 D7=GPIO44 D8=GPIO7 D9=GPIO8 D10=GPIO9.
+const uint8_t kEncoderPushControl = 6;  // routed by the encoder mode (lib/modes)
+
 const ButtonPin kButtons[] = {
-    {1, 1},  // D0
-    {2, 2},  // D1
-    {3, 3},  // D2
-    {4, 4},  // D3
-    {6, 9},  // D10, the encoder's push switch
+    {1, 1},                    // D0
+    {2, 2},                    // D1
+    {3, 3},                    // D2
+    {4, 4},                    // D3
+    {kEncoderPushControl, 9},  // D10, the encoder's push switch
 };
 const uint8_t kButtonCount = sizeof kButtons / sizeof kButtons[0];
 

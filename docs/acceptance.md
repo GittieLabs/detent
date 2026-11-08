@@ -69,7 +69,7 @@ Needs the XIAO ESP32-S3 on USB, wired with the buttons, encoder, and OLED. Steps
 3. Replug (exit criterion). Run `just probe --count-hellos 20`, then unplug and replug the device 20 times, waiting for each HELLO line. The probe exits 0 after the 20th.
 4. Keyboard isolation (exit criterion). With `ctl-probe` running, type a sentence on the built in keyboard and on any external keyboard. The probe prints nothing.
 5. Controls (task 9). With `ctl-probe` running, press, hold (over 600 ms), and release each button, and turn the encoder in Mapped mode both ways. Each shows the matching BUTTON down, long press, up, and ENCODER lines with the right sign.
-6. Volume pass through (exit criterion). Quit `ctl-probe`. Put the encoder in Volume mode from the OLED menu. Turning it moves the macOS volume with the native HUD; pressing it toggles mute.
+6. Volume pass through (exit criterion). Quit `ctl-probe`. The encoder boots in Volume mode (or pick Volume from the OLED menu). Turning it moves the macOS volume with the native HUD; a short press toggles mute on release. A long press (over 600 ms) opens the menu and does not mute; another long press closes it.
 7. OLED (task 11). The screen shows connection, paired state, and mode. The menu lists Volume, Mapped, Setup, Device info; Setup shows the same serial as step 2; leaving Setup makes `ctl-probe` print a HELLO.
 
 Results:

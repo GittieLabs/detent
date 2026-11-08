@@ -38,7 +38,9 @@ The USB serial number string is derived from the chip's MAC address, so two iden
 
 - **Volume.** Turns send Consumer Control volume steps; a press toggles mute. Runs entirely on the device.
 - **Menu.** Turns scroll the OLED menu; a press selects.
-- **Mapped.** Turns are sent to the app as ENCODER events and mapped like any control (for example zoom or scrub in Plasticity).
+- **Mapped.** Turns are sent to the app as ENCODER events and mapped like any control (for example zoom or scrub in Plasticity). The push switch goes to the app as a BUTTON.
+
+A long press of the encoder's push switch opens the OLED menu from any mode, and another long press closes it, back to the mode it came from. In Volume mode, mute toggles on release, so a long press never mutes (D-048). The device boots in Volume mode.
 
 **OLED menu.** A firmware owned part (Volume, Mapped, Setup, Device info) plus an app owned part (apps and dashboards) that the app sends as MENU messages. Setup puts the device in pairing mode and shows its serial so the wizard can confirm the right unit. With no app connected, only the firmware owned part shows. Labels are at most 16 characters.
 
