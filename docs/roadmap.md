@@ -27,7 +27,7 @@ Exit criteria:
 - [x] Two consecutive signed rebuilds keep the Accessibility grant without re prompting (manual, `acceptance.md`). Keith passed it on 2026-11-04 with build `147ecce`.
 - [x] CI green on main. First green run 41943577075 on 2026-11-05 (private repo `gittielabs/detent`).
 
-## M1 Device speaks (current)
+## M1 Device speaks (done 2026-11-07)
 
 Goal: firmware enumerates with VID, PID, serial, the vendor HID channel, and Consumer Control. It sends HELLO, BUTTON, ENCODER, HEARTBEAT and handles REQUEST_HELLO and HELLO_ACK. Encoder Volume mode sends Consumer Control; the OLED shows status and the firmware owned menu. Protocol codec in the `protocol` crate with property tests. `ctl-probe` opens the device by VID/PID and prints decoded events. `protocol.md` frozen at v1.
 
@@ -48,7 +48,7 @@ Tasks:
 - [x] Encoder modes and Consumer Control: `firmware/lib/modes/` routes the encoder by mode. Volume sends Consumer Control volume steps and press toggles mute; Mapped sends ENCODER events; Menu drives the OLED menu. Mode reported in HELLO and HEARTBEAT. Tests: native unit tests for routing per mode; HIL for ENCODER in Mapped mode via TEST_INJECT; acceptance step for volume with `ctl-probe` closed (exit criterion). Done 2026-11-07: `lib/modes` with 10 native tests; TEST_INJECT now replays through the router. The extended `scripts/hil.sh` (volume, mute, long press to menu) is written but not yet run: flashing needs Keith's OK.
 - [x] OLED status and firmware owned menu: `firmware/lib/display/` for the SSD1306 over I2C; status line (connected, paired, mode), firmware menu (Volume, Mapped, Setup, Device info), Setup shows the serial and sends HELLO on exit, labels at most 16 chars. Pick the display library then and log it. Tests: native unit tests for the menu model (navigation, selection, truncation); acceptance step for what the screen shows. Done 2026-11-07: `lib/menu` with 12 native tests, U8g2 driver (D-050). On hardware: passed acceptance step 7 with Keith's display, all three modes and Setup.
 - [x] Freeze protocol v1: reconcile `protocol.md` with the codec as built, drop "draft", regenerate the header and vectors, and run the M1 acceptance pass. Tests: full `just ci`; `acceptance.md` M1 steps. Done 2026-11-07: `protocol.md` reconciled (unique control IDs, nonzero delta, mode routing, PID 0x8FDE) and marked frozen; `protocol/tests/frozen.rs` pins the exact v1 bytes and fails on any wire change even after the vectors are regenerated (D-051). The acceptance pass is split out below.
-- [ ] M1 acceptance pass on release firmware: ~~flash release and run `scripts/hil.sh`~~ (done 2026-11-07, PASS, board on release `b7c213b`); Keith runs steps 3 (20 replugs) and 4 (keyboard isolation); step 5 (buttons) waits on button wiring or is waived for M1 by Keith; record results in `acceptance.md`.
+- [x] M1 acceptance pass on release firmware: HIL PASS (`b7c213b`, board left on release); steps 3, 4, 6, 7 PASS; step 5 (buttons) and step 2's second unit check DEFERRED by Keith 2026-11-07 and carried into M2.
 
 Exit criteria:
 
@@ -58,6 +58,11 @@ Exit criteria:
 - [x] Codec rejects malformed reports without panicking (proptest in `cargo test`). Both directions, 2048 cases per property, 2026-11-07.
 
 ## M2 Headless engine
+
+Carried over from M1 (hardware Keith doesn't have yet; not M1 exit criteria):
+
+- [ ] Press each of the four buttons with `just probe` running and see BUTTON down, long press, and up (`acceptance.md` M1 step 5). Waits on tactile buttons. Update `firmware/include/board_pins.h` if they aren't on D0 to D3.
+- [ ] Plug in a second board and confirm a different USB serial (`acceptance.md` M1 step 2). Waits on a second XIAO.
 
 Devices module with allowlist and heartbeat, router, and four actions (Open app, Open URL, Volume, AppleScript), driven by a hand written JSON config. MockTransport and RecordingExecutor.
 

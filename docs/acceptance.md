@@ -74,6 +74,8 @@ Needs the XIAO ESP32-S3 on USB, wired with the buttons, encoder, and OLED. Steps
 
 Results:
 
+- Step 5: DEFERRED by Keith, 2026-11-07. No buttons wired yet (tactile buttons to be bought). Debounce and long press are covered by native tests (`firmware/test/test_input`), and the encoder's push switch exercises the same button path on hardware. Carried into M2.
+- Step 2, second unit: DEFERRED, needs a second board. The single unit's identity checks passed. Carried into M2.
 - Step 4: `PASS`, 2026-11-07, release firmware `b7c213b`. Keith typed on the built in keyboard for 40 s while `ctl-probe --raw` ran: it showed only HELLO and 20 heartbeats, with no BUTTON, ENCODER, rejected, or foreign collection reports.
 - Step 3: `PASS`, 2026-11-07, release firmware `b7c213b`. Keith replugged 20 times with `ctl-probe` counting: 19 replugs in a `--count-hellos 20` run (the first count was the existing connection; 19 disconnects logged) plus 1 in a `--count-hellos 2` run. Every connection produced a HELLO; both runs exited 0.
 - HIL (`scripts/hil.sh`), run by Claude on 2026-11-07, build `b7c213b`: PASS. Debug firmware replayed buttons in order (down to up 118 ms); a Volume mode detent moved the Mac's volume 44 -> 50 -> 44; a short press toggled mute false -> true -> false; a long press opened and closed the menu without muting; release firmware ignored TEST_INJECT and still sent HELLO. Board left on release firmware; audio restored.
