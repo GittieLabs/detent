@@ -42,7 +42,7 @@ The USB serial number string is derived from the chip's MAC address, so two iden
 
 A long press of the encoder's push switch opens the OLED menu from any mode, and another long press closes it, back to the mode it came from. In Volume mode, mute toggles on release, so a long press never mutes (D-048). The device boots in Volume mode.
 
-**OLED menu.** A firmware owned part (Volume, Mapped, Setup, Device info) plus an app owned part (apps and dashboards) that the app sends as MENU messages. Setup puts the device in pairing mode and shows its serial so the wizard can confirm the right unit. With no app connected, only the firmware owned part shows. Labels are at most 16 characters.
+**OLED menu.** A firmware owned part (Volume, Mapped, Setup, Device info) plus an app owned part (apps and dashboards) that the app sends as MENU messages (M6). Setup puts the device in pairing mode and shows its serial so the wizard can confirm the right unit. With no app connected, only the firmware owned part shows. Labels are at most 16 characters. Outside the menu the screen shows the model, the encoder mode, and USB state. `lib/menu` keeps the menu state and renders text lines (natively tested); `src/display.cpp` draws them with U8g2, skipping all drawing if no display answers on I2C.
 
 ## Identity
 

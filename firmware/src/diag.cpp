@@ -5,6 +5,7 @@
 #include <esp_attr.h>
 #include <esp_system.h>
 
+#include "display.h"
 #include "usb_device.h"
 
 namespace detent {
@@ -51,7 +52,8 @@ void tick(uint32_t now_ms, uint32_t rejected) {
   if (now_ms - last_print < 2000) return;
   last_print = now_ms;
   Print& out = usb::log();
-  out.printf("diag: boots=%lu uptime_ms=%lu mounts=%lu unmounts=%lu idf=[",
+  out.printf("diag: oled=%s boots=%lu uptime_ms=%lu mounts=%lu unmounts=%lu idf=[",
+             display::present() ? "yes" : "no",
              static_cast<unsigned long>(persisted.boots), static_cast<unsigned long>(now_ms),
              static_cast<unsigned long>(mounts), static_cast<unsigned long>(unmounts));
   for (int i = 0; i < kHistory; i++) out.printf(i ? " %u" : "%u", persisted.idf[i]);

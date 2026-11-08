@@ -38,9 +38,12 @@ const uint8_t kEncoderControl = 5;
 const uint8_t kEncoderA = 7;  // D8
 const uint8_t kEncoderB = 8;  // D9
 
-// SSD1306 OLED on I2C (used by the display task).
+// 128x64 OLED on I2C, the XIAO's default SDA/SCL pins. Most modules answer at
+// 0x3C (some at 0x3D). Modules sold as "SSD1306" sometimes carry an SH1106; if
+// the picture is shifted two pixels or garbled, build with -DDETENT_OLED_SH1106=1.
 const uint8_t kOledSda = 5;  // D4
 const uint8_t kOledScl = 6;  // D5
+const uint8_t kOledAddress = 0x3C;
 
 }  // namespace board
 }  // namespace detent

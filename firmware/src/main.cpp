@@ -9,12 +9,15 @@
 
 #include "board_pins.h"
 #include "detent_protocol.h"
+#include "display.h"
 #include "injector.h"
 #include "input.h"
 #include "link_layer.h"
+#include "menu.h"
 #include "modes.h"
 #include "report.h"
 #include "usb_device.h"
+#include "usb_identity.h"
 #include "version.h"
 
 // Set by the xiao_esp32s3_debug env only: boot and reset diagnostics on CDC.
@@ -101,6 +104,10 @@ UsbTransport transport;
 detent::Link device_link(kLinkConfig, transport);
 detent::Injector injector(DETENT_TEST_INJECT != 0);
 
+// The OLED's screens and the firmware owned menu.
+detent::Menu menu;
+void on_menu_select();  // defined after `modes`, which it changes
+
 // What the encoder and its push switch do, by mode.
 struct FirmwareModeSink : detent::ModeSink {
   void volume_steps(int8_t delta) override {
@@ -115,17 +122,53 @@ struct FirmwareModeSink : detent::ModeSink {
   }
   void encoder(uint8_t control, int8_t delta) override { device_link.send_encoder(control, delta); }
   void button(uint8_t control, uint8_t action) override { device_link.send_button(control, action); }
-  // The OLED menu arrives with the display task.
-  void menu_scroll(int8_t delta) override { detent::usb::log().printf("menu: scroll %d\n", delta); }
-  void menu_select() override { detent::usb::log().print("menu: select\n"); }
+  void menu_scroll(int8_t delta) override { menu.scroll(delta); }
+  void menu_select() override { on_menu_select(); }
   void mode_changed(uint8_t mode) override {
     device_link.set_encoder_mode(mode);
     detent::usb::log().printf("mode: %u\n", mode);
+    if (mode == DETENT_ENCODER_MODE_MENU) {
+      menu.open();
+    } else if (menu.close() == detent::MenuAction::SetupExited) {
+      device_link.on_setup_exit(millis());
+    }
   }
 };
 
 FirmwareModeSink mode_sink;
 detent::ModeRouter modes(board::kEncoderControl, board::kEncoderPushControl, mode_sink);
+
+void on_menu_select() {
+  switch (menu.select()) {
+    case detent::MenuAction::SetVolume:
+      modes.set_mode(DETENT_ENCODER_MODE_VOLUME);  // closes the menu
+      break;
+    case detent::MenuAction::SetMapped:
+      modes.set_mode(DETENT_ENCODER_MODE_MAPPED);
+      break;
+    case detent::MenuAction::SetupExited:
+      device_link.on_setup_exit(millis());
+      break;
+    default:
+      break;
+  }
+}
+
+void refresh_display() {
+  detent::DeviceView v;
+  v.product = detent::kProductName;
+  v.serial = detent::usb::serial();
+  v.fw_major = DETENT_FW_MAJOR;
+  v.fw_minor = DETENT_FW_MINOR;
+  v.fw_patch = DETENT_FW_PATCH;
+  v.protocol = DETENT_PROTOCOL_VERSION;
+  v.mode = modes.mode();
+  v.mounted = device_link.mounted();
+  v.paired = device_link.paired();
+  char lines[detent::kScreenLines][detent::kLineChars + 1];
+  menu.render(v, lines);
+  detent::display::draw(lines);
+}
 
 // Routes one control event, physical or injected (TEST_INJECT replays through
 // here so it exercises the real path).
@@ -284,6 +327,7 @@ void setup() {
   digitalWrite(LED_PIN, LED_OFF);
   setup_controls();
   detent::usb::begin();
+  detent::display::begin();
 }
 
 void loop() {
@@ -319,6 +363,7 @@ void loop() {
 
   device_link.tick(now);
   update_led(now);
+  refresh_display();
 #if DETENT_DIAG
   detent::diag::tick(now, device_link.rejected());
 #endif
