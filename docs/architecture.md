@@ -52,6 +52,22 @@ A long press of the encoder's push switch opens the OLED menu from any mode, and
 
 Every event inside the app carries a `DeviceId` from day one, even though v1 supports one connected device. That keeps multi device a UI change, not a refactor.
 
+## Firmware modules (`firmware/`)
+
+Logic lives in pure C++11 libraries under `lib/` with caller supplied time and pins, tested natively (`just fw-test`, D-035); `src/` holds the thin Arduino glue.
+
+- `lib/report`: pack device to app messages, strictly parse app to device ones; tested byte for byte against golden vectors generated from the Rust codec (D-039).
+- `lib/link_layer`: HELLO, HEARTBEAT, REQUEST_HELLO, HELLO_ACK, seq, pairing (D-042).
+- `lib/input`: button debounce and long press, quadrature decoding and detent coalescing (D-047).
+- `lib/modes`: what the encoder and its push switch do in Volume, Mapped, and Menu modes (D-048).
+- `lib/menu`: OLED screens and the firmware owned menu, rendered as text lines (D-050).
+- `lib/injector`: TEST_INJECT replay, enabled only in the debug env (D-043).
+- `lib/usb_identity`: serial from the base MAC, product strings (D-040).
+- `src/usb_device`: the composite USB device and its receive path (D-036, D-046); `src/display`: draws `lib/menu`'s lines with U8g2; `src/diag`: debug only boot, USB, and input diagnostics (D-049); `src/main.cpp`: wiring.
+- `include/board_pins.h` is the one pin map; `include/detent_protocol.h` is generated from the `protocol` crate.
+
+Two builds: `xiao_esp32s3` (release) and `xiao_esp32s3_debug` (adds TEST_INJECT, diagnostics, and the input trace). `scripts/hil.sh` exercises both on hardware.
+
 ## App modules (`app/src-tauri/src/`)
 
 1. **`transport`** A `DeviceTransport` trait. `UsbHid` implementation over the `hidapi` crate. A `MockTransport` for tests. Bluetooth later is another implementation; nothing above this changes. Note: on macOS, open the vendor entry non exclusive (hidapi's default is exclusive, which swallows the volume keys), and every read and write carries the leading report ID `0x06`; drop reads with any other ID.
