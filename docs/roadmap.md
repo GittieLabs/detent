@@ -53,7 +53,7 @@ Exit criteria:
 
 - [ ] 20 unplug and replug cycles, a HELLO every time (`ctl-probe --count-hellos 20`, `acceptance.md`).
 - [ ] Typing on the built in keyboard produces nothing in `ctl-probe` (manual, `acceptance.md`).
-- [ ] The encoder in Volume mode moves the macOS volume with `ctl-probe` closed (manual, `acceptance.md`).
+- [x] The encoder in Volume mode moves the macOS volume with `ctl-probe` closed (manual, `acceptance.md`). Keith confirmed 2026-11-07.
 - [x] Codec rejects malformed reports without panicking (proptest in `cargo test`). Both directions, 2048 cases per property, 2026-11-07.
 
 ## M2 Headless engine
