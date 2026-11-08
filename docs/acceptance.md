@@ -74,5 +74,6 @@ Needs the XIAO ESP32-S3 on USB, wired with the buttons, encoder, and OLED. Steps
 
 Results:
 
+- Step 6, partial, 2026-11-07, firmware `bccacdd` + debug trace: Keith confirmed turning the encoder moves the macOS volume (after rewiring A/B from D4/D5 to D8/D9; the debug pin finder showed the mistake). Short press mute and long press menu still to check; not marked PASS.
 - Step 1: `PASS`, 2026-11-07, build `da68b77` (spike firmware). Keith confirmed no macOS permission dialog appeared. Evidence, run by Claude (spike firmware, build after `31a5fc6`): `ctl-probe` launched through Terminal.app, whose Input Monitoring status was `unknown` (never granted), opened the vendor channel non exclusive and read reports; the status was still `unknown` afterwards, so no prompt was raised. Volume keys (Consumer Control) changed the macOS volume while the probe held the device open shared, and didn't when it was open exclusive.
 - Step 2, evidence run by Claude on 2026-11-07 (build after `dc896ca`): `ioreg` shows vendor `12346`, product `36830`, serial `E072A1FC4EDC` (matches the ROM's MAC `E0:72:A1:FC:4E:DC`), product `Detent Dev`, vendor name `GittieLabs`. Not marked PASS: the second unit check needs Keith and a second board.
