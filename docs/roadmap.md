@@ -53,7 +53,7 @@ Tasks:
 Exit criteria:
 
 - [x] 20 unplug and replug cycles, a HELLO every time (`ctl-probe --count-hellos`, `acceptance.md`). Keith, 2026-11-07: 20 of 20.
-- [ ] Typing on the built in keyboard produces nothing in `ctl-probe` (manual, `acceptance.md`).
+- [x] Typing on the built in keyboard produces nothing in `ctl-probe` (manual, `acceptance.md`). Keith, 2026-11-07.
 - [x] The encoder in Volume mode moves the macOS volume with `ctl-probe` closed (manual, `acceptance.md`). Keith confirmed 2026-11-07.
 - [x] Codec rejects malformed reports without panicking (proptest in `cargo test`). Both directions, 2048 cases per property, 2026-11-07.
 
