@@ -30,6 +30,8 @@ VID is Espressif's `0x303A`. The PID comes from Espressif's free usb-pids progra
 
 The USB serial number string is derived from the chip's MAC address, so two identical devices are distinguishable.
 
+**Controls.** `firmware/include/board_pins.h` is the one place that maps controls to pins, and HELLO reports exactly its table (a PLACEHOLDER until the wiring is settled). Buttons are polled and debounced in the main loop; the encoder is decoded from pin change interrupts so turns survive a blocked loop, and detents within 20 ms go out as one ENCODER delta. The encoder's push switch is its own button control.
+
 **Status LED** (the XIAO's user LED): off with no host, blinking once a second while mounted but not paired, solid once the app has sent HELLO_ACK paired.
 
 **Encoder modes** (switched from the OLED menu, owned by firmware):

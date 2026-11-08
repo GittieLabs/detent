@@ -6,8 +6,10 @@
 
 #include <Arduino.h>
 
+#include "board_pins.h"
 #include "detent_protocol.h"
 #include "injector.h"
+#include "input.h"
 #include "link_layer.h"
 #include "report.h"
 #include "usb_device.h"
@@ -28,20 +30,31 @@
 
 namespace {
 
-// PLACEHOLDER: what HELLO reports until Keith's wiring is known (open question
-// in docs/roadmap.md); the input task replaces this with board_pins.h.
-const detent::Control kControls[] = {
-    {1, DETENT_KIND_BUTTON},
-    {2, DETENT_KIND_BUTTON},
-    {3, DETENT_KIND_BUTTON},
-    {4, DETENT_KIND_BUTTON},
-    {5, DETENT_KIND_ENCODER},
-};
+namespace board = detent::board;
+
+// What HELLO reports: every button in board_pins.h, then the encoder. Filled in
+// setup(), before USB starts.
+const uint8_t kControlCount = board::kButtonCount + 1;
+detent::Control controls[kControlCount];
 
 const detent::LinkConfig kLinkConfig = {
-    DETENT_FW_MAJOR, DETENT_FW_MINOR, DETENT_FW_PATCH,
-    kControls, sizeof kControls / sizeof kControls[0],
+    DETENT_FW_MAJOR, DETENT_FW_MINOR, DETENT_FW_PATCH, controls, kControlCount,
 };
+
+detent::Button buttons[board::kButtonCount];
+
+// The encoder is decoded in a pin change interrupt so turns aren't lost while
+// loop() is blocked in a USB send; loop() polls coalesced deltas.
+detent::Encoder encoder;
+portMUX_TYPE encoder_mux = portMUX_INITIALIZER_UNLOCKED;
+
+void IRAM_ATTR on_encoder_edge() {
+  const bool a = digitalRead(board::kEncoderA);
+  const bool b = digitalRead(board::kEncoderB);
+  portENTER_CRITICAL_ISR(&encoder_mux);
+  encoder.on_edge(a, b);
+  portEXIT_CRITICAL_ISR(&encoder_mux);
+}
 
 struct UsbTransport : detent::LinkTransport {
   bool send(const uint8_t report[DETENT_REPORT_LEN]) override {
@@ -67,6 +80,44 @@ void update_led(uint32_t now) {
     on = (now / 500) % 2 == 0;
   }
   digitalWrite(LED_PIN, on ? LED_ON : LED_OFF);
+}
+
+uint8_t action_of(detent::ButtonEvent e) {
+  switch (e) {
+    case detent::ButtonEvent::Down: return DETENT_ACTION_DOWN;
+    case detent::ButtonEvent::Up: return DETENT_ACTION_UP;
+    case detent::ButtonEvent::LongPress: return DETENT_ACTION_LONG_PRESS;
+    default: return 0;
+  }
+}
+
+void setup_controls() {
+  for (uint8_t i = 0; i < board::kButtonCount; i++) {
+    controls[i] = {board::kButtons[i].control, DETENT_KIND_BUTTON};
+    pinMode(board::kButtons[i].gpio, INPUT_PULLUP);
+  }
+  controls[board::kButtonCount] = {board::kEncoderControl, DETENT_KIND_ENCODER};
+  pinMode(board::kEncoderA, INPUT_PULLUP);
+  pinMode(board::kEncoderB, INPUT_PULLUP);
+  encoder.reset(digitalRead(board::kEncoderA), digitalRead(board::kEncoderB));
+  attachInterrupt(digitalPinToInterrupt(board::kEncoderA), on_encoder_edge, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(board::kEncoderB), on_encoder_edge, CHANGE);
+}
+
+void poll_controls(uint32_t now) {
+  for (uint8_t i = 0; i < board::kButtonCount; i++) {
+    const bool pressed = digitalRead(board::kButtons[i].gpio) == LOW;
+    const detent::ButtonEvent e = buttons[i].update(pressed, now);
+    if (e != detent::ButtonEvent::None) {
+      device_link.send_button(board::kButtons[i].control, action_of(e));
+    }
+  }
+  int8_t delta;
+  portENTER_CRITICAL(&encoder_mux);
+  const bool turned = encoder.poll(now, &delta);
+  portEXIT_CRITICAL(&encoder_mux);
+  // Mapped mode for now; the encoder modes task routes by mode.
+  if (turned) device_link.send_encoder(board::kEncoderControl, delta);
 }
 
 void handle_report(const uint8_t* report, uint32_t now) {
@@ -103,6 +154,7 @@ void setup() {
 #endif
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LED_OFF);
+  setup_controls();
   detent::usb::begin();
 }
 
@@ -125,6 +177,8 @@ void loop() {
   while (detent::usb::poll_report(report)) {
     handle_report(report, now);
   }
+
+  poll_controls(now);
 
   detent::InjectEvent ev;
   while (injector.next_due(now, &ev)) {
