@@ -1,8 +1,8 @@
 # Protocol
 
-`PROTOCOL_VERSION = 1` (draft; frozen at the end of M1)
+`PROTOCOL_VERSION = 1`, **frozen** on 2026-11-07 at the end of M1.
 
-Changes only with a version bump. The Rust crate in `protocol/` is the source of truth; `scripts/gen-header.sh` generates `firmware/include/detent_protocol.h` from it, and a test fails if they drift.
+Any change to the wire format needs a version bump; `protocol/tests/frozen.rs` pins the exact v1 bytes of every message and fails otherwise. The Rust crate in `protocol/` is the source of truth; `scripts/gen-header.sh` generates `firmware/include/detent_protocol.h` from it, and a test fails if they drift.
 
 ## Transport
 
@@ -36,13 +36,13 @@ Offsets are within the 63 byte report, after the report ID. A report with `len >
 
 | Type | Name | Payload |
 | --- | --- | --- |
-| `0x01` | HELLO | `fw_major u8, fw_minor u8, fw_patch u8, encoder_mode u8, control_count u8`, then `control_count` pairs of `(control_id u8, kind u8)`. Kind: `1` button, `2` encoder. Max 27 controls. |
+| `0x01` | HELLO | `fw_major u8, fw_minor u8, fw_patch u8, encoder_mode u8, control_count u8`, then `control_count` pairs of `(control_id u8, kind u8)`. Kind: `1` button, `2` encoder. Max 27 controls; control IDs are unique. |
 | `0x02` | BUTTON | `control_id u8, action u8`. Action: `1` down, `2` up, `3` long press (fires once at 600 ms held, before up). |
-| `0x03` | ENCODER | `control_id u8, delta i8`. Sent only in Mapped mode. Positive is clockwise. Device may coalesce detents within 20 ms. |
+| `0x03` | ENCODER | `control_id u8, delta i8`, never 0. Sent only in Mapped mode. Positive is clockwise. Device may coalesce detents within 20 ms. |
 | `0x04` | MENU_SELECT | `item_id u8`. An app owned OLED menu item was picked. |
 | `0x05` | HEARTBEAT | `uptime_s u32, encoder_mode u8`. Every 2 s while the host has the device mounted, measured from the previous one. `uptime_s` is seconds since boot and restarts at 0 after about 49.7 days (the device's 32 bit millisecond clock). |
 
-Encoder mode values: `0` Volume, `1` Menu, `2` Mapped.
+Encoder mode values: `0` Volume, `1` Menu, `2` Mapped. In Volume and Menu modes the device handles the encoder and its push switch itself; only Mapped mode sends them to the app (the push switch as a BUTTON).
 
 Device sends HELLO when the host mounts it, on REQUEST_HELLO, and after leaving Setup. The mount HELLO usually goes out before any app has the channel open, so hosts send REQUEST_HELLO after opening. Seq numbers advance even when a send fails, so gaps are visible. Paired (from HELLO_ACK) resets when the host unmounts the device.
 
@@ -61,6 +61,6 @@ Device sends HELLO when the host mounts it, on REQUEST_HELLO, and after leaving 
 | Field | Value |
 | --- | --- |
 | VID | `0x303A` (Espressif) |
-| PID | Placeholder `0x8XXX` in `protocol/src/ids.rs` until the Espressif usb-pids PR merges (D-014). Never `0x4001` or other default TinyUSB PIDs. |
+| PID | Placeholder `0x8FDE` in `protocol/src/ids.rs` until the Espressif usb-pids PR merges (D-014, D-026). Never `0x4001` or other default TinyUSB PIDs. Identity isn't wire format: the allocated PID replaces the placeholder without a version bump. |
 | Serial | 12 uppercase hex chars from the chip's base MAC (`esp_efuse_mac_get_default`), formatted by the firmware, not the core |
 | Product string | `Detent <model name>` (placeholder `Detent Dev`). Manufacturer string `GittieLabs`. |
