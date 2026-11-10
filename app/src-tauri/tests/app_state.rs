@@ -885,3 +885,27 @@ fn the_volume_overlay_shows_after_a_volume_action_that_ran() {
     );
     assert_eq!(hud_of(&Record::DryRun { on: true }), None);
 }
+
+#[test]
+fn the_controls_follow_an_encoder_mode_change() {
+    let mut s = seen(EncoderMode::Volume);
+    let handled = |s: &AppState| {
+        s.paired[0]
+            .controls
+            .iter()
+            .filter(|c| c.handled_by_device)
+            .map(|c| c.id)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(handled(&s), [6, 5]);
+    assert!(s.apply(&dev(DeviceEvent::Mode {
+        id: id(PAIRED),
+        mode: EncoderMode::Mapped
+    })));
+    assert!(handled(&s).is_empty(), "Mapped: the app maps them");
+    s.apply(&dev(DeviceEvent::Mode {
+        id: id(PAIRED),
+        mode: EncoderMode::Menu,
+    }));
+    assert_eq!(handled(&s), [6, 5], "Menu: the device has them");
+}

@@ -488,6 +488,19 @@ impl AppState {
                     !(c.vid == id.vid && c.pid == id.pid && same(&c.serial, &id.serial))
                 });
             }
+            DeviceEvent::Mode { id, mode } => {
+                let pid = id.pid;
+                if let Some(u) = self.paired_mut(id) {
+                    let push = models::encoder_push(pid);
+                    let device_mode = *mode != EncoderMode::Mapped;
+                    for c in &mut u.controls {
+                        let encoderish = c.kind == ControlType::Encoder || Some(c.id) == push;
+                        if encoderish {
+                            c.handled_by_device = device_mode;
+                        }
+                    }
+                }
+            }
             DeviceEvent::Input { .. }
             | DeviceEvent::Rejected { .. }
             | DeviceEvent::OpenFailed { .. } => {}

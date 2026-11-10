@@ -15,7 +15,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use detent_protocol::codec::{
-    decode_device, encode_app, AppMessage, ButtonAction, DecodeError, DeviceMessage, Hello,
+    decode_device, encode_app, AppMessage, ButtonAction, DecodeError, DeviceMessage, EncoderMode,
+    Hello,
 };
 use detent_protocol::ids;
 
@@ -55,6 +56,12 @@ pub enum Lost {
 /// What happened, for the engine and its log.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DeviceEvent {
+    /// A paired unit's encoder mode changed since its last HELLO or
+    /// heartbeat (the user switched it on the device's menu).
+    Mode {
+        id: DeviceId,
+        mode: EncoderMode,
+    },
     /// A paired unit was opened and asked for its HELLO. `product` is its
     /// USB product string (`Detent <model name>`), if it reports one.
     Connected {
@@ -588,7 +595,13 @@ fn handle(
         }
         DeviceMessage::Heartbeat { encoder_mode, .. } => {
             if let Some(h) = unit.hello.as_mut() {
-                h.encoder_mode = encoder_mode;
+                if h.encoder_mode != encoder_mode {
+                    h.encoder_mode = encoder_mode;
+                    events.push(DeviceEvent::Mode {
+                        id: unit.id.clone(),
+                        mode: encoder_mode,
+                    });
+                }
             }
         }
         message @ (DeviceMessage::Button { .. }

@@ -914,3 +914,35 @@ fn releasing_tells_paired_units_and_leaves_candidates_unwritten() {
     assert_eq!(sent(&other), before, "a candidate is never acked (D-066)");
     assert!(r.devices.connected().is_empty());
 }
+
+// Encoder mode changes (M6): the device reports its mode in every heartbeat;
+// a change since the last HELLO or heartbeat is news.
+
+#[test]
+fn an_encoder_mode_change_in_a_heartbeat_is_reported_once() {
+    let mut r = Rig::new(&[PAIRED], &[]);
+    let hid = r.bus.attach(VID, PID, Some(PAIRED));
+    r.at(0.0);
+    hid.push_device(0, &DeviceMessage::Hello(hello())); // Mapped
+    r.at(0.1);
+    let beat = |mode| DeviceMessage::Heartbeat {
+        uptime_s: 1,
+        encoder_mode: mode,
+    };
+    hid.push_device(1, &beat(EncoderMode::Mapped));
+    assert_eq!(r.at(0.2), vec![], "same mode: nothing new");
+    hid.push_device(2, &beat(EncoderMode::Volume));
+    assert_eq!(
+        r.at(0.3),
+        vec![DeviceEvent::Mode {
+            id: id(PAIRED),
+            mode: EncoderMode::Volume
+        }]
+    );
+    hid.push_device(3, &beat(EncoderMode::Volume));
+    assert_eq!(r.at(0.4), vec![], "reported once");
+    assert_eq!(
+        r.devices.hello(&id(PAIRED)).map(|h| h.encoder_mode),
+        Some(EncoderMode::Volume)
+    );
+}
