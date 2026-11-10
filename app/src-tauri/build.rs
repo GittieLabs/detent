@@ -13,6 +13,7 @@ fn main() {
         "ignore",
         "unignore",
         "set_paused",
+        "list_apps",
     ];
     tauri_build::try_build(
         tauri_build::Attributes::new()

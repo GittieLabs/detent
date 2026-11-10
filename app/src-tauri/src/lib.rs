@@ -3,6 +3,7 @@
 
 pub mod actions;
 pub mod app_state;
+pub mod apps;
 pub mod devices;
 pub mod engine;
 #[cfg(target_os = "macos")]

@@ -16,6 +16,7 @@
     "allow-unpair",
     "allow-ignore",
     "allow-unignore",
-    "allow-set-paused"
+    "allow-set-paused",
+    "allow-list-apps"
   ]
 }

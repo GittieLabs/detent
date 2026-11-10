@@ -69,6 +69,13 @@ pub fn set_paused(shared: State<'_, Shared>, on: bool) -> Answer {
     set_paused_now(&shared, on)
 }
 
+/// Apps for the app picker (D-080). Async, so the folder scan runs off the
+/// main thread.
+#[tauri::command]
+pub async fn list_apps() -> Vec<detent_lib::apps::AppEntry> {
+    detent_lib::apps::list()
+}
+
 #[tauri::command]
 pub fn get_state(shared: State<'_, Shared>) -> AppState {
     snapshot(&shared)
@@ -131,4 +138,5 @@ pub const ALL: &[&str] = &[
     "ignore",
     "unignore",
     "set_paused",
+    "list_apps",
 ];

@@ -49,6 +49,7 @@ fn main() {
             commands::ignore,
             commands::unignore,
             commands::set_paused,
+            commands::list_apps,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build the Detent app");

@@ -22,6 +22,7 @@ hidapi = "2.6.7"  # same version as ctl-probe
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_path_to_error = "0.1.20"  # field paths in config syntax errors
+plist = "1"
 
 # Native macOS bindings, used only from src/macos/ (the one unsafe module). Same
 # objc2 family and versions Tauri already pulls in (D-053).
