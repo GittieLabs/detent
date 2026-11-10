@@ -140,4 +140,6 @@ Results:
   - The five mappings from `config.json.bak` were then copied into the new config by Claude (M3 has no mapping editor) for steps 5, 4 and 3.
   - Step 5: `PASS`, Keith. Presses logged `(paused, not run)` while paused; Pause stayed on across a quit and relaunch; with it off, button 2 stepped the volume 25 -> 31 -> ... -> 63%. Unplug logged a disconnect at once and replug reconnected with no relaunch.
   - Step 4: `PASS` as written, Keith: after Apple menu Sleep and a wake, button 2 stepped the volume 19 -> 38% with no relaunch. But `pmset` shows DarkWake again (08:21:21 to 08:22:04, TCP keep alive on AC), so the CPU kept running and the board stayed connected: the wake reopen path (D-068) is still unexercised on hardware.
+  - Step 3 (exit criterion): `PASS`, Keith. Open at Login on; the Mac booted at 08:25:06 and, after login with no action on Detent, it started at 08:27:13 with Keith's config (1 device, 5 mappings), connected the board and acked its HELLO within 75 ms. Button 2 then stepped the volume 38 -> 44 -> 50% (dispatch 0.3 ms).
+  - M3 exit criteria both pass on a signed build. Keith's original config stays at `config.json.bak` (named `Desk controller`); the one in use was made by the wizard (`Detent Dev`) plus those mappings.
 

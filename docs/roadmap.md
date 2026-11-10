@@ -2,7 +2,7 @@
 
 Changes every session. This is the only place progress is tracked.
 
-**Current milestone: M2 Headless engine**
+**Current milestone: M4 Mappings and Test** (not yet planned: run `/plan-milestone`)
 
 Milestones are ordered by risk: macOS signing and permissions, then the USB protocol, are proven before any UI exists. The engine runs headless before it gets a window. The next milestone starts only when every exit criterion of the current one passes on a signed build.
 
@@ -85,7 +85,7 @@ Exit criteria:
 - [x] Router and codec unit tests pass; integration tests pass against MockTransport. Passed 2026-11-09 in CI (`3bc5a3b`): router, codec, transport, devices, and engine pipeline tests.
 - [x] A real button opens Mail (signed build, `acceptance.md` M2). Keith, 2026-11-09: quit Mail, pressed button 1, Mail opened (step 6).
 
-## M3 App shell and pairing (current)
+## M3 App shell and pairing (done 2026-11-10)
 
 Goal: Detent is a real background app. It starts at login, survives sleep and wake, and a new device is paired from the Devices screen through a short wizard, with no hand written config. Tray app, launch at login, sleep and wake recovery, Devices screen, pairing wizard, ignore list, persistence with schema version.
 
@@ -104,12 +104,12 @@ Tasks:
 - [x] Devices screen: `app/ui/` in plain TypeScript (D-065). Paired units with name, model, firmware, and a live connected dot; rename and unpair; the Ignored list with un-ignore; Pair new device. Window closes to hide (already true). Tests: `tsc --noEmit`; the logic stays in Rust and is tested there; `acceptance.md` M3 step 1. Done: `api.ts`, `dom.ts` (text only via `textContent`), `devices.ts`, `style.css` (light and dark); `--settings` opens the window at launch. Keith checked the empty state and Ignore/Un-ignore on the signed build; that check found un-ignore never re-reported the unit (fixed in `devices::scan`, test `an_unignored_unit_is_news_again`). Rename and Unpair get their hands-on check after the wizard lands.
 - [x] Pairing wizard: the four steps in `product.md` (plug in and list candidates, press a button to pick one, name it prefilled from the model, done with the starter template checkbox) plus Ignore on a candidate. Starter template: PLACEHOLDER until Keith decides (open question). Tests: `tsc --noEmit`; `acceptance.md` M3 step 2 (fresh device pairs in under 2 minutes, timed). Done: `app/ui/wizard.ts`, a view inside Devices driven by `identifying` (D-072); plug in and press share the first of three panels; the name is prefilled by `Candidate.suggested_name` (D-073); closing the window ends identification. Keith passed steps 2 and 7 early on a signed build.
 - [x] Tray: status dot (connected, none, problem) in the menu, Pause toggle (input is logged but nothing runs; survives relaunch; the engine pause and a Tauri command land here, moved from the App state task), a "new device found" line that opens the wizard, Open Detent, Quit. Tests: unit tests for the labels and the engine's pause; `acceptance.md` M3 step 5. Done: an emoji dot on the device line (D-074); Pause is the config's `paused` flag, applied on reload, and a paused press is logged "(paused, not run)" (D-075), with a `set_paused` command and a Devices banner; "New device found: Pair…" is inserted while a pairable unit is plugged in, and it starts pairing so the window opens on the wizard. Keith passed step 5 early on a signed build.
-- [ ] M3 acceptance pass on a signed build: `just build-dev`, an empty config, and the steps in `acceptance.md` M3.
+- [x] M3 acceptance pass on a signed build: `just build-dev`, an empty config, and the steps in `acceptance.md` M3. Done 2026-11-10 at `ef3b7ce`: Keith passed steps 1 to 7. The pass found that the board stayed "paired" after an unpair or a quit; fixed with `HELLO_ACK 0` (D-076). Sleep was a DarkWake both times, so the full sleep reopen path (D-068) is still untested on hardware.
 
 Exit criteria:
 
-- [ ] A fresh device pairs in under 2 minutes (signed build, `acceptance.md` M3 step 2).
-- [ ] After reboot the device works with no user action (signed build, `acceptance.md` M3 step 3).
+- [x] A fresh device pairs in under 2 minutes (signed build, `acceptance.md` M3 step 2).
+- [x] After reboot the device works with no user action (signed build, `acceptance.md` M3 step 3).
 
 ## M4 Mappings and Test
 
@@ -176,6 +176,7 @@ Multiple connected devices, Bluetooth transport, then Windows.
 
 Newest first. One or two lines per session: what landed, what's next.
 
+- 2026-11-10: M3 done. Landed the Devices screen, the pairing wizard, the tray (status dot, Pause saved in the config, "New device found"), and releasing units on unpair and quit (D-076); Keith passed acceptance steps 1 to 7 on a signed build from an empty config, including the timed pairing and a reboot. Next: plan M4. Waiting on Keith: the starter template open question, a full (non DarkWake) sleep to exercise D-068, and the second board serial check.
 - 2026-11-09: M2 done. Landed the router, actions (system and recording executors), transport (UsbHid, MockTransport), devices (pairing, heartbeat, replug), and the engine with its log and tray line; Keith passed acceptance steps 1 to 8 on a signed build, including a real button opening Mail. Fixed on the way: the frontmost check tool's stale reading and step 5's Finder script. Next: plan M3. Waiting on Keith: the second board serial check (needs a second XIAO).
 - 2026-11-07 (end): M1 done. Landed buttons and encoder input, encoder modes with Consumer Control volume and mute, the OLED status screen and menu, debug input tracing, and the v1 protocol freeze guarded by `frozen.rs`; all four exit criteria passed on Keith's hardware and the board is on release `b7c213b`. Next: `/plan-milestone` for M2 (headless engine). Waiting on Keith: tactile buttons for M1 step 5 and a second XIAO for step 2's serial check, both carried into M2; confirm the moot draft-version open question.
 - 2026-11-07 (later): TEST_INJECT and `scripts/hil.sh` landed and found a USB stall; root caused to Arduino-ESP32 2.0.17 and fixed by moving to 3.3.12 on PlatformIO 6.2 (D-045), plus a receive queue fix (D-046). Next: buttons and encoder input. Keith can now run the 20 replug exit criterion.
