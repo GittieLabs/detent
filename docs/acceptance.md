@@ -190,4 +190,9 @@ Results:
 - Early checks of tasks 6 and 7, 2026-11-10, signed builds of the overview list and the volume overlay on Keith's config, board `Detent Dev`:
   - Step 4: `PASS`, Keith. Button 2 in TextEdit showed Detent's level overlay near the bottom of the screen and it faded after about a second; five presses stepped 69 -> 75 -> 81 -> 88 -> 94 -> 100% (log); typing stayed in TextEdit, so the overlay doesn't take focus. The mute variant wasn't exercised (no `mute_toggle` press logged on these builds).
   - Step 6: `PASS`, Keith, on the list layout (D-085) after two rounds of his feedback: fixed tiles with a Preview as picker (D-084) were replaced, then the row dividers squared off and the window made a fixed frame. Claude also checked a fake 24 button device in the browser pane: tabs and headers stay, the Buttons group scrolls in its box while Encoder stays visible, the panel stays in view, and scroll positions survive re-renders (a bug found and fixed there).
+- Acceptance pass, 2026-11-10, signed `Detent.app` from `just build-dev` at `b5fdfc7` (Mac Developer identity), board `Detent Dev` on release firmware, Keith's config. Steps 1 to 4 and 6 passed early on builds from `ee132d4` to `b5fdfc7` (above); this pass finished step 5 and the overlay's mute case, and re-checked step 2. Keith did each step; Claude read the log.
+  - Step 5: `PASS`, Keith. On Test with Dry run on and TextEdit in front, button 4 twice logged `send_shortcut shift+h: recorded (dry run)` and nothing was typed; with Dry run off the next press logged `sent shift+h`.
+  - Step 4, mute: `PASS`, Keith. Button 3 in TextEdit logged `muted` then `unmuted`; the overlay showed Muted, then the level.
+  - Step 2 re-check: `PASS`. Button 3 in Plasticity logged `send_shortcut e: sent e`.
+  - M5 exit criteria both pass on a signed build.
 

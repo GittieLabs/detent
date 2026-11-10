@@ -2,7 +2,7 @@
 
 Changes every session. This is the only place progress is tracked.
 
-**Current milestone: M5 App scope and shortcuts**
+**Current milestone: M6 Dashboard and encoder menu** (not yet planned: run `/plan-milestone`)
 
 Milestones are ordered by risk: macOS signing and permissions, then the USB protocol, are proven before any UI exists. The engine runs headless before it gets a window. The next milestone starts only when every exit criterion of the current one passes on a signed build.
 
@@ -131,7 +131,7 @@ Exit criteria:
 - [x] Keith creates three mappings without reading anything (signed build, `acceptance.md` M4 step 1). Passed with notes 2026-11-10.
 - [x] Dry run never executes an action (tests, and `acceptance.md` M4 step 2 on a signed build). Passed 2026-11-10.
 
-## M5 App scope and shortcuts (current)
+## M5 App scope and shortcuts (done 2026-11-10)
 
 Only in app scope, Send shortcut action via CGEvent, permission banner with Fix button, and visible volume feedback (noted during M4; Detent's own overlay, D-083).
 
@@ -144,7 +144,7 @@ Tasks, riskiest first:
 - [x] App scope in the editor: each mapping picks Everywhere or Only in an app (the app picker, D-080); the panel lists a button's app mappings as editable rows with Edit and Remove, and the drawing's badge names them. Tests: `tsc --noEmit` (the edit rules are in `app_state`, tested in M4); `acceptance.md` M5 step 2 (exit criterion). Done 2026-11-10: a Where switch (Everywhere, Only in an app with the app picker) in `ui/mappings.ts`; each when, where and app is its own mapping; per-app rows with Edit and Remove, the edited one highlighted. Keith passed step 2 early on a signed build.
 - [x] Glanceable mapping overview (D-085, superseding D-084): Mappings and Test list the controls HELLO reports, one row each, grouped by type (Buttons, Encoders; more types later); each trigger is a cell of scope chips (Everywhere, then each app) whose hover text says what fires, and clicking a chip opens that exact mapping; a control the device handles is one grey row; no Preview as picker. First tried as fixed tiles with a Preview as picker (D-084); Keith found the tile text truncated to uselessness, the knob too large for two read only facts, and the picker easy to miss. Tests: `tsc --noEmit`; `acceptance.md` M5 step 6. Done 2026-11-10: `ui/drawing.ts` (`rowsOf`, scope chips with hover text, chips open their mapping), a fixed frame window (tabs and headers stay; groups, the panel and the feed scroll inside, small groups keep their height; `keepingScroll` keeps positions); Keith passed step 6.
 - [x] Visible volume feedback (D-083): Detent shows its own small level overlay, like macOS's volume HUD, for about a second after each volume action that runs (up, down, set, mute), on the display with the pointer; a borderless, click through, always on top window with no IPC capabilities, fed the result's new level. Tests: a unit test for the overlay's text and level from a result; `tsc --noEmit`; `acceptance.md` M5 step 4. Done 2026-11-10: `app_state::hud_of` (tested), `src/hud.rs` (a transparent, click through, non focusable window with no capabilities, shown 1.2 s on the display with the pointer, level by script), `ui/hud.html` and `hud.ts`; `macOSPrivateApi` for the transparent window. Keith passed step 4.
-- [ ] M5 acceptance pass on a signed build: `just build-dev` and the steps in `acceptance.md` M5.
+- [x] M5 acceptance pass on a signed build: `just build-dev` and the steps in `acceptance.md` M5. Done 2026-11-10 at `b5fdfc7`: step 5 and the mute overlay in the pass, the rest early on near final builds.
 
 Noted during M4:
 
@@ -207,6 +207,7 @@ Multiple connected devices, Bluetooth transport, then Windows.
 
 Newest first. One or two lines per session: what landed, what's next.
 
+- 2026-11-10 (evening): M5 done. Landed key names and keystroke posting (D-082), Send shortcut with Secure Input and grant refusals, the Accessibility banner with Fix, the shortcut recorder, app scope in the editor, Mappings as a grouped list with scope chips (D-085, after D-084's tiles), a fixed frame window, and Detent's own volume overlay (D-083: macOS 27 ignores posted volume keys). Keith passed every M5 step on signed builds. Next: plan M6. Waiting on Keith: the dashboard content open question (D-055) before M6's dashboard work.
 - 2026-11-10 (later): M4 done. Landed the app list (D-080), runtime Dry run and live input (D-079), mappings in app state with per model knowledge (D-081), the starter template (D-077), the tabbed window and device drawing, the mapping editor, and the Test screen with results. Also: the second board flashed and checked (M1 step 2), Node fixed, sleep retested (D-068 still unexercised, M7). Keith passed every M4 step on signed builds; step 1 with notes (AppleScript text given, volume wording fixed, press and long press labelled). Next: plan M5, which now includes visible volume feedback.
 - 2026-11-10: M3 done. Landed the Devices screen, the pairing wizard, the tray (status dot, Pause saved in the config, "New device found"), and releasing units on unpair and quit (D-076); Keith passed acceptance steps 1 to 7 on a signed build from an empty config, including the timed pairing and a reboot. Next: plan M4. Waiting on Keith: the starter template open question, a full (non DarkWake) sleep to exercise D-068, and the second board serial check.
 - 2026-11-09: M2 done. Landed the router, actions (system and recording executors), transport (UsbHid, MockTransport), devices (pairing, heartbeat, replug), and the engine with its log and tray line; Keith passed acceptance steps 1 to 8 on a signed build, including a real button opening Mail. Fixed on the way: the frontmost check tool's stale reading and step 5's Finder script. Next: plan M3. Waiting on Keith: the second board serial check (needs a second XIAO).
