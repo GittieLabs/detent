@@ -18,6 +18,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 detent-protocol = { path = "../../protocol" }
+hidapi = "2.6.7"  # same version as ctl-probe
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_path_to_error = "0.1.20"  # field paths in config syntax errors

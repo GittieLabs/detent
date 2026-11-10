@@ -24,6 +24,10 @@ build-dev:
 hil:
     scripts/hil.sh
 
+# Transport HIL: the app's UsbHid reads a HELLO from the board (any firmware, no flashing)
+hil-transport:
+    cargo test -p detent --test transport -- --ignored --nocapture
+
 # Exercise the macOS bindings by hand: open <bundle-id> | frontmost | volume | mute
 macos-check *ARGS:
     cargo run -q -p detent --example macos_check -- {{ARGS}}
