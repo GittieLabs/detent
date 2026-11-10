@@ -66,7 +66,7 @@ Riskiest unknown: the native macOS calls the actions need (NSWorkspace to launch
 Carried over from M1 (hardware Keith doesn't have yet; not M1 exit criteria):
 
 - [x] Press each of the four buttons with `just probe` running and see BUTTON down, long press, and up (`acceptance.md` M1 step 5). Keith, 2026-11-09: all four pass on D0 to D3, no pin changes needed.
-- [ ] Plug in a second board and confirm a different USB serial (`acceptance.md` M1 step 2). Waits on a second XIAO.
+- [x] Plug in a second board and confirm a different USB serial (`acceptance.md` M1 step 2). Done 2026-11-10: the second XIAO, flashed with release firmware at `15af3c1`, reports `E072A1FC849C`; the first is `E072A1FC4EDC`.
 
 
 Tasks:
@@ -93,7 +93,7 @@ Riskiest unknown: launch at login and wake recovery on a signed build. Whether `
 
 Carried over (hardware Keith doesn't have yet; not an M3 exit criterion):
 
-- [ ] Plug in a second board and confirm a different USB serial (`acceptance.md` M1 step 2). Waits on a second XIAO.
+- [x] Plug in a second board and confirm a different USB serial (`acceptance.md` M1 step 2). Done 2026-11-10: the second XIAO, flashed with release firmware at `15af3c1`, reports `E072A1FC849C`; the first is `E072A1FC4EDC`.
 
 Tasks:
 
