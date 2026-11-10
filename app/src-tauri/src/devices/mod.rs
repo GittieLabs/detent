@@ -46,6 +46,8 @@ pub enum Lost {
     Detached,
     /// No valid report for [`Options::heartbeat_timeout`].
     HeartbeatTimeout,
+    /// The Mac slept; handles are reopened rather than trusted (D-068).
+    Slept,
 }
 
 /// What happened, for the engine and its log.
@@ -142,6 +144,8 @@ pub struct Devices<B> {
     unknown_seen: HashSet<CString>,
     /// Paired units whose open failure was already reported.
     open_failed: HashSet<DeviceId>,
+    /// Set by [`Devices::woke`]; handled at the start of the next step.
+    woke: bool,
 }
 
 impl<B: Bus> Devices<B> {
@@ -155,6 +159,7 @@ impl<B: Bus> Devices<B> {
             units: Vec::new(),
             unknown_seen: HashSet::new(),
             open_failed: HashSet::new(),
+            woke: false,
         }
     }
 
@@ -168,10 +173,21 @@ impl<B: Bus> Devices<B> {
         self.units.iter().find(|u| &u.id == id)?.hello.as_ref()
     }
 
+    /// The Mac just woke from sleep. The next step closes every unit and
+    /// rescans at once, so units come back in about a second instead of
+    /// after the 6 s silence timeout, and none is read through a stale handle.
+    pub fn woke(&mut self) {
+        self.woke = true;
+    }
+
     /// One turn: scan if due, read, check heartbeats. Blocks at most about
     /// `read_wait` (sleeping that long when nothing is open).
     pub fn step(&mut self, now: Instant) -> Vec<DeviceEvent> {
         let mut events = Vec::new();
+        if std::mem::take(&mut self.woke) {
+            self.drop_where(&mut events, |_| Some(Lost::Slept));
+            self.next_scan = None;
+        }
         if self.next_scan.is_none_or(|t| now >= t) {
             self.next_scan = Some(now + self.opts.scan_every);
             self.scan(now, &mut events);

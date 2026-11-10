@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use crate::actions::{Executor, Outcome};
 use crate::devices::{DeviceEvent, DeviceId, Devices, Options};
@@ -48,6 +48,16 @@ pub enum Record {
         waited: Duration,
         took: Duration,
     },
+}
+
+/// A wall clock gain over the monotonic clock this big means the Mac slept.
+pub const SLEEP_GAP: Duration = Duration::from_secs(2);
+
+/// Whether the Mac slept between two loop turns, from how far each clock
+/// moved. On macOS `Instant` stops during sleep and the wall clock doesn't
+/// (D-068); a wall clock step backwards counts as zero, not a sleep.
+pub fn slept(monotonic: Duration, wall: Duration) -> bool {
+    wall.saturating_sub(monotonic) >= SLEEP_GAP
 }
 
 /// Where records go. Called from the engine and worker threads.
@@ -240,8 +250,15 @@ impl<B: Bus + 'static> Engine<B> {
         let thread = thread::Builder::new()
             .name("detent-engine".into())
             .spawn(move || {
+                let mut last = (Instant::now(), SystemTime::now());
                 while !flag.load(Ordering::Relaxed) {
-                    self.step(Instant::now());
+                    let now = (Instant::now(), SystemTime::now());
+                    let wall = now.1.duration_since(last.1).unwrap_or_default();
+                    if slept(now.0 - last.0, wall) {
+                        self.devices.woke();
+                    }
+                    last = now;
+                    self.step(now.0);
                 }
                 // Dropping `self` drops the job sender: the worker finishes
                 // what's queued, then ends.

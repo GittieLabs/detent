@@ -326,3 +326,18 @@ fn the_log_file_appends_and_starts_over_past_1_mb() {
     assert!(text.ends_with(" fresh\n"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn a_sleep_shows_as_the_wall_clock_outrunning_the_monotonic_one() {
+    use detent_lib::engine::slept;
+    let s = Duration::from_secs;
+    let ms = Duration::from_millis;
+    // Awake: both clocks move together, give or take scheduling jitter.
+    assert!(!slept(ms(20), ms(20)));
+    assert!(!slept(ms(20), ms(900)));
+    // A wall clock step backwards (NTP) is not a sleep.
+    assert!(!slept(ms(20), Duration::ZERO));
+    // Asleep for a minute: the monotonic clock barely moved.
+    assert!(slept(ms(20), s(60)));
+    assert!(slept(ms(20), s(3)));
+}

@@ -508,3 +508,51 @@ fn the_board_pairs_and_stays_up_on_heartbeats() {
     );
     assert_eq!(devices.connected(), vec![&id(&serial)]);
 }
+
+#[test]
+fn after_sleep_every_unit_is_closed_and_reopened_at_once() {
+    let mut r = Rig::new(&[PAIRED, SECOND], &[]);
+    let a = r.bus.attach(VID, PID, Some(PAIRED));
+    r.bus.attach(VID, PID, Some(SECOND));
+    r.at(0.0);
+    a.push_device(0, &DeviceMessage::Hello(hello()));
+    r.at(0.1);
+    assert_eq!(r.bus.opens(), 2);
+
+    // Woke at t = 0.3, well before the next scheduled scan at t = 1.
+    r.devices.woke();
+    let events = r.at(0.3);
+    let lost: Vec<_> = events
+        .iter()
+        .filter(|e| {
+            matches!(
+                e,
+                DeviceEvent::Disconnected {
+                    why: Lost::Slept,
+                    ..
+                }
+            )
+        })
+        .collect();
+    let back: Vec<_> = events
+        .iter()
+        .filter(|e| matches!(e, DeviceEvent::Connected(_)))
+        .collect();
+    assert_eq!((lost.len(), back.len()), (2, 2), "{events:?}");
+    assert_eq!(r.bus.opens(), 4, "both reopened in the same step");
+    assert_eq!(r.devices.hello(&id(PAIRED)), None, "HELLO asked for again");
+    assert_eq!(
+        sent(&a).last(),
+        Some(&AppMessage::RequestHello),
+        "the reopened unit is asked for its HELLO"
+    );
+}
+
+#[test]
+fn waking_with_nothing_open_just_scans() {
+    let mut r = Rig::new(&[PAIRED], &[]);
+    r.at(0.0);
+    r.bus.attach(VID, PID, Some(PAIRED));
+    r.devices.woke();
+    assert_eq!(r.at(0.2), vec![DeviceEvent::Connected(id(PAIRED))]);
+}
