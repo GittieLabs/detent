@@ -99,4 +99,4 @@ Needs a signed build (`just build-dev`), the board on release firmware with its 
 
 Results:
 
-- (none yet)
+- Engine HIL, run by Claude on 2026-11-09, build `9b595f9`: PASS. Debug firmware flashed (4 of 4 regions verified); the app ran `--dry-run` with the example config; `ctl-probe --inject` replayed presses of buttons 1 to 3 and a press and long press of button 4. The app logged each against the frontmost app (Claude) and resolved it: 1 to `open_app com.apple.mail`, 2 to `volume_up 6%`, 3 to `volume_down 6%`, 4 to the Finder AppleScript, 4 long to `volume_set 25%`; each recorded (dry run), dispatch 0.2 to 0.7 ms. Nothing ran. Three HELLOs were acked (the app's REQUEST_HELLO and the probe's, which the app also sees). Release firmware reflashed (4 of 4 verified); TEST_INJECT produced no BUTTON on it. Not an acceptance step; steps 1 to 8 still need Keith.
