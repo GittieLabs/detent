@@ -61,7 +61,7 @@ Exit criteria:
 
 Carried over from M1 (hardware Keith doesn't have yet; not M1 exit criteria):
 
-- [ ] Press each of the four buttons with `just probe` running and see BUTTON down, long press, and up (`acceptance.md` M1 step 5). Waits on tactile buttons. Update `firmware/include/board_pins.h` if they aren't on D0 to D3.
+- [x] Press each of the four buttons with `just probe` running and see BUTTON down, long press, and up (`acceptance.md` M1 step 5). Keith, 2026-11-09: all four pass on D0 to D3, no pin changes needed.
 - [ ] Plug in a second board and confirm a different USB serial (`acceptance.md` M1 step 2). Waits on a second XIAO.
 
 Devices module with allowlist and heartbeat, router, and four actions (Open app, Open URL, Volume, AppleScript), driven by a hand written JSON config. MockTransport and RecordingExecutor.

@@ -74,7 +74,7 @@ Needs the XIAO ESP32-S3 on USB, wired with the buttons, encoder, and OLED. Steps
 
 Results:
 
-- Step 5: DEFERRED by Keith, 2026-11-07. No buttons wired yet (tactile buttons to be bought). Debounce and long press are covered by native tests (`firmware/test/test_input`), and the encoder's push switch exercises the same button path on hardware. Carried into M2.
+- Step 5: `PASS`, 2026-11-09, release firmware `b7c213b`, four tactile buttons on D0 to D3 as `board_pins.h` maps them. Keith tapped each button: one clean down and up each. Holds of 526 to 575 ms correctly sent no long press; 2 s holds sent down, long press at 599 to 601 ms, then up, for all four. No rejects or disconnects. (Deferred 2026-11-07 until the buttons arrived.)
 - Step 2, second unit: DEFERRED, needs a second board. The single unit's identity checks passed. Carried into M2.
 - Step 4: `PASS`, 2026-11-07, release firmware `b7c213b`. Keith typed on the built in keyboard for 40 s while `ctl-probe --raw` ran: it showed only HELLO and 20 heartbeats, with no BUTTON, ENCODER, rejected, or foreign collection reports.
 - Step 3: `PASS`, 2026-11-07, release firmware `b7c213b`. Keith replugged 20 times with `ctl-probe` counting: 19 replugs in a `--count-hellos 20` run (the first count was the existing connection; 19 disconnects logged) plus 1 in a `--count-hellos 2` run. Every connection produced a HELLO; both runs exited 0.
