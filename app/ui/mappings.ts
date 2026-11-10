@@ -1,10 +1,11 @@
 // The Mappings screen (architecture.md, UX): the unit's drawing, and a side
-// panel that edits the clicked button. Scope is Everywhere here: app scoped
-// mappings show read only with Remove (creating them is M5). The Rust side
+// panel that edits the clicked button: when (press or long press), where
+// (everywhere, or only while one app is in front; product.md's one concept),
+// and what it does. App mappings win over Everywhere for that app. The Rust side
 // checks every edit (`app_state::set_mapping`); the panel checks ranges in
 // percent first so its messages match what the user typed.
 
-import type { Action, AppEntry, AppState, ControlView, Mapping, PairedUnit, Trigger } from "./api";
+import type { Action, AppEntry, AppState, ControlView, Mapping, PairedUnit, Scope, Trigger } from "./api";
 import * as api from "./api";
 import { type AppName, actionText, idName, namesFrom, shortcutText, triggerText } from "./describe";
 import { MAX_COMBOS, comboOf } from "./keys";
@@ -30,6 +31,7 @@ const KINDS: [Kind, string][] = [
 interface Draft {
   control: number;
   trigger: Trigger;
+  scope: Scope; // { app: "" } while the app is still to be chosen
   kind: Kind;
   bundleId: string;
   stepPct: string;
@@ -41,10 +43,11 @@ interface Draft {
 
 const trim = (n: number) => String(Math.round(n * 100) / 100);
 
-function draftFrom(control: number, trigger: Trigger, m: Mapping | undefined): Draft {
+function draftFrom(control: number, trigger: Trigger, scope: Scope, m: Mapping | undefined): Draft {
   const d: Draft = {
     control,
     trigger,
+    scope,
     kind: "none",
     bundleId: "",
     stepPct: "6.25",
@@ -99,13 +102,20 @@ function actionFrom(d: Draft): { action: Action } | { error: string } | null {
   }
 }
 
-const everywhere = (u: PairedUnit, control: number, trigger: Trigger) =>
-  u.mappings.find((m) => m.control === control && m.trigger === trigger && m.scope === "everywhere");
+/** Same scope; app bundle IDs match ignoring case, as the router does. */
+function sameScope(a: Scope, b: Scope): boolean {
+  if (a === "everywhere" || b === "everywhere") return a === b;
+  return a.app.toLowerCase() === b.app.toLowerCase();
+}
+
+const findMapping = (u: PairedUnit, control: number, trigger: Trigger, scope: Scope) =>
+  u.mappings.find((m) => m.control === control && m.trigger === trigger && sameScope(m.scope, scope));
 
 export function mappingsScreen(root: HTMLElement, chosen: { serial: string | null }): Screen {
   let current: AppState | null = null;
   let selected: number | null = null;
   let trigger: Trigger = "press"; // outlives the draft, so a save stays on it
+  let where: Scope = "everywhere"; // likewise for the scope being edited
   let draft: Draft | null = null;
   let note: { text: string; error: boolean } | null = null;
   let busy = false;
@@ -294,7 +304,7 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
     }
   }
 
-  function perApp(unit: PairedUnit, control: number): HTMLElement | null {
+  function perApp(unit: PairedUnit, control: number, editing: Draft): HTMLElement | null {
     const scoped = unit.mappings.filter((m) => m.control === control && m.scope !== "everywhere");
     if (scoped.length === 0) return null;
     return el(
@@ -307,7 +317,10 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
         ...scoped.map((m) =>
           el(
             "li",
-            { class: "row" },
+            {
+              class:
+                m.trigger === editing.trigger && sameScope(m.scope, editing.scope) ? "row editing" : "row",
+            },
             el(
               "div",
               { class: "grow" },
@@ -318,6 +331,14 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
               ),
               el("div", { class: "sub" }, actionText(m.action, appName)),
             ),
+            button("Edit", () => {
+              trigger = m.trigger;
+              where = m.scope;
+              draft = null;
+              note = null;
+              recordFresh = true;
+              rerender();
+            }),
             button(
               "Remove",
               () => void run(() => api.removeMapping(unit.serial, control, m.trigger, m.scope), "Removed."),
@@ -326,22 +347,98 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
           ),
         ),
       ),
-      el("p", { class: "hint" }, "These win over the setting above while that app is in front."),
+      el("p", { class: "hint" }, "These win over Everywhere while that app is in front."),
+    );
+  }
+
+  /** Everywhere, or only while one app is in front. */
+  function whereField(unit: PairedUnit, c: ControlView, d: Draft): HTMLElement {
+    const choose = (scope: Scope) => {
+      where = scope;
+      draft = null;
+      note = null;
+      recordFresh = true;
+      rerender();
+    };
+    const inApp = d.scope !== "everywhere";
+    const appId = d.scope === "everywhere" ? "" : d.scope.app;
+    const option = (a: AppEntry) => el("option", { value: a.bundle_id }, a.name);
+    const known = apps.some((a) => a.bundle_id.toLowerCase() === appId.toLowerCase());
+    return el(
+      "div",
+      { class: "fields" },
+      el(
+        "div",
+        { class: "segmented", ariaLabel: "Where" },
+        el(
+          "button",
+          {
+            type: "button",
+            class: inApp ? "seg" : "seg active",
+            onClick: () => choose("everywhere"),
+          },
+          "Everywhere",
+          findMapping(unit, c.id, d.trigger, "everywhere")
+            ? el("span", { class: "mapped-dot", ariaLabel: "mapped" })
+            : null,
+        ),
+        el(
+          "button",
+          {
+            type: "button",
+            class: inApp ? "seg active" : "seg",
+            onClick: () => {
+              if (!inApp) choose({ app: "" });
+            },
+          },
+          "Only in an app",
+        ),
+      ),
+      inApp
+        ? el(
+            "label",
+            { class: "field" },
+            el("span", {}, "When this app is in front"),
+            el(
+              "select",
+              {
+                class: "field-input",
+                ariaLabel: "Scope app",
+                value: appId,
+                onInput: (v) => choose({ app: v }),
+              },
+              el("option", { value: "" }, apps.length ? "Choose an app…" : "Loading apps…"),
+              appId && !known ? el("option", { value: appId }, `${appId} (not found)`) : null,
+              el("optgroup", { attrs: { label: "Running" } }, ...apps.filter((a) => a.running).map(option)),
+              el(
+                "optgroup",
+                { attrs: { label: "Other apps" } },
+                ...apps.filter((a) => !a.running).map(option),
+              ),
+            ),
+          )
+        : null,
     );
   }
 
   function panel(unit: PairedUnit, c: ControlView): HTMLElement {
-    if (!draft || draft.control !== c.id || draft.trigger !== trigger) {
-      draft = draftFrom(c.id, trigger, everywhere(unit, c.id, trigger));
+    if (!draft || draft.control !== c.id || draft.trigger !== trigger || !sameScope(draft.scope, where)) {
+      draft = draftFrom(c.id, trigger, where, findMapping(unit, c.id, trigger, where));
     }
     const d = draft;
-    const saved = everywhere(unit, c.id, d.trigger);
+    const pendingApp = d.scope !== "everywhere" && d.scope.app === "";
+    const saved = pendingApp ? undefined : findMapping(unit, c.id, d.trigger, d.scope);
     const triggers: Trigger[] = c.type === "encoder" ? ["clockwise", "counterclockwise"] : ["press", "long_press"];
 
     const save = () => {
+      if (pendingApp) {
+        note = { text: "Choose the app this applies in.", error: true };
+        rerender();
+        return;
+      }
       const result = actionFrom(d);
       if (result === null) {
-        if (saved) void run(() => api.removeMapping(unit.serial, c.id, d.trigger, "everywhere"), "Saved.");
+        if (saved) void run(() => api.removeMapping(unit.serial, c.id, d.trigger, d.scope), "Saved.");
         else note = { text: "Nothing to save.", error: false };
         rerender();
         return;
@@ -355,7 +452,7 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
         device: unit.serial,
         control: c.id,
         trigger: d.trigger,
-        scope: "everywhere",
+        scope: d.scope,
         action: result.action,
       };
       void run(() => api.setMapping(mapping), "Saved.");
@@ -382,10 +479,13 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
               },
             },
             triggerText(t),
-            everywhere(unit, c.id, t) ? el("span", { class: "mapped-dot", ariaLabel: "mapped" }) : null,
+            pendingApp || !findMapping(unit, c.id, t, d.scope)
+              ? null
+              : el("span", { class: "mapped-dot", ariaLabel: "mapped" }),
           ),
         ),
       ),
+      whereField(unit, c, d),
       el(
         "label",
         { class: "field" },
@@ -409,13 +509,13 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
         saved
           ? button(
               "Remove",
-              () => void run(() => api.removeMapping(unit.serial, c.id, d.trigger, "everywhere"), "Removed."),
+              () => void run(() => api.removeMapping(unit.serial, c.id, d.trigger, d.scope), "Removed."),
               { class: "danger", disabled: busy },
             )
           : null,
         button("Save", save, { class: "primary", disabled: busy }),
       ),
-      perApp(unit, c.id),
+      perApp(unit, c.id, d),
     );
   }
 
@@ -443,6 +543,7 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
         recordFresh = true;
         selected = c.id;
         trigger = c.type === "encoder" ? "clockwise" : "press";
+        where = "everywhere";
         draft = null;
         note = null;
       }

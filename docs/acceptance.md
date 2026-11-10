@@ -184,4 +184,6 @@ Results:
   - Step 1: `PASS`, Keith. No banner with no shortcut mapping; after recording Shift+H on button 4 and saving, the Accessibility banner showed; Fix brought up macOS's prompt and the Settings pane, and the banner cleared after the grant with no relaunch. No shortcut was refused for the grant afterwards.
   - Step 3 (exit criterion): `PASS`, Keith; confirmed in the log by Claude. In TextEdit button 4 logged `sent shift+h` (dispatch 115 ms the first time, 1.5 ms after). In the Passwords app it logged `FAILED Secure Input is on (a password field has focus), so macOS blocks sent keys` three times, nothing typed; the Test screen showed the failure with Dry run off. The editor's one line note is under the shortcut field.
   - Step 5, partly: with Dry run on, button 4 logged `recorded (dry run)` (in Passwords, not yet in TextEdit).
+- Early check of task 5, 2026-11-10, signed build of app scope in the editor on Keith's config, board `Detent Dev`:
+  - Step 2 (exit criterion): `PASS`, Keith; confirmed in the log and config by Claude. Button 3 press holds two mappings: Everywhere `mute_toggle`, and only in `com.electron.plasticity` `send_shortcut e`. With Plasticity in front the press resolved to `send_shortcut e` (sent, dispatch 2.6 ms) and started Extrude; in Notes and Chrome it resolved to `mute_toggle` (muted, unmuted).
 

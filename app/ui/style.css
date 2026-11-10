@@ -618,3 +618,7 @@ button.control:hover {
 .field-input.shortcut:focus {
   border-color: var(--accent);
 }
+
+.row.editing {
+  background: var(--banner);
+}
