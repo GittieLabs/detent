@@ -878,3 +878,39 @@ fn an_unignored_unit_is_news_again() {
     assert_eq!(r.at(0.2), vec![unknown], "un-ignoring it reports it again");
     assert_eq!(r.bus.opens(), 0);
 }
+
+// The device keeps "paired" (solid LED, OLED `USB: paired`) until it's
+// unmounted or acked unpaired, so Detent says so whenever it lets a unit go.
+
+#[test]
+fn an_unpaired_unit_is_told_before_it_closes() {
+    let mut r = Rig::new(&[PAIRED], &[]);
+    let hid = r.bus.attach(VID, PID, Some(PAIRED));
+    r.at(0.0);
+    hid.push_device(0, &DeviceMessage::Hello(hello()));
+    r.at(0.1);
+    r.devices.set_lists(&[], &[]);
+    r.at(0.2);
+    assert_eq!(
+        sent(&hid).last(),
+        Some(&AppMessage::HelloAck { paired: false })
+    );
+    assert!(r.devices.connected().is_empty());
+}
+
+#[test]
+fn releasing_tells_paired_units_and_leaves_candidates_unwritten() {
+    let mut r = Rig::new(&[PAIRED], &[]);
+    let paired = r.bus.attach(VID, PID, Some(PAIRED));
+    let other = r.bus.attach(VID, PID, Some(OTHER));
+    r.devices.start_identify();
+    r.at(0.0);
+    let before = sent(&other);
+    r.devices.release_all();
+    assert_eq!(
+        sent(&paired).last(),
+        Some(&AppMessage::HelloAck { paired: false })
+    );
+    assert_eq!(sent(&other), before, "a candidate is never acked (D-066)");
+    assert!(r.devices.connected().is_empty());
+}

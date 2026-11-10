@@ -11,7 +11,7 @@ mod log;
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -302,13 +302,14 @@ impl<B: Bus + 'static> Engine<B> {
                     last = now;
                     self.step(now.0);
                 }
+                self.devices.release_all();
                 // Dropping `self` drops the job sender: the worker finishes
                 // what's queued, then ends.
             })
             .expect("spawn the engine");
         EngineHandle {
             stop,
-            thread,
+            thread: Mutex::new(Some(thread)),
             commands,
         }
     }
@@ -324,7 +325,8 @@ enum Command {
 
 pub struct EngineHandle {
     stop: Arc<AtomicBool>,
-    thread: JoinHandle<()>,
+    /// Taken by the first `stop`.
+    thread: Mutex<Option<JoinHandle<()>>>,
     commands: Sender<Command>,
 }
 
@@ -341,10 +343,14 @@ impl EngineHandle {
         let _ = self.commands.send(Command::Identify(on));
     }
 
-    /// Stops reading devices and returns once the engine thread has ended.
+    /// Stops reading devices, tells paired units they're released, and
+    /// returns once the engine thread has ended. Later calls do nothing.
     /// Actions still queued finish on the worker in the background.
-    pub fn stop(self) {
+    pub fn stop(&self) {
         self.stop.store(true, Ordering::Relaxed);
-        let _ = self.thread.join();
+        let thread = self.thread.lock().unwrap_or_else(|e| e.into_inner()).take();
+        if let Some(thread) = thread {
+            let _ = thread.join();
+        }
     }
 }

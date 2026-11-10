@@ -233,6 +233,16 @@ impl<B: Bus> Devices<B> {
         self.units.retain(|u| !u.candidate);
     }
 
+    /// Detent is quitting: tells each open paired unit it's no longer paired
+    /// (so its LED and OLED say so) and closes every unit. Candidates are
+    /// never written (D-066).
+    pub fn release_all(&mut self) {
+        for unit in self.units.iter_mut().filter(|u| !u.candidate) {
+            let _ = unit.send(&AppMessage::HelloAck { paired: false });
+        }
+        self.units.clear();
+    }
+
     /// The Mac just woke from sleep. The next step closes every unit and
     /// rescans at once, so units come back in about a second instead of
     /// after the 6 s silence timeout, and none is read through a stale handle.
@@ -269,6 +279,10 @@ impl<B: Bus> Devices<B> {
                 .filter(|u| !u.candidate && !self.still_allowed(&u.id))
                 .map(|u| u.id.clone())
                 .collect();
+            // The device stays "paired" until told otherwise or unmounted.
+            for unit in self.units.iter_mut().filter(|u| gone.contains(&u.id)) {
+                let _ = unit.send(&AppMessage::HelloAck { paired: false });
+            }
             self.drop_where(&mut events, |u| {
                 gone.contains(&u.id).then_some(Lost::Unpaired)
             });

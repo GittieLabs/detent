@@ -404,3 +404,14 @@ fn a_paused_press_is_logged_but_runs_nothing_until_unpaused() {
     r.hid.push_device(1, &press(1));
     assert_eq!(r.call().0, mail());
 }
+
+#[test]
+fn stopping_tells_the_unit_it_is_no_longer_paired() {
+    let mut r = Rig::start();
+    r.engine.take().unwrap().stop();
+    let last = r.hid.writes().last().cloned().expect("something was sent");
+    assert_eq!(
+        detent_protocol::codec::decode_app(&last[1..]).unwrap().msg,
+        detent_protocol::codec::AppMessage::HelloAck { paired: false }
+    );
+}

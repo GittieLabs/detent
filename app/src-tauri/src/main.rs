@@ -53,15 +53,22 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("failed to build the Detent app");
 
-    app.run(|_app, event| {
+    app.run(|app, event| match event {
         // Closing the last window must not quit a tray app. Quit from the tray
         // calls `exit(0)`, which arrives with a code and is let through.
-        if let RunEvent::ExitRequested {
+        RunEvent::ExitRequested {
             code: None, api, ..
-        } = event
-        {
-            api.prevent_exit();
+        } => api.prevent_exit(),
+        // Quitting (the tray, logout, shutdown): release the units so their
+        // LED and OLED stop saying paired (D-076).
+        RunEvent::Exit => {
+            if let Some(shared) = app.try_state::<launch::Shared>() {
+                if let Some(engine) = &shared.engine {
+                    engine.stop();
+                }
+            }
         }
+        _ => {}
     });
 }
 
