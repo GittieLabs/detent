@@ -13,6 +13,7 @@ pub use schema::{
     Action, Config, DeviceEntry, Mapping, Scope, Trigger, UnitRef, DEFAULT_APPLESCRIPT_TIMEOUT_MS,
     DEFAULT_VOLUME_STEP,
 };
+pub use validate::ArgError;
 
 /// The schema version this build reads.
 pub const SCHEMA_VERSION: u64 = 1;

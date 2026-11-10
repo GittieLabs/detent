@@ -90,7 +90,7 @@ Needs a signed build (`just build-dev`), the board on release firmware with its 
 
 1. macOS bindings (task 1). Run `just macos-check open com.apple.mail` (Mail opens or comes forward), `just macos-check frontmost` (switch apps; each one's bundle ID prints), `just macos-check volume` (the menu bar volume jumps up for 2 s, then returns), and `just macos-check mute` (mutes for 2 s, then unmutes).
 2. Device opens (Devices and Engine tasks). Launch Detent with the board allowlisted in the config. The board's LED goes solid (HELLO_ACK paired) and the OLED shows `USB: paired`. Remove the board from the allowlist and relaunch: the LED keeps blinking and Detent never reads it.
-3. Volume action. Map a button to Volume up and another to Mute; each press changes the volume or mute with the native HUD.
+3. Volume action. Map a button to Volume up and another to Mute; each press changes the volume or mute, as the menu bar volume shows (setting it through CoreAudio doesn't show the on screen volume HUD that the keys do). Mute, then press Volume up: it unmutes (D-059).
 4. (Open dashboard is deferred to M6 with its content still to be decided, D-055. No step here.)
 5. Run AppleScript. Map a button to `tell application "Finder" to activate`. The first press shows macOS's Automation prompt naming Detent; after allowing, presses bring Finder forward.
 6. Exit criterion: map a button (Everywhere) to Open app `com.apple.mail`. Quit Mail, press the button: Mail opens.

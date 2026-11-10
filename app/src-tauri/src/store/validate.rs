@@ -73,24 +73,49 @@ pub fn check(config: &Config) -> Result<(), Problem> {
 }
 
 fn check_action(action: &Action, path: &str) -> Result<(), Problem> {
-    let step_ok = |s: f32| s > 0.0 && s <= 1.0;
-    match action {
-        Action::OpenApp { bundle_id } if !is_bundle_id(bundle_id) => {
-            Err(problem(format!("{path}.bundle_id"), BUNDLE_ID))
+    action
+        .check_args()
+        .map_err(|e| problem(format!("{path}.{}", e.field), e.message))
+}
+
+/// An action argument out of range, by field name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ArgError {
+    pub field: &'static str,
+    pub message: &'static str,
+}
+
+impl std::fmt::Display for ArgError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.field, self.message)
+    }
+}
+
+impl std::error::Error for ArgError {}
+
+impl Action {
+    /// Checks the arguments, the one set of rules the config loader and the
+    /// executors share. Rejects NaN wherever a number is expected.
+    pub fn check_args(&self) -> Result<(), ArgError> {
+        let bad = |field, message| Err(ArgError { field, message });
+        let step_ok = |s: f32| s > 0.0 && s <= 1.0;
+        match self {
+            Action::OpenApp { bundle_id } if !is_bundle_id(bundle_id) => {
+                bad("bundle_id", BUNDLE_ID)
+            }
+            Action::VolumeUp { step } | Action::VolumeDown { step } if !step_ok(*step) => {
+                bad("step", "must be more than 0 and at most 1")
+            }
+            Action::VolumeSet { level } if !(0.0..=1.0).contains(level) => {
+                bad("level", "must be from 0 to 1")
+            }
+            Action::AppleScript { source, .. } if source.trim().is_empty() => {
+                bad("source", "must not be empty")
+            }
+            Action::AppleScript { timeout_ms, .. } if !(100..=60_000).contains(timeout_ms) => {
+                bad("timeout_ms", "must be from 100 to 60000")
+            }
+            _ => Ok(()),
         }
-        Action::VolumeUp { step } | Action::VolumeDown { step } if !step_ok(*step) => Err(problem(
-            format!("{path}.step"),
-            "must be more than 0 and at most 1",
-        )),
-        Action::VolumeSet { level } if !(0.0..=1.0).contains(level) => {
-            Err(problem(format!("{path}.level"), "must be from 0 to 1"))
-        }
-        Action::AppleScript { source, .. } if source.trim().is_empty() => {
-            Err(problem(format!("{path}.source"), "must not be empty"))
-        }
-        Action::AppleScript { timeout_ms, .. } if !(100..=60_000).contains(timeout_ms) => Err(
-            problem(format!("{path}.timeout_ms"), "must be from 100 to 60000"),
-        ),
-        _ => Ok(()),
     }
 }
