@@ -4,6 +4,9 @@
 //!   just macos-check frontmost             print the frontmost app for 10 s
 //!   just macos-check volume                step the volume up, then restore it
 //!   just macos-check mute                  toggle mute, then restore it
+//!   just macos-check key cmd+shift+4       send a shortcut after 3 s (M5)
+//!   just macos-check volume-key up         press a system volume key (HUD)
+//!   just macos-check secure-input          print Secure Input for 10 s
 
 #[cfg(target_os = "macos")]
 fn main() -> std::process::ExitCode {
@@ -51,7 +54,44 @@ fn main() -> std::process::ExitCode {
             Ok::<(), macos::AudioError>(())
         })()
         .map_err(|e| e.to_string()),
-        _ => Err("usage: macos_check open <bundle-id> | frontmost | volume | mute".into()),
+        ["key", shortcut] => detent_lib::keys::parse(shortcut)
+            .map_err(|e| e.to_string())
+            .and_then(|combos| {
+                println!(
+                    "sending {} in 3 s: switch to the app that should get it",
+                    detent_lib::keys::canonical(&combos)
+                );
+                sleep(Duration::from_secs(3));
+                macos::post_combos(&combos).map_err(|e| e.to_string())?;
+                println!("sent");
+                Ok(())
+            }),
+        ["volume-key", which] => {
+            let key = match which {
+                "up" => Ok(macos::VolumeKey::Up),
+                "down" => Ok(macos::VolumeKey::Down),
+                "mute" => Ok(macos::VolumeKey::Mute),
+                _ => Err("volume-key takes up, down or mute".to_owned()),
+            };
+            key.and_then(|k| {
+                macos::post_volume_key(k).map_err(|e| e.to_string())?;
+                println!("pressed {which}: the volume HUD should show");
+                Ok(())
+            })
+        }
+        ["secure-input"] => {
+            println!("click into a password field and out again; printing for 10 s");
+            for _ in 0..10 {
+                println!("  secure input: {}", macos::secure_input_on());
+                sleep(Duration::from_secs(1));
+            }
+            Ok(())
+        }
+        _ => Err(
+            "usage: macos_check open <bundle-id> | frontmost | volume | mute | \
+                  key <shortcut> | volume-key up|down|mute | secure-input"
+                .into(),
+        ),
     };
     match result {
         Ok(()) => std::process::ExitCode::SUCCESS,

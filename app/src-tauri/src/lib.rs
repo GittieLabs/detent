@@ -6,6 +6,7 @@ pub mod app_state;
 pub mod apps;
 pub mod devices;
 pub mod engine;
+pub mod keys;
 #[cfg(target_os = "macos")]
 pub mod macos;
 pub mod models;
