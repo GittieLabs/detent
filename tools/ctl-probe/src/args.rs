@@ -1,6 +1,6 @@
 //! Command line parsing. No dependencies; the surface is small (D-041).
 
-use detent_protocol::codec::InjectEvent;
+use detent_protocol::codec::{InjectEvent, Label, StatusText};
 
 use crate::inject;
 
@@ -15,6 +15,10 @@ pub enum Command {
         inject: Option<Vec<InjectEvent>>,
         /// Exit 0 after this many seconds.
         exit_after: Option<u64>,
+        /// Sent as app owned OLED menu items (ids 1, 2, ...) after each connect.
+        menu: Option<Vec<Label>>,
+        /// Sent as STATUS after each connect.
+        status: Option<StatusText>,
     },
     /// List every HID entry with Detent's VID.
     List,
@@ -26,6 +30,8 @@ pub const USAGE: &str = "usage:
   ctl-probe [--raw] [--count-hellos N]   print decoded events; reopen after unplug
             [--inject SCRIPT]            after connecting, send TEST_INJECT (debug firmware)
             [--exit-after SECS]          exit 0 after SECS (not with --count-hellos)
+            [--menu \"Mail,Mute\"]        after connecting, send these OLED menu items (ids 1, 2, ...)
+            [--status TEXT]              after connecting, send STATUS (\"\" clears)
   SCRIPT: \"B1:down B1:up@120 E5:+2@50\"; B<id>:<down|up|long>, E<id>:<+n|-n>, @ms waits after the previous event
   ctl-probe list                         list HID entries with Detent's VID
   ctl-probe raw [--secs N]               print undecoded reports (default 10 s)";
@@ -43,6 +49,8 @@ pub fn parse(args: &[String]) -> Result<Command, String> {
     let mut count_hellos = None;
     let mut inject = None;
     let mut exit_after = None;
+    let mut menu = None;
+    let mut status = None;
     let mut secs = 10;
     while let Some(arg) = it.next() {
         match (sub, arg) {
@@ -68,6 +76,20 @@ pub fn parse(args: &[String]) -> Result<Command, String> {
                         .map_err(|_| format!("bad --exit-after value: {v}"))?,
                 );
             }
+            ("watch", "--menu") => {
+                let v = it
+                    .next()
+                    .ok_or("--menu needs labels, separated by commas")?;
+                let labels = v
+                    .split(',')
+                    .map(|l| Label::new(l.trim()).map_err(|e| format!("bad menu label {l:?}: {e}")))
+                    .collect::<Result<Vec<_>, _>>()?;
+                menu = Some(labels);
+            }
+            ("watch", "--status") => {
+                let v = it.next().ok_or("--status needs text")?;
+                status = Some(StatusText::new(v).map_err(|e| format!("bad --status: {e}"))?);
+            }
             ("raw", "--secs") => {
                 let v = it.next().ok_or("--secs needs a value")?;
                 secs = v.parse().map_err(|_| format!("bad --secs value: {v}"))?;
@@ -84,6 +106,8 @@ pub fn parse(args: &[String]) -> Result<Command, String> {
             count_hellos,
             inject,
             exit_after,
+            menu,
+            status,
         }),
         "list" => Ok(Command::List),
         "raw" => Ok(Command::Raw { secs }),
@@ -106,7 +130,32 @@ mod tests {
             count_hellos,
             inject: None,
             exit_after: None,
+            menu: None,
+            status: None,
         }
+    }
+
+    #[test]
+    fn menu_and_status() {
+        let args: Vec<String> = ["--menu", "Mail, Mute", "--status", "Vol 38%"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let Ok(Command::Watch {
+            menu: Some(m),
+            status: Some(st),
+            ..
+        }) = parse(&args)
+        else {
+            panic!("{:?}", parse(&args));
+        };
+        assert_eq!(
+            m,
+            vec![Label::new("Mail").unwrap(), Label::new("Mute").unwrap()]
+        );
+        assert_eq!(st, StatusText::new("Vol 38%").unwrap());
+        let too_long = ["--menu", "A label far too long"].map(String::from);
+        assert!(parse(&too_long).unwrap_err().contains("bad menu label"));
     }
 
     #[test]

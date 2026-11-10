@@ -190,6 +190,105 @@ static void test_every_rendered_line_fits_the_screen() {
   }
 }
 
+
+// --- app owned items (MENU) and the status line (STATUS), M6 ---
+
+static void fill(Menu& m, const char* const* labels, uint8_t n, uint8_t first_id = 10) {
+  for (uint8_t i = 0; i < n; i++) m.set_app_item(n, i, first_id + i, labels[i]);
+}
+
+static void test_app_items_follow_the_firmware_ones() {
+  Menu m;
+  const char* const labels[] = {"Mail", "Mute"};
+  fill(m, labels, 2);
+  TEST_ASSERT_EQUAL_UINT8(6, m.item_count());
+  m.open();
+  m.scroll(4);
+  uint8_t id = 0;
+  TEST_ASSERT_EQUAL(MenuAction::AppItem, m.select(&id));
+  TEST_ASSERT_EQUAL_UINT8(10, id);
+  m.open();
+  m.scroll(5);
+  TEST_ASSERT_EQUAL(MenuAction::AppItem, m.select(&id));
+  TEST_ASSERT_EQUAL_UINT8(11, id);
+}
+
+static void test_a_partial_set_is_not_shown_until_complete() {
+  Menu m;
+  m.set_app_item(3, 0, 1, "A");
+  m.set_app_item(3, 2, 3, "C");
+  TEST_ASSERT_EQUAL_UINT8(4, m.item_count());
+  m.set_app_item(3, 1, 2, "B");
+  TEST_ASSERT_EQUAL_UINT8(7, m.item_count());
+}
+
+static void test_a_new_set_replaces_the_old_one_once_complete() {
+  Menu m;
+  const char* const two[] = {"Mail", "Mute"};
+  fill(m, two, 2);
+  m.set_app_item(1, 0, 20, "Notes");
+  TEST_ASSERT_EQUAL_UINT8(5, m.item_count());
+  m.open();
+  m.scroll(4);
+  uint8_t id = 0;
+  m.select(&id);
+  TEST_ASSERT_EQUAL_UINT8(20, id);
+}
+
+static void test_total_zero_and_unmount_clear_the_items() {
+  Menu m;
+  const char* const two[] = {"Mail", "Mute"};
+  fill(m, two, 2);
+  m.set_app_item(0, 0, 0, "");
+  TEST_ASSERT_EQUAL_UINT8(4, m.item_count());
+  fill(m, two, 2);
+  m.clear_app_items();
+  TEST_ASSERT_EQUAL_UINT8(4, m.item_count());
+}
+
+static void test_at_most_eight_app_items() {
+  Menu m;
+  const char* const ten[] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
+  fill(m, ten, 10);
+  TEST_ASSERT_EQUAL_UINT8(4 + detent::kMaxAppItems, m.item_count());
+}
+
+static void test_a_long_menu_scrolls_to_keep_the_cursor_in_view() {
+  Menu m;
+  const char* const labels[] = {"Mail", "Mute", "Notes"};
+  fill(m, labels, 3);
+  m.open();
+  m.scroll(6);  // Notes, the last item
+  render(m, view());
+  TEST_ASSERT_EQUAL_STRING("Menu", lines[0]);
+  TEST_ASSERT_EQUAL_STRING("> Notes", lines[4]);
+  m.scroll(1);  // wraps to Volume
+  render(m, view());
+  TEST_ASSERT_EQUAL_STRING("> Volume *", lines[1]);
+}
+
+static void test_status_text_shows_on_the_status_screen_until_cleared() {
+  Menu m;
+  m.set_status("Vol 38%");
+  render(m, view());
+  TEST_ASSERT_EQUAL_STRING("Vol 38%", lines[3]);
+  m.set_status("");
+  render(m, view());
+  TEST_ASSERT_EQUAL_STRING("", lines[3]);
+  m.set_status("Muted");
+  m.clear_app_items();  // unmount clears both
+  render(m, view());
+  TEST_ASSERT_EQUAL_STRING("", lines[3]);
+}
+
+static void test_status_text_is_cut_to_the_line() {
+  Menu m;
+  m.set_status("12345678901234567890");
+  render(m, view());
+  TEST_ASSERT_EQUAL_STRING("12345678901234567890", lines[3]);
+  TEST_ASSERT_TRUE(strlen(lines[3]) <= static_cast<size_t>(detent::kLineChars));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_starts_on_the_status_screen);
@@ -204,5 +303,13 @@ int main() {
   RUN_TEST(test_scroll_and_select_on_status_do_nothing);
   RUN_TEST(test_labels_fit_16_chars);
   RUN_TEST(test_every_rendered_line_fits_the_screen);
+  RUN_TEST(test_app_items_follow_the_firmware_ones);
+  RUN_TEST(test_a_partial_set_is_not_shown_until_complete);
+  RUN_TEST(test_a_new_set_replaces_the_old_one_once_complete);
+  RUN_TEST(test_total_zero_and_unmount_clear_the_items);
+  RUN_TEST(test_at_most_eight_app_items);
+  RUN_TEST(test_a_long_menu_scrolls_to_keep_the_cursor_in_view);
+  RUN_TEST(test_status_text_shows_on_the_status_screen_until_cleared);
+  RUN_TEST(test_status_text_is_cut_to_the_line);
   return UNITY_END();
 }

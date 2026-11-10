@@ -153,8 +153,20 @@ static void test_set_mode_validates_and_reports() {
   TEST_ASSERT_EQUAL_INT(1, sink->mode_changes);
 }
 
+
+static void test_leaving_the_menu_returns_to_the_previous_mode() {
+  TEST_ASSERT_TRUE(router->set_mode(DETENT_ENCODER_MODE_MAPPED));
+  press(ButtonEvent::Down, ButtonEvent::LongPress, ButtonEvent::Up);
+  TEST_ASSERT_EQUAL_UINT8(DETENT_ENCODER_MODE_MENU, router->mode());
+  router->leave_menu();
+  TEST_ASSERT_EQUAL_UINT8(DETENT_ENCODER_MODE_MAPPED, router->mode());
+  router->leave_menu();  // not in the menu: nothing changes
+  TEST_ASSERT_EQUAL_UINT8(DETENT_ENCODER_MODE_MAPPED, router->mode());
+}
+
 int main() {
   UNITY_BEGIN();
+  RUN_TEST(test_leaving_the_menu_returns_to_the_previous_mode);
   RUN_TEST(test_boots_in_volume_mode);
   RUN_TEST(test_volume_turns_change_volume_only);
   RUN_TEST(test_volume_short_press_toggles_mute_on_release);

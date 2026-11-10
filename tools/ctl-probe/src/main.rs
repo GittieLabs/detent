@@ -19,7 +19,9 @@ use std::process::ExitCode;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use detent_protocol::codec::{encode_app, AppMessage, DeviceMessage, InjectEvent};
+use detent_protocol::codec::{
+    encode_app, AppMessage, DeviceMessage, InjectEvent, Label, StatusText,
+};
 use detent_protocol::{ids, REPORT_LEN, USAGE, USAGE_PAGE, VENDOR_REPORT_ID};
 use hidapi::{DeviceInfo, HidApi, HidDevice};
 
@@ -129,6 +131,8 @@ fn watch(
     count_hellos: Option<u32>,
     inject: Option<Vec<InjectEvent>>,
     exit_after: Option<u64>,
+    menu: Option<Vec<Label>>,
+    status: Option<StatusText>,
 ) -> Result<ExitCode, String> {
     let start = Instant::now();
     let deadline = exit_after.map(|s| start + Duration::from_secs(s));
@@ -170,6 +174,31 @@ fn watch(
         match send(&dev, seq_out, &AppMessage::RequestHello) {
             Ok(()) => seq_out = seq_out.wrapping_add(1),
             Err(e) => eprintln!("{}  REQUEST_HELLO failed: {e}", stamp()),
+        }
+        if let Some(labels) = &menu {
+            let total = labels.len() as u8;
+            for (i, label) in labels.iter().enumerate() {
+                let msg = AppMessage::MenuItem {
+                    total,
+                    index: i as u8,
+                    item: i as u8 + 1,
+                    label: label.clone(),
+                };
+                match send(&dev, seq_out, &msg) {
+                    Ok(()) => seq_out = seq_out.wrapping_add(1),
+                    Err(e) => eprintln!("{}  MENU failed: {e}", stamp()),
+                }
+            }
+            println!("{}  sent {total} menu items", stamp());
+        }
+        if let Some(text) = &status {
+            match send(&dev, seq_out, &AppMessage::Status { text: text.clone() }) {
+                Ok(()) => {
+                    seq_out = seq_out.wrapping_add(1);
+                    println!("{}  sent STATUS", stamp());
+                }
+                Err(e) => eprintln!("{}  STATUS failed: {e}", stamp()),
+            }
         }
         if let Some(events) = &inject {
             let msg = AppMessage::TestInject {
@@ -238,7 +267,17 @@ fn run(cmd: Command) -> Result<ExitCode, String> {
             count_hellos,
             inject,
             exit_after,
-        } => watch(&mut api, raw, count_hellos, inject, exit_after),
+            menu,
+            status,
+        } => watch(
+            &mut api,
+            raw,
+            count_hellos,
+            inject,
+            exit_after,
+            menu,
+            status,
+        ),
     }
 }
 

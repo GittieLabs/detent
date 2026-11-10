@@ -42,6 +42,11 @@ class ModeRouter {
 
   // Returns false, changing nothing, for an undefined mode.
   bool set_mode(uint8_t mode);
+  // Leaves the menu for the mode it was opened from (an app item was
+  // picked); does nothing outside the menu.
+  void leave_menu() {
+    if (mode_ == DETENT_ENCODER_MODE_MENU) set_mode(before_menu_);
+  }
   uint8_t mode() const { return mode_; }
 
  private:

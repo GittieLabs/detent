@@ -139,7 +139,14 @@ FirmwareModeSink mode_sink;
 detent::ModeRouter modes(board::kEncoderControl, board::kEncoderPushControl, mode_sink);
 
 void on_menu_select() {
-  switch (menu.select()) {
+  uint8_t app_item = 0;
+  switch (menu.select(&app_item)) {
+    case detent::MenuAction::AppItem:
+      // The app runs the item's action; the knob goes back to its mode.
+      device_link.send_menu_select(app_item);
+      detent::usb::log().printf("menu: app item %u\n", app_item);
+      modes.leave_menu();
+      break;
     case detent::MenuAction::SetVolume:
       modes.set_mode(DETENT_ENCODER_MODE_VOLUME);  // closes the menu
       break;
@@ -315,9 +322,14 @@ void handle_report(const uint8_t* report, uint32_t now) {
         detent::usb::log().print("inject: ignored (release firmware)\n");
       }
       break;
+    case DETENT_MSG_MENU:
+      menu.set_app_item(msg.menu_total, msg.menu_index, msg.menu_item, msg.label);
+      break;
+    case DETENT_MSG_STATUS:
+      menu.set_status(msg.status);
+      break;
     default:
-      // MENU, STATUS: later M1 tasks.
-      detent::usb::log().printf("link: type 0x%02X not handled yet\n", msg.type);
+      detent::usb::log().printf("link: type 0x%02X not handled\n", msg.type);
       break;
   }
 }
@@ -344,6 +356,7 @@ void loop() {
       device_link.on_mount(now);
     } else {
       device_link.on_unmount();
+      menu.clear_app_items();  // the next host sends its own
     }
 #if DETENT_DIAG
     mounted ? detent::diag::on_mount() : detent::diag::on_unmount();

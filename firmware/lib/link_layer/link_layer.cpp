@@ -71,6 +71,14 @@ bool Link::send_button(uint8_t control, uint8_t action) {
   return true;
 }
 
+bool Link::send_menu_select(uint8_t item) {
+  if (!mounted_) return false;
+  uint8_t r[DETENT_REPORT_LEN];
+  pack_menu_select(r, seq_, item);
+  send(r);
+  return true;
+}
+
 bool Link::send_encoder(uint8_t control, int8_t delta) {
   uint8_t r[DETENT_REPORT_LEN];
   if (!mounted_ || !pack_encoder(r, seq_, control, delta)) return false;

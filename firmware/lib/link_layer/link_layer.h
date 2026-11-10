@@ -60,6 +60,8 @@ class Link {
   // delta).
   bool send_button(uint8_t control, uint8_t action);
   bool send_encoder(uint8_t control, int8_t delta);
+  // An app owned menu item was picked. False, sending nothing, if unmounted.
+  bool send_menu_select(uint8_t item);
 
   void set_encoder_mode(uint8_t mode) { encoder_mode_ = mode; }
   uint8_t encoder_mode() const { return encoder_mode_; }

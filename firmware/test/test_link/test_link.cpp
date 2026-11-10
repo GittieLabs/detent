@@ -224,8 +224,18 @@ static void test_input_events_refused_when_invalid_or_unmounted() {
   TEST_ASSERT_EQUAL_size_t(1, tx->count);
 }
 
+
+static void test_menu_select_goes_out_with_the_shared_seq_when_mounted() {
+  TEST_ASSERT_FALSE(lnk->send_menu_select(10));
+  lnk->on_mount(0);  // HELLO, seq 0
+  TEST_ASSERT_TRUE(lnk->send_menu_select(10));
+  detent::pack_menu_select(expected, 1, 10);
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, tx->last(), DETENT_REPORT_LEN);
+}
+
 int main() {
   UNITY_BEGIN();
+  RUN_TEST(test_menu_select_goes_out_with_the_shared_seq_when_mounted);
   RUN_TEST(test_silent_until_mounted);
   RUN_TEST(test_hello_on_mount);
   RUN_TEST(test_hello_on_request_hello);
