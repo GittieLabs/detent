@@ -148,6 +148,7 @@ Debug mode and log export, crash recovery, config migration tests, notarized rel
 
 Noted during M2 (do here, not before):
 
+- [ ] Sleep and wake on hardware: in three tests (2026-11-09 and 2026-11-10) macOS DarkWaked on AC power and dropped the HID link before sleeping, so the rescan path recovered the board and the clock gap reopen (D-068) never ran. Exercise D-068 with a sleep that keeps the link (on battery, Power Nap off), log the clock gap when it fires, and time the reconnect after wake (20 s in the last test). Found 2026-11-10.
 - [ ] An AppleScript's first run waits on macOS's Automation prompt, and that wait counts against its timeout (5 s by default): in M2 step 5 the first press took 4.6 s. A slow click on Allow stops the script (the grant still sticks). Don't count prompt time, or retry once after a timeout on the first run against an app. Found 2026-11-09.
 
 Exit criteria:
