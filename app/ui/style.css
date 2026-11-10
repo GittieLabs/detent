@@ -607,3 +607,14 @@ button.control:hover {
   align-items: center;
   gap: 12px;
 }
+
+.field-input.shortcut {
+  font-size: 16px;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  caret-color: transparent;
+}
+
+.field-input.shortcut:focus {
+  border-color: var(--accent);
+}

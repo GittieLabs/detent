@@ -154,3 +154,25 @@ fn the_key_table_covers_what_shortcuts_use() {
     codes.dedup();
     assert_eq!(codes.len(), n, "two names share a code");
 }
+
+/// The shortcut field (`ui/keycodes.json`, KeyboardEvent.code to key name)
+/// only produces names this module knows, and covers every one of them.
+#[test]
+fn the_ui_shortcut_field_uses_the_same_key_names() {
+    let table: std::collections::BTreeMap<String, String> =
+        serde_json::from_str(include_str!("../../ui/keycodes.json")).unwrap();
+    for (code, name) in &table {
+        assert!(keys::code_of(name).is_some(), "{code} -> {name}");
+        assert_eq!(
+            keys::canonical(&keys::parse(name).unwrap()),
+            *name,
+            "{name} isn't canonical"
+        );
+    }
+    for name in keys::names() {
+        assert!(
+            table.values().any(|n| n == name),
+            "the UI can't record {name}"
+        );
+    }
+}

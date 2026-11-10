@@ -6,7 +6,8 @@
 
 import type { Action, AppEntry, AppState, ControlView, Mapping, PairedUnit, Trigger } from "./api";
 import * as api from "./api";
-import { type AppName, actionText, idName, namesFrom, triggerText } from "./describe";
+import { type AppName, actionText, idName, namesFrom, shortcutText, triggerText } from "./describe";
+import { MAX_COMBOS, comboOf } from "./keys";
 import { accessibilityBanner } from "./banners";
 import { drawUnit, pickUnit, unitPicker } from "./drawing";
 import { button, el, keepingFocus } from "./dom";
@@ -21,6 +22,7 @@ const KINDS: [Kind, string][] = [
   ["volume_down", "Turn volume down by…"],
   ["volume_set", "Set volume to…"],
   ["mute_toggle", "Mute or unmute"],
+  ["send_shortcut", "Send a shortcut"],
   ["applescript", "Run an AppleScript"],
 ];
 
@@ -107,6 +109,7 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
   let draft: Draft | null = null;
   let note: { text: string; error: boolean } | null = null;
   let busy = false;
+  let recordFresh = true; // the shortcut field's next key starts a new shortcut
   let apps: AppEntry[] = [];
   let appName: AppName = idName;
 
@@ -183,8 +186,57 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
     );
   }
 
+  /** Records the keys pressed while it has focus: one combo, or a sequence. */
+  function shortcutField(d: Draft): HTMLElement {
+    const input = el("input", {
+      class: "field-input shortcut",
+      value: d.keys ? shortcutText(d.keys) : "",
+      ariaLabel: "Shortcut",
+      attrs: { readonly: "", placeholder: "Click here, then press the keys" },
+      onClick: () => {
+        recordFresh = true;
+      },
+      onKey: (e) => {
+        // Plain Tab still moves focus; with a modifier it's recorded.
+        if (e.code === "Tab" && !(e.metaKey || e.altKey || e.ctrlKey)) return;
+        e.preventDefault();
+        const combo = comboOf(e);
+        if (!combo) return; // a modifier on its own: wait for the key
+        const seq = recordFresh || !d.keys ? [] : d.keys.split(" ");
+        recordFresh = false;
+        const next = seq.length >= MAX_COMBOS ? [combo] : [...seq, combo];
+        edit({ keys: next.join(" ") });
+      },
+    });
+    return el(
+      "div",
+      { class: "fields" },
+      el(
+        "label",
+        { class: "field" },
+        el("span", {}, "Shortcut"),
+        el(
+          "span",
+          { class: "with-unit" },
+          input,
+          button("Clear", () => {
+            recordFresh = true;
+            edit({ keys: "" });
+          }),
+        ),
+      ),
+      el(
+        "p",
+        { class: "hint" },
+        `Press up to ${MAX_COMBOS} combos in a row for a sequence. Shortcuts go to the app in front; password fields and some games block them.`,
+      ),
+    );
+  }
+
   function fields(d: Draft): HTMLElement | null {
     switch (d.kind) {
+      case "send_shortcut":
+        return shortcutField(d);
       case "open_app":
         return el("label", { class: "field" }, el("span", {}, "App"), appPicker(d));
       case "volume_up":
@@ -388,6 +440,7 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
     }
     const pick = (c: ControlView) => {
       if (selected !== c.id) {
+        recordFresh = true;
         selected = c.id;
         trigger = c.type === "encoder" ? "clockwise" : "press";
         draft = null;

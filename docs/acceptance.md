@@ -180,4 +180,8 @@ Needs a signed build (`just build-dev`), a paired board on release firmware, and
 5. Dry run never sends keys. On Test with Dry run on, press the shortcut button with TextEdit in front: nothing is typed and Test shows it as not run.
 
 Results:
+- Early checks of task 4, 2026-11-10, signed build of the shortcut field on Keith's config, board `Detent Dev` (`E072A1FC4EDC`), after `tccutil reset Accessibility com.gittielabs.detent`:
+  - Step 1: `PASS`, Keith. No banner with no shortcut mapping; after recording Shift+H on button 4 and saving, the Accessibility banner showed; Fix brought up macOS's prompt and the Settings pane, and the banner cleared after the grant with no relaunch. No shortcut was refused for the grant afterwards.
+  - Step 3 (exit criterion): `PASS`, Keith; confirmed in the log by Claude. In TextEdit button 4 logged `sent shift+h` (dispatch 115 ms the first time, 1.5 ms after). In the Passwords app it logged `FAILED Secure Input is on (a password field has focus), so macOS blocks sent keys` three times, nothing typed; the Test screen showed the failure with Dry run off. The editor's one line note is under the shortcut field.
+  - Step 5, partly: with Dry run on, button 4 logged `recorded (dry run)` (in Passwords, not yet in TextEdit).
 
