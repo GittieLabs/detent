@@ -2,7 +2,7 @@
 
 Changes every session. This is the only place progress is tracked.
 
-**Current milestone: M5 App scope and shortcuts** (not yet planned: run `/plan-milestone`)
+**Current milestone: M5 App scope and shortcuts**
 
 Milestones are ordered by risk: macOS signing and permissions, then the USB protocol, are proven before any UI exists. The engine runs headless before it gets a window. The next milestone starts only when every exit criterion of the current one passes on a signed build.
 
@@ -131,18 +131,28 @@ Exit criteria:
 - [x] Keith creates three mappings without reading anything (signed build, `acceptance.md` M4 step 1). Passed with notes 2026-11-10.
 - [x] Dry run never executes an action (tests, and `acceptance.md` M4 step 2 on a signed build). Passed 2026-11-10.
 
-## M5 App scope and shortcuts
+## M5 App scope and shortcuts (current)
 
-Only in app scope, Send shortcut action via CGEvent, permission banner with Fix button.
+Only in app scope, Send shortcut action via CGEvent, permission banner with Fix button, and visible volume feedback (noted during M4).
 
-Noted during M4 (plan these in):
+Tasks, riskiest first:
 
-- [ ] Visible volume feedback: Detent's volume actions go through CoreAudio, which shows no macOS volume HUD, so Keith couldn't see a long press change the volume (2026-11-10). Once Accessibility is granted for Send shortcut, send Volume up and down as real volume keys to get the native HUD (fixed system steps), keeping Set volume on the exact CoreAudio path; log the choice in `decisions.md`.
+- [ ] Keystrokes and Secure Input in `macos/`: `macos/keys.rs` posts a key combo, or a short sequence of up to four, as CGEvents at the HID tap (key down and up with modifier flags), from key names (`cmd+shift+e`, `f5`, `space`, `left`) on fixed US ANSI key codes (D-082); `secure_input_on()` (Carbon `IsSecureEventInputEnabled`); and posting a system volume key (`NSEventTypeSystemDefined`, sound up, down and mute) for the native HUD. Tests: pure unit tests for parsing key names and sequences (good and bad, case, aliases like `command`); a macOS test that the key table covers letters, digits, F1 to F12, arrows and the named keys; `just macos-check key cmd+shift+4` and `just macos-check volume-key up` for acceptance.
+- [ ] Send shortcut action: `send_shortcut { keys }` in the config schema (validated with the loader's path messages), `describe`, the router unchanged, and `SystemExecutor` posting it to the frontmost app. It fails with a plain reason when Accessibility isn't granted or Secure Input is on, and never sends a partial sequence. Tests: `store` (parse, bad keys with a field path, round trip, canonical form), the recording executor, the executor's refusals through a fake for the macOS calls; `acceptance.md` M5 step 3.
+- [ ] Accessibility banner with a Fix button: `AppState.accessibility` (granted, and whether any mapping needs it), rechecked about every 2 s while the window shows and on tray hover; a banner on Mappings and Test when a shortcut mapping exists without the grant; Fix asks macOS (`AXIsProcessTrustedWithOptions` with the prompt) and opens Privacy & Security > Accessibility. Tests: `app_state` unit tests (banner shown only when needed, hidden once granted), the commands test; `acceptance.md` M5 step 1 from a reset grant.
+- [ ] Shortcut field in the editor: Send shortcut in the action list with a field that records the next key combo pressed while it has focus (shown as ⌘⇧E), a Clear button, and the one line from product.md about the frontmost app and Secure Input. Tests: `tsc --noEmit`; the recorder's key mapping is a pure function in `ui/keys.ts` checked against `macos/keys.rs` names by a Rust test that reads the same table; `acceptance.md` M5 steps 2 and 3.
+- [ ] App scope in the editor: each mapping picks Everywhere or Only in an app (the app picker, D-080); the panel lists a button's app mappings as editable rows with Edit and Remove, and the drawing's badge names them. Tests: `tsc --noEmit` (the edit rules are in `app_state`, tested in M4); `acceptance.md` M5 step 2 (exit criterion).
+- [ ] Visible volume feedback: with Accessibility granted, Volume up and down send system volume keys (the native HUD), one press per 6.25% of the mapping's step, rounded, at least one; Set volume stays on CoreAudio at the exact level; without the grant, all three use CoreAudio as now. Log the choice. Tests: unit tests for step to presses; the executor's choice through the fake; `acceptance.md` M5 step 4.
+- [ ] M5 acceptance pass on a signed build: `just build-dev` and the steps in `acceptance.md` M5.
+
+Noted during M4:
+
+- [x] Visible volume feedback: planned above.
 
 Exit criteria:
 
-- One button is Extrude in Plasticity and Mute everywhere else.
-- Secure Input behavior verified and stated in the UI.
+- [ ] One button is Extrude in Plasticity and Mute everywhere else (signed build, `acceptance.md` M5 step 2).
+- [ ] Secure Input behavior verified and stated in the UI (signed build, `acceptance.md` M5 step 3).
 
 ## M6 Dashboard and encoder menu
 

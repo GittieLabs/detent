@@ -169,3 +169,15 @@ Results:
   - Dry run re-check: entering Test logged `dry run on` and button 2 was `recorded (dry run)`. Leaving Test wasn't repeated in this pass (it passed in step 2).
   - M4 exit criteria both pass on a signed build.
 
+## M5
+
+Needs a signed build (`just build-dev`), a paired board on release firmware, and Plasticity installed. Steps 2 and 3 are the exit criteria. Step 1 starts from a reset grant: `tccutil reset Accessibility com.gittielabs.detent`.
+
+1. Accessibility. With no Send shortcut mapping, Mappings shows no banner. Save one: a banner says Detent needs Accessibility to send shortcuts, with a Fix button. Fix shows macOS's prompt and opens Privacy & Security > Accessibility. Turn Detent on there: the banner goes away within a few seconds, with no relaunch.
+2. Exit criterion: app scope. On Mappings, button 3 does Mute or unmute everywhere. Add a second mapping to it, only in Plasticity, that sends Plasticity's Extrude shortcut (record it in the shortcut field). The drawing shows the Plasticity badge. With a face selected in Plasticity and Plasticity in front, button 3 starts Extrude; with any other app in front it mutes. The log shows which mapping resolved each time.
+3. Exit criterion: Secure Input. Map a button to send a plain letter everywhere. In TextEdit the press types the letter. Click into a password field (for example Safari's or Passwords' sign in field) and press it: nothing is typed, the Test screen shows the press as failed because Secure Input is on, and the log says the same. Where Send shortcut is picked, the editor says in one line that shortcuts go to the front app and that password fields block them.
+4. Volume feedback. With Accessibility granted, button 2 (volume up) shows macOS's volume HUD. A long press set to 25% sets exactly 25% (Test shows "was …, now 25%"). With the grant turned off, volume up still works, without the HUD.
+5. Dry run never sends keys. On Test with Dry run on, press the shortcut button with TextEdit in front: nothing is typed and Test shows it as not run.
+
+Results:
+
