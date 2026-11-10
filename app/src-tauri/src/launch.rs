@@ -17,8 +17,7 @@ use detent_lib::devices::Options;
 use detent_lib::engine::{default_log_path, Engine, EngineHandle, FileLog, Record, Sink};
 use detent_lib::store::{self, Config, ConfigError};
 use detent_lib::transport::Hid;
-use tauri::menu::MenuItem;
-use tauri::{AppHandle, Emitter, Wry};
+use tauri::{AppHandle, Emitter};
 
 use crate::tray;
 
@@ -60,33 +59,20 @@ pub struct Shared {
     pub state: Arc<Mutex<AppState>>,
     pub engine: Option<EngineHandle>,
     pub app: AppHandle,
-    pub status: MenuItem<Wry>,
+    pub tray: tray::Tray,
     pub dry_run: bool,
 }
 
 impl Shared {
     /// Pushes the state to the settings window and the tray.
     pub fn publish(&self, state: &AppState) {
-        publish(&self.app, &self.status, state, self.dry_run);
+        publish(&self.app, &self.tray, state, self.dry_run);
     }
 }
 
-fn publish(app: &AppHandle, status: &MenuItem<Wry>, state: &AppState, dry_run: bool) {
+fn publish(app: &AppHandle, tray: &tray::Tray, state: &AppState, dry_run: bool) {
     let _ = app.emit(STATE_EVENT, state);
-    let connected: Vec<String> = state
-        .paired
-        .iter()
-        .filter(|u| u.connected)
-        .map(|u| u.name.clone())
-        .collect();
-    let line = if state.problem.is_some() {
-        tray::DeviceStatus::Problem
-    } else {
-        tray::DeviceStatus::Running(&connected)
-    };
-    if let Err(e) = status.set_text(tray::device_label(&line, dry_run)) {
-        eprintln!("detent: could not update the tray: {e}");
-    }
+    tray.show(&tray::view(state, dry_run));
 }
 
 /// Logs every record, folds it into the app state, and publishes changes.
@@ -94,7 +80,7 @@ struct AppSink {
     log: Option<FileLog>,
     state: Arc<Mutex<AppState>>,
     app: AppHandle,
-    status: MenuItem<Wry>,
+    tray: tray::Tray,
     dry_run: bool,
 }
 
@@ -107,7 +93,7 @@ impl Sink for AppSink {
         }
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         if state.apply(record) {
-            publish(&self.app, &self.status, &state, self.dry_run);
+            publish(&self.app, &self.tray, &state, self.dry_run);
         }
     }
 }
@@ -135,6 +121,7 @@ pub fn empty_config() -> Config {
         devices: Vec::new(),
         ignored: Vec::new(),
         mappings: Vec::new(),
+        paused: false,
     }
 }
 
@@ -142,7 +129,7 @@ pub fn empty_config() -> Config {
 /// Detent starts empty and the first save creates it. A file that doesn't
 /// load is left alone, shown as a problem, and never overwritten (D-070).
 /// The app keeps running either way.
-pub fn start(launch: &Launch, app: AppHandle, status: MenuItem<Wry>) -> Shared {
+pub fn start(launch: &Launch, app: AppHandle, tray: tray::Tray) -> Shared {
     let log = default_log_path().and_then(|p| match FileLog::open(&p) {
         Ok(log) => Some(log),
         Err(e) => {
@@ -206,7 +193,7 @@ pub fn start(launch: &Launch, app: AppHandle, status: MenuItem<Wry>) -> Shared {
                 log,
                 state: state.clone(),
                 app: app.clone(),
-                status: status.clone(),
+                tray: tray.clone(),
                 dry_run: launch.dry_run,
             });
             Some(
@@ -235,7 +222,7 @@ pub fn start(launch: &Launch, app: AppHandle, status: MenuItem<Wry>) -> Shared {
         state,
         engine,
         app,
-        status,
+        tray,
         dry_run: launch.dry_run,
     };
     let snapshot = shared

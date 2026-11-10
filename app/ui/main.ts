@@ -18,7 +18,9 @@ async function start(root: HTMLElement) {
   });
   const show = (state: AppState) => {
     latest = state;
-    if (wizard.active()) wizard.show(state);
+    // Pairing started from the tray's "New device found" opens the wizard.
+    if (!wizard.active() && state.identifying) wizard.adopt(state);
+    else if (wizard.active()) wizard.show(state);
     else devices.show(state);
   };
   await api.onState(show);

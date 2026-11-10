@@ -15,6 +15,7 @@
     "allow-mappings-of",
     "allow-unpair",
     "allow-ignore",
-    "allow-unignore"
+    "allow-unignore",
+    "allow-set-paused"
   ]
 }

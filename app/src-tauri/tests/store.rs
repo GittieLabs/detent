@@ -463,3 +463,17 @@ fn a_failed_write_leaves_the_old_file_intact() {
     assert_eq!(std::fs::read(&path).unwrap(), before);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn paused_defaults_off_and_is_saved() {
+    let c = parse(r#"{ "version": 1 }"#).unwrap();
+    assert!(!c.paused);
+    let c = parse(r#"{ "version": 1, "paused": true }"#).unwrap();
+    assert!(c.paused);
+    let text = store::to_json(&c).unwrap();
+    assert!(text.contains("\"paused\": true"), "{text}");
+    assert_eq!(parse(&text).unwrap(), c);
+    // Written out when off too, like every default (D-069).
+    let text = store::to_json(&example()).unwrap();
+    assert!(text.contains("\"paused\": false"), "{text}");
+}

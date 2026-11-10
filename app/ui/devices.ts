@@ -193,6 +193,14 @@ export function devicesScreen(root: HTMLElement, openWizard: (() => void) | null
         ? el("div", { class: "banner" }, el("strong", {}, "Detent can't run normally. "), state.problem)
         : null,
       local.error ? el("div", { class: "banner" }, local.error) : null,
+      state.paused
+        ? el(
+            "div",
+            { class: "banner" },
+            el("strong", {}, "Paused. "),
+            "Presses are logged but run nothing. Turn Pause off in the menu bar.",
+          )
+        : null,
       el("section", {}, paired),
       unknown.length
         ? el(

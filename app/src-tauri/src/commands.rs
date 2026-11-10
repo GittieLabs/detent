@@ -59,6 +59,16 @@ pub fn set_identifying(shared: &Shared, on: bool) -> Answer {
     Ok(state)
 }
 
+/// Turns Pause on or off and saves it, so it survives a relaunch.
+pub fn set_paused_now(shared: &Shared, on: bool) -> Answer {
+    edit(shared, |c| Ok(app_state::set_paused(c, on)))
+}
+
+#[tauri::command]
+pub fn set_paused(shared: State<'_, Shared>, on: bool) -> Answer {
+    set_paused_now(&shared, on)
+}
+
 #[tauri::command]
 pub fn get_state(shared: State<'_, Shared>) -> AppState {
     snapshot(&shared)
@@ -120,4 +130,5 @@ pub const ALL: &[&str] = &[
     "unpair",
     "ignore",
     "unignore",
+    "set_paused",
 ];

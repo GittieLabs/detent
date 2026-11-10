@@ -171,7 +171,9 @@ fn a_press_runs_its_mapping_and_is_logged_end_to_end() {
             frontmost,
             action,
             count,
+            paused,
         } => {
+            assert!(!paused);
             assert_eq!(id.serial, SERIAL);
             assert_eq!((control, trigger, count), (1, Trigger::Press, 1));
             assert_eq!(frontmost, None);
@@ -378,4 +380,27 @@ fn a_candidate_press_is_reported_but_runs_nothing() {
     r.expect(|x| matches!(x, Record::Device(DeviceEvent::CandidatePressed(_))));
     r.no_call();
     r.engine.as_ref().unwrap().identify(false);
+}
+
+#[test]
+fn a_paused_press_is_logged_but_runs_nothing_until_unpaused() {
+    let r = Rig::start();
+    let engine = r.engine.as_ref().unwrap();
+    let mut paused = config();
+    paused.paused = true;
+    engine.reload(paused);
+    r.expect(|x| matches!(x, Record::Reloaded { .. }));
+    r.hid.push_device(0, &press(1));
+    let rec = r.expect(|x| matches!(x, Record::Resolved { .. }));
+    assert!(
+        matches!(&rec, Record::Resolved { action: Some(a), paused: true, .. } if *a == mail()),
+        "{rec:?}"
+    );
+    assert!(rec.to_string().ends_with("(paused, not run)"), "{rec}");
+    r.no_call();
+
+    engine.reload(config());
+    r.expect(|x| matches!(x, Record::Reloaded { .. }));
+    r.hid.push_device(1, &press(1));
+    assert_eq!(r.call().0, mail());
 }

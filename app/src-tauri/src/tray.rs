@@ -1,16 +1,26 @@
 //! Tray icon and menu. The tray is the only UI shown at launch.
 
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+
+use detent_lib::app_state::AppState;
 use tauri::{
     image::Image,
     menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Runtime,
+    AppHandle, Manager, Runtime, Wry,
 };
+
+use crate::launch::Shared;
 
 pub const TRAY_ID: &str = "detent";
 pub const ID_ACCESSIBILITY: &str = "accessibility";
 pub const ID_DEVICE: &str = "device";
 pub const ID_LOGIN: &str = "login";
+pub const ID_NEW_DEVICE: &str = "new_device";
+pub const ID_PAUSE: &str = "pause";
 pub const ID_OPEN: &str = "open";
 pub const ID_QUIT: &str = "quit";
 
@@ -96,14 +106,15 @@ fn show_login<R: Runtime>(item: &CheckMenuItem<R>, state: Option<Login>) {
     let _ = item.set_enabled(enabled);
 }
 
-/// Text of the device line.
+/// Text of the device line, led by its status dot (D-074): green connected,
+/// white none, red a problem.
 pub fn device_label(status: &DeviceStatus, dry_run: bool) -> String {
     let base = match status {
-        DeviceStatus::Starting => "Starting".to_owned(),
-        DeviceStatus::Running([]) => "No device connected".to_owned(),
-        DeviceStatus::Running([one]) => format!("Connected: {one}"),
-        DeviceStatus::Running(many) => format!("Connected: {} devices", many.len()),
-        DeviceStatus::Problem => "Problem: see the log".to_owned(),
+        DeviceStatus::Starting => "⚪ Starting".to_owned(),
+        DeviceStatus::Running([]) => "⚪ No device connected".to_owned(),
+        DeviceStatus::Running([one]) => format!("🟢 Connected: {one}"),
+        DeviceStatus::Running(many) => format!("🟢 Connected: {} devices", many.len()),
+        DeviceStatus::Problem => "🔴 Problem: see the log".to_owned(),
     };
     if dry_run {
         format!("{base} (dry run)")
@@ -112,8 +123,98 @@ pub fn device_label(status: &DeviceStatus, dry_run: bool) -> String {
     }
 }
 
-/// Builds the tray. Returns the device line, which the engine keeps current.
-pub fn build<R: Runtime>(app: &AppHandle<R>, dry_run: bool) -> tauri::Result<MenuItem<R>> {
+/// The line shown while an unpaired Detent is plugged in; it opens the wizard.
+pub const NEW_DEVICE: &str = "New device found: Pair…";
+/// Text shown when Pause couldn't be saved (the config isn't writable).
+pub const PAUSE_FAILED: &str = "Pause: couldn't save the config";
+
+/// What the tray shows for a given app state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct View {
+    pub device: String,
+    pub paused: bool,
+    pub new_device: bool,
+}
+
+pub fn view(state: &AppState, dry_run: bool) -> View {
+    let connected: Vec<String> = state
+        .paired
+        .iter()
+        .filter(|u| u.connected)
+        .map(|u| u.name.clone())
+        .collect();
+    let line = if state.problem.is_some() {
+        DeviceStatus::Problem
+    } else {
+        DeviceStatus::Running(&connected)
+    };
+    View {
+        device: device_label(&line, dry_run),
+        paused: state.paused,
+        // A unit with no serial can't be paired, so it isn't offered.
+        new_device: state.unknown.iter().any(|u| u.serial.is_some()),
+    }
+}
+
+/// The menu items the app keeps current.
+#[derive(Clone)]
+pub struct Tray {
+    menu: Menu<Wry>,
+    device: MenuItem<Wry>,
+    pause: CheckMenuItem<Wry>,
+    new_device: MenuItem<Wry>,
+    /// Whether `new_device` is in the menu (it's inserted and removed).
+    showing_new: Arc<AtomicBool>,
+}
+
+impl Tray {
+    pub fn show(&self, view: &View) {
+        if let Err(e) = self.device.set_text(&view.device) {
+            eprintln!("detent: could not update the tray: {e}");
+        }
+        let _ = self.pause.set_text("Pause");
+        let _ = self.pause.set_checked(view.paused);
+        if self.showing_new.swap(view.new_device, Ordering::Relaxed) != view.new_device {
+            let done = if view.new_device {
+                self.menu.insert(&self.new_device, 1)
+            } else {
+                self.menu.remove(&self.new_device)
+            };
+            if let Err(e) = done {
+                eprintln!("detent: could not update the tray: {e}");
+            }
+        }
+    }
+}
+
+fn toggle_pause(app: &AppHandle<Wry>, tray: &Tray) {
+    let Some(shared) = app.try_state::<Shared>() else {
+        return;
+    };
+    let on = !shared
+        .state
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .paused;
+    if let Err(e) = crate::commands::set_paused_now(&shared, on) {
+        eprintln!("detent: pause: {e}");
+        let _ = tray.pause.set_checked(!on);
+        let _ = tray.pause.set_text(PAUSE_FAILED);
+    }
+}
+
+fn pair_new_device(app: &AppHandle<Wry>) {
+    // Pairing starts first, so the window opens on the wizard.
+    if let Some(shared) = app.try_state::<Shared>() {
+        let _ = crate::commands::set_identifying(&shared, true);
+    }
+    if let Err(err) = crate::open_settings(app) {
+        eprintln!("detent: could not open settings window: {err}");
+    }
+}
+
+/// Builds the tray. Returns the items the app keeps current.
+pub fn build(app: &AppHandle<Wry>, dry_run: bool) -> tauri::Result<Tray> {
     let device = MenuItem::with_id(
         app,
         ID_DEVICE,
@@ -130,12 +231,16 @@ pub fn build<R: Runtime>(app: &AppHandle<R>, dry_run: bool) -> tauri::Result<Men
     )?;
     let (text, checked, enabled) = login_item_view(login_status());
     let login = CheckMenuItem::with_id(app, ID_LOGIN, text, enabled, checked, None::<&str>)?;
+    let new_device = MenuItem::with_id(app, ID_NEW_DEVICE, NEW_DEVICE, true, None::<&str>)?;
+    let pause = CheckMenuItem::with_id(app, ID_PAUSE, "Pause", true, false, None::<&str>)?;
     let open = MenuItem::with_id(app, ID_OPEN, "Open Detent", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, ID_QUIT, "Quit Detent", true, Some("Cmd+Q"))?;
     let menu = Menu::with_items(
         app,
         &[
             &device,
+            &PredefinedMenuItem::separator(app)?,
+            &pause,
             &accessibility,
             &login,
             &PredefinedMenuItem::separator(app)?,
@@ -143,6 +248,14 @@ pub fn build<R: Runtime>(app: &AppHandle<R>, dry_run: bool) -> tauri::Result<Men
             &quit,
         ],
     )?;
+
+    let tray = Tray {
+        menu: menu.clone(),
+        device,
+        pause,
+        new_device,
+        showing_new: Arc::new(AtomicBool::new(false)),
+    };
 
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(Image::from_bytes(include_bytes!("../icons/tray.png"))?)
@@ -162,25 +275,30 @@ pub fn build<R: Runtime>(app: &AppHandle<R>, dry_run: bool) -> tauri::Result<Men
                 show_login(&login, login_status());
             }
         })
-        .on_menu_event(move |app, event| match event.id().as_ref() {
-            ID_OPEN => {
-                if let Err(err) = crate::open_settings(app) {
-                    eprintln!("detent: could not open settings window: {err}");
+        .on_menu_event({
+            let tray = tray.clone();
+            move |app, event| match event.id().as_ref() {
+                ID_NEW_DEVICE => pair_new_device(app),
+                ID_PAUSE => toggle_pause(app, &tray),
+                ID_OPEN => {
+                    if let Err(err) = crate::open_settings(app) {
+                        eprintln!("detent: could not open settings window: {err}");
+                    }
                 }
+                ID_LOGIN => match toggle_login(login_status()) {
+                    Ok(state) => show_login(&login, state),
+                    Err(e) => {
+                        eprintln!("detent: open at login: {e}");
+                        show_login(&login, login_status());
+                        let _ = login.set_text(LOGIN_FAILED);
+                    }
+                },
+                ID_QUIT => app.exit(0),
+                _ => {}
             }
-            ID_LOGIN => match toggle_login(login_status()) {
-                Ok(state) => show_login(&login, state),
-                Err(e) => {
-                    eprintln!("detent: open at login: {e}");
-                    show_login(&login, login_status());
-                    let _ = login.set_text(LOGIN_FAILED);
-                }
-            },
-            ID_QUIT => app.exit(0),
-            _ => {}
         })
         .build(app)?;
-    Ok(device)
+    Ok(tray)
 }
 
 #[cfg(test)]
@@ -210,25 +328,25 @@ mod tests {
         let two = ["a".to_owned(), "b".to_owned()];
         assert_eq!(
             device_label(&DeviceStatus::Running(&[]), false),
-            "No device connected"
+            "⚪ No device connected"
         );
         assert_eq!(
             device_label(&DeviceStatus::Running(&one), false),
-            "Connected: Desk controller"
+            "🟢 Connected: Desk controller"
         );
         assert_eq!(
             device_label(&DeviceStatus::Running(&two), false),
-            "Connected: 2 devices"
+            "🟢 Connected: 2 devices"
         );
         assert_eq!(
             device_label(&DeviceStatus::Problem, false),
-            "Problem: see the log"
+            "🔴 Problem: see the log"
         );
         assert_eq!(
             device_label(&DeviceStatus::Running(&one), true),
-            "Connected: Desk controller (dry run)"
+            "🟢 Connected: Desk controller (dry run)"
         );
-        assert_eq!(device_label(&DeviceStatus::Starting, false), "Starting");
+        assert_eq!(device_label(&DeviceStatus::Starting, false), "⚪ Starting");
     }
 
     #[test]
@@ -257,11 +375,65 @@ mod tests {
 
     #[test]
     fn menu_ids_are_distinct() {
-        let ids = [ID_DEVICE, ID_ACCESSIBILITY, ID_LOGIN, ID_OPEN, ID_QUIT];
+        let ids = [
+            ID_DEVICE,
+            ID_ACCESSIBILITY,
+            ID_LOGIN,
+            ID_NEW_DEVICE,
+            ID_PAUSE,
+            ID_OPEN,
+            ID_QUIT,
+        ];
         for (i, a) in ids.iter().enumerate() {
             for b in &ids[i + 1..] {
                 assert_ne!(a, b);
             }
         }
+    }
+
+    fn state() -> AppState {
+        let config = detent_lib::store::parse(
+            r#"{ "version": 1, "devices": [{ "name": "Desk", "vid": "0x303A", "pid": "0x8FDE", "serial": "E072A1FC4EDC" }] }"#,
+        )
+        .unwrap();
+        AppState::new(&config)
+    }
+
+    #[test]
+    fn the_view_follows_the_state() {
+        let mut s = state();
+        assert_eq!(
+            view(&s, false),
+            View {
+                device: "⚪ No device connected".into(),
+                paused: false,
+                new_device: false,
+            }
+        );
+        s.paired[0].connected = true;
+        s.paused = true;
+        let v = view(&s, false);
+        assert_eq!(v.device, "🟢 Connected: Desk");
+        assert!(v.paused);
+        s.problem = Some("config not loaded".into());
+        assert_eq!(view(&s, false).device, "🔴 Problem: see the log");
+    }
+
+    #[test]
+    fn only_a_pairable_unit_is_new_device_news() {
+        use detent_lib::app_state::UnknownUnit;
+        let mut s = state();
+        s.unknown.push(UnknownUnit {
+            vid: 0x303A,
+            pid: 0x8FDE,
+            serial: None,
+        });
+        assert!(!view(&s, false).new_device, "no serial: can't be paired");
+        s.unknown.push(UnknownUnit {
+            vid: 0x303A,
+            pid: 0x8FDE,
+            serial: Some("AABBCCDDEEFF".into()),
+        });
+        assert!(view(&s, false).new_device);
     }
 }

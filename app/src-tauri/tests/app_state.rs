@@ -370,3 +370,16 @@ fn a_suggested_name_never_repeats_a_paired_one() {
     s.set_config(&c);
     assert_eq!(s.candidates[0].suggested_name, "Detent Dev");
 }
+
+#[test]
+fn pausing_is_a_config_edit_the_state_follows() {
+    let mut s = AppState::new(&config());
+    assert!(!s.paused);
+    let c = app_state::set_paused(&config(), true);
+    assert!(c.paused);
+    assert_eq!(c.mappings, config().mappings, "mappings untouched");
+    s.set_config(&c);
+    assert!(s.paused);
+    s.set_config(&app_state::set_paused(&c, false));
+    assert!(!s.paused);
+}

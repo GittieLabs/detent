@@ -19,9 +19,9 @@ fn main() {
             // unbundled binary that never reads the plist.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-            let device_line = tray::build(app.handle(), launch.dry_run)?;
+            let tray = tray::build(app.handle(), launch.dry_run)?;
             // Kept for the app's lifetime; the process exit ends its threads.
-            app.manage(launch::start(&launch, app.handle().clone(), device_line));
+            app.manage(launch::start(&launch, app.handle().clone(), tray));
             if launch.settings {
                 open_settings(app.handle())?;
             }
@@ -48,6 +48,7 @@ fn main() {
             commands::unpair,
             commands::ignore,
             commands::unignore,
+            commands::set_paused,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build the Detent app");

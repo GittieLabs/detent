@@ -10,6 +10,7 @@ Detent reads `~/Library/Application Support/Detent/config.json`. In M2 you write
 | `devices` | no | Paired units. Detent opens these and nothing else. |
 | `ignored` | no | Units Detent never opens or offers to pair (`vid`, `pid`, `serial`). |
 | `mappings` | no | What each control does. |
+| `paused` | no | `true` while the tray's Pause is on: presses are logged but run nothing. Default `false`. Detent writes it; there's no need to edit it by hand. |
 
 ## `devices[]`
 

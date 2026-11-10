@@ -46,6 +46,7 @@ export interface AppState {
   unknown: UnknownUnit[];
   ignored: UnitRef[];
   identifying: boolean;
+  paused: boolean;
   problem: string | null;
 }
 
@@ -64,6 +65,7 @@ export const unpair = (serial: string) => invoke<AppState>("unpair", { serial })
 export const ignore = (vid: number, pid: number, serial: string) =>
   invoke<AppState>("ignore", { vid, pid, serial });
 export const unignore = (serial: string) => invoke<AppState>("unignore", { serial });
+export const setPaused = (on: boolean) => invoke<AppState>("set_paused", { on });
 
 export function onState(handler: (state: AppState) => void): Promise<UnlistenFn> {
   return listen<AppState>(STATE_EVENT, (event) => handler(event.payload));

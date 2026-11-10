@@ -12,6 +12,7 @@ fn main() {
         "unpair",
         "ignore",
         "unignore",
+        "set_paused",
     ];
     tauri_build::try_build(
         tauri_build::Attributes::new()

@@ -37,6 +37,8 @@ pub enum Record {
         frontmost: Option<String>,
         action: Option<Action>,
         count: u8,
+        /// Detent is paused: the action is logged, not run.
+        paused: bool,
     },
     /// An action finished. `waited` is from the report being read to the
     /// action starting (press to dispatch, less USB transit); `took` is the
@@ -112,6 +114,7 @@ impl fmt::Display for Record {
                 frontmost,
                 action,
                 count,
+                paused,
             } => {
                 write!(f, "{} {}", id.serial, input_name(*control, *trigger))?;
                 if *count > 1 {
@@ -123,9 +126,13 @@ impl fmt::Display for Record {
                     frontmost.as_deref().unwrap_or("(no frontmost app)")
                 )?;
                 match action {
-                    Some(a) => write!(f, " -> {}", describe(a)),
-                    None => write!(f, " -> no mapping"),
+                    Some(a) => write!(f, " -> {}", describe(a))?,
+                    None => write!(f, " -> no mapping")?,
                 }
+                if *paused && action.is_some() {
+                    write!(f, " (paused, not run)")?;
+                }
+                Ok(())
             }
             Record::Reloaded { devices, mappings } => {
                 write!(
@@ -183,6 +190,8 @@ pub struct Engine<B> {
     router: Router,
     frontmost: Frontmost,
     sink: Arc<dyn Sink>,
+    /// The config's Pause: input is resolved and logged, never queued.
+    paused: bool,
     jobs: Sender<Job>,
     /// Kept so the worker is owned by the engine; dropping `jobs` ends it.
     _worker: JoinHandle<()>,
@@ -209,6 +218,7 @@ impl<B: Bus + 'static> Engine<B> {
             router: Router::new(config),
             frontmost,
             sink,
+            paused: config.paused,
             jobs,
             _worker: worker,
         }
@@ -218,6 +228,7 @@ impl<B: Bus + 'static> Engine<B> {
     /// the devices module closes units no longer paired and opens new ones.
     pub fn reload(&mut self, config: &Config) {
         self.router = Router::new(config);
+        self.paused = config.paused;
         self.devices.set_lists(&config.devices, &config.ignored);
         self.sink.record(&Record::Reloaded {
             devices: config.devices.len(),
@@ -249,7 +260,11 @@ impl<B: Bus + 'static> Engine<B> {
                 frontmost,
                 action: action.clone(),
                 count,
+                paused: self.paused,
             });
+            if self.paused {
+                continue;
+            }
             if let Some(action) = action {
                 for _ in 0..count {
                     let _ = self.jobs.send(Job {

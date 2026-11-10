@@ -129,3 +129,5 @@ Results:
 - Early checks of task 6, 2026-11-10, signed build of the wizard on top of `6a86806` (Mac Developer identity), a throwaway config with no devices, board `E072A1FC4EDC` on release firmware (not the acceptance pass, which task 8 runs on the final build):
   - Step 2: `PASS`, Keith. Paired through the wizard in under 2 minutes with no docs.
   - Step 7: `PASS`, Keith. Closing the window mid wizard left the board unpaired; reopening showed Devices, and the wizard found the board again.
+- Early checks of task 7, 2026-11-10, signed build of the tray work on top of `2db975b`, run on a copy of Keith's config, board `E072A1FC4EDC` on release firmware (not the acceptance pass):
+  - Step 5: `PASS`, Keith. The device line showed 🟢 connected. Pause stopped button 2 changing the volume, and turning it off restored it. Pause stayed on across a quit and relaunch (the copy's config read `"paused": true`). Unpairing showed ⚪ and "New device found: Pair…", which opened the wizard, and the board paired again. Unplug and replug updated the line with no relaunch.

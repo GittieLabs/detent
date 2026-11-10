@@ -60,6 +60,8 @@ pub struct AppState {
     pub ignored: Vec<UnitRef>,
     /// The pairing wizard is open.
     pub identifying: bool,
+    /// Presses run nothing (the tray's Pause).
+    pub paused: bool,
     /// Why Detent can't run normally (no config loaded, USB unavailable).
     pub problem: Option<String>,
 }
@@ -114,6 +116,7 @@ impl AppState {
             unknown: Vec::new(),
             ignored: Vec::new(),
             identifying: false,
+            paused: false,
             problem: None,
         };
         s.set_config(config);
@@ -143,6 +146,7 @@ impl AppState {
             })
             .collect();
         self.ignored = config.ignored.clone();
+        self.paused = config.paused;
         let listed = |serial: &Option<String>| {
             serial.as_deref().is_some_and(|s| {
                 config.devices.iter().any(|d| same(&d.serial, s))
@@ -322,6 +326,14 @@ pub fn pair(
         serial: serial.to_owned(),
     });
     Ok(c)
+}
+
+/// Turns Pause on or off.
+pub fn set_paused(config: &Config, on: bool) -> Config {
+    Config {
+        paused: on,
+        ..config.clone()
+    }
 }
 
 /// Renames a paired unit.

@@ -13,6 +13,8 @@ type Step = "find" | "name" | "done";
 export interface Wizard {
   /** Starts identification and shows the first panel. */
   open(): Promise<void>;
+  /** Shows the first panel for identification started elsewhere (the tray). */
+  adopt(state: AppState): void;
   /** The wizard is showing, so state goes to it rather than to Devices. */
   active(): boolean;
   show(state: AppState): void;
@@ -266,6 +268,13 @@ export function pairingWizard(root: HTMLElement, onClose: () => void): Wizard {
       const state = await api.startPairing();
       step = "find";
       current = state;
+      render();
+    },
+    adopt(state: AppState) {
+      reset();
+      step = "find";
+      current = state;
+      advance(state);
       render();
     },
     active: () => step !== null,

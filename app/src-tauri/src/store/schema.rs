@@ -21,6 +21,10 @@ pub struct Config {
     pub ignored: Vec<UnitRef>,
     #[serde(default)]
     pub mappings: Vec<Mapping>,
+    /// Presses are logged but run nothing (the tray's Pause). Kept here so it
+    /// survives a relaunch (D-075).
+    #[serde(default)]
+    pub paused: bool,
 }
 
 /// A paired unit: VID + PID + serial identifies it (D-004).
