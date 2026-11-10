@@ -259,9 +259,12 @@ impl<B: Bus + 'static> Engine<B> {
 
     /// Turns dry run on or off (D-079): from the next input, actions are
     /// recorded instead of run. Logged as [`Record::DryRun`].
+    /// Asking for the state it's already in records nothing.
     pub fn set_dry_run(&mut self, on: bool) {
-        self.dry_run = on;
-        self.sink.record(&Record::DryRun { on });
+        if self.dry_run != on {
+            self.dry_run = on;
+            self.sink.record(&Record::DryRun { on });
+        }
     }
 
     /// One turn: read devices, then resolve and queue any input.

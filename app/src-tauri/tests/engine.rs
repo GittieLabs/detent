@@ -451,3 +451,28 @@ fn dry_run_resolves_and_records_but_never_calls_the_executor() {
     r.hid.push_device(1, &press(1));
     assert_eq!(r.call().0, mail());
 }
+
+#[test]
+fn asking_for_the_dry_run_state_it_has_records_nothing() {
+    let r = Rig::start();
+    let engine = r.engine.as_ref().unwrap();
+    engine.set_dry_run(false); // already off
+    engine.set_dry_run(true);
+    engine.set_dry_run(true); // already on
+    engine.set_dry_run(false);
+    let mut seen = Vec::new();
+    while seen.len() < 2 {
+        seen.push(r.expect(|x| matches!(x, Record::DryRun { .. })));
+    }
+    assert_eq!(
+        seen,
+        [Record::DryRun { on: true }, Record::DryRun { on: false }]
+    );
+    let more = r
+        .records
+        .recv_timeout(Duration::from_millis(100))
+        .into_iter()
+        .filter(|x| matches!(x, Record::DryRun { .. }))
+        .count();
+    assert_eq!(more, 0, "no repeats");
+}

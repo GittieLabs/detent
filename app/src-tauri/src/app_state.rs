@@ -75,6 +75,57 @@ pub struct InputView {
     pub dry_run: bool,
 }
 
+/// An action's result, for the Test screen (sent as the `result` event).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ResultView {
+    pub serial: String,
+    /// The log's short form of the action.
+    pub action: String,
+    pub mapping: Action,
+    /// Something actually happened (not a dry run, not a failure).
+    pub ran: bool,
+    pub ok: bool,
+    /// "was 13%, now 38%", "opened", "not run (dry run)", "failed: …".
+    pub outcome: String,
+    pub took_ms: f64,
+}
+
+/// The Test screen's view of a [`Record::Ran`]; `None` for other records.
+pub fn result_view(record: &Record) -> Option<ResultView> {
+    use crate::actions::Done;
+    let Record::Ran {
+        id,
+        action,
+        outcome,
+        took,
+        ..
+    } = record
+    else {
+        return None;
+    };
+    let pct = |v: f32| (v * 100.0).round() as i32;
+    let (ran, ok, text) = match outcome {
+        Ok(Done::Recorded) => (false, true, "not run (dry run)".to_owned()),
+        Ok(Done::Volume { from, to }) => (
+            true,
+            true,
+            format!("was {}%, now {}%", pct(*from), pct(*to)),
+        ),
+        Ok(Done::Opened(_)) => (true, true, "opened".to_owned()),
+        Ok(done) => (true, true, done.to_string()),
+        Err(e) => (false, false, format!("failed: {e}")),
+    };
+    Some(ResultView {
+        serial: id.serial.clone(),
+        action: describe(action),
+        mapping: action.clone(),
+        ran,
+        ok,
+        outcome: text,
+        took_ms: took.as_secs_f64() * 1000.0,
+    })
+}
+
 /// The live view of a [`Record::Resolved`]; `None` for other records.
 pub fn input_view(record: &Record) -> Option<InputView> {
     let Record::Resolved {

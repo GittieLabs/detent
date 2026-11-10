@@ -34,11 +34,22 @@ async function start(app: HTMLElement) {
   const devices = devicesScreen(root, () => {
     wizard.open().catch((e) => devices.error(`Couldn't start pairing: ${api.message(e)}`));
   });
+  const test = testScreen(root, chosen);
   const screens: Record<Tab, Screen> = {
     devices,
     mappings: mappingsScreen(root, chosen),
-    test: testScreen(root, chosen),
+    test,
   };
+
+  /** Switches screens. Dry run is on exactly while Test shows (D-079). */
+  function go(next: Tab) {
+    if (next === tab) return;
+    const was = tab;
+    tab = next;
+    if (next === "test") api.setDryRun(true).catch((e) => test.error(api.message(e)));
+    else if (was === "test") api.setDryRun(false).catch(() => {});
+    if (latest) show(latest);
+  }
 
   function renderNav() {
     // The wizard has its own Cancel and Finish; no switching mid pairing.
@@ -51,10 +62,7 @@ async function start(app: HTMLElement) {
             type: "button",
             class: id === tab ? "tab active" : "tab",
             ariaLabel: label,
-            onClick: () => {
-              tab = id;
-              if (latest) show(latest);
-            },
+            onClick: () => go(id),
           },
           label,
         ),
@@ -66,6 +74,7 @@ async function start(app: HTMLElement) {
     latest = state;
     // Pairing started from the tray's "New device found" opens the wizard.
     if (!wizard.active() && state.identifying) {
+      if (tab === "test") api.setDryRun(false).catch(() => {});
       tab = "devices";
       wizard.adopt(state);
     } else if (wizard.active()) {
@@ -77,6 +86,12 @@ async function start(app: HTMLElement) {
   }
 
   await api.onState(show);
+  await api.onInput((view) => {
+    if (tab === "test" && !wizard.active()) test.input(view);
+  });
+  await api.onResult((view) => {
+    if (tab === "test" && !wizard.active()) test.result(view);
+  });
   show(await api.getState());
 }
 

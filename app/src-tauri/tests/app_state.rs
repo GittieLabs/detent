@@ -745,3 +745,56 @@ fn a_paired_unit_shows_the_template_it_would_get() {
     let s = AppState::new(&app_state::apply_template(&just_paired(OTHER), OTHER).unwrap());
     assert!(s.paired[0].template.is_empty());
 }
+
+// The Test screen's results (M4 task 7).
+
+#[test]
+fn an_action_result_reads_plainly_for_the_test_screen() {
+    use detent_lib::actions::Done;
+    use std::time::Duration;
+    let ran = |outcome| Record::Ran {
+        id: id(PAIRED),
+        action: Action::VolumeUp { step: 0.25 },
+        outcome,
+        waited: Duration::from_millis(1),
+        took: Duration::from_millis(9),
+    };
+    let text = |r: &Record| app_state::result_view(r).map(|v| (v.outcome, v.ran, v.ok));
+
+    assert_eq!(
+        text(&ran(Ok(Done::Volume {
+            from: 0.13,
+            to: 0.38
+        }))),
+        Some(("was 13%, now 38%".into(), true, true))
+    );
+    assert_eq!(
+        text(&ran(Ok(Done::Recorded))),
+        Some(("not run (dry run)".into(), false, true))
+    );
+    assert_eq!(
+        text(&ran(Ok(Done::Opened("com.apple.mail".into())))),
+        Some(("opened".into(), true, true))
+    );
+    assert_eq!(
+        text(&ran(Ok(Done::Muted(true)))),
+        Some(("muted".into(), true, true))
+    );
+    assert_eq!(
+        text(&ran(Ok(Done::Script("42".into())))),
+        Some(("script returned \"42\"".into(), true, true))
+    );
+    let failed = app_state::result_view(&ran(Err(detent_lib::actions::ActionError::Invalid(
+        Action::VolumeUp { step: 0.0 }.check_args().unwrap_err(),
+    ))))
+    .unwrap();
+    assert!(
+        !failed.ok && failed.outcome.starts_with("failed: "),
+        "{failed:?}"
+    );
+
+    let v = app_state::result_view(&ran(Ok(Done::Recorded))).unwrap();
+    assert_eq!(v.serial, PAIRED);
+    assert_eq!(v.action, "volume_up 25%");
+    assert_eq!(app_state::result_view(&Record::DryRun { on: true }), None);
+}

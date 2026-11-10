@@ -47,6 +47,8 @@ pub fn parse_args(args: &[String]) -> Launch {
 pub const STATE_EVENT: &str = "state";
 /// The event carrying each resolved input to the Test screen.
 pub const INPUT_EVENT: &str = "input";
+/// The event carrying each action's result to the Test screen.
+pub const RESULT_EVENT: &str = "result";
 
 /// Everything the app shares between the engine's sink, the tray, and the
 /// commands. Managed by Tauri.
@@ -105,6 +107,9 @@ impl Sink for AppSink {
         }
         if let Some(view) = detent_lib::app_state::input_view(record) {
             let _ = self.app.emit(INPUT_EVENT, view);
+        }
+        if let Some(view) = detent_lib::app_state::result_view(record) {
+            let _ = self.app.emit(RESULT_EVENT, view);
         }
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         if state.apply(record) {

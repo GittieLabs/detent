@@ -78,6 +78,19 @@ export interface AppState {
 const STATE_EVENT = "state";
 /** The event carrying each resolved input, for the Test screen. */
 const INPUT_EVENT = "input";
+/** The event carrying each action's result, for the Test screen. */
+const RESULT_EVENT = "result";
+
+/** An action's result (`app_state::ResultView`). */
+export interface ResultView {
+  serial: string;
+  action: string;
+  mapping: Action;
+  ran: boolean; // something actually happened
+  ok: boolean;
+  outcome: string; // "was 13%, now 38%", "not run (dry run)", "failed: …"
+  took_ms: number;
+}
 
 export type Trigger = "press" | "long_press" | "clockwise" | "counterclockwise";
 
@@ -129,6 +142,10 @@ export const applyTemplate = (serial: string) =>
 export const removeMapping = (serial: string, control: number, trigger: Trigger, scope: Scope) =>
   invoke<AppState>("remove_mapping", { serial, control, trigger, scope });
 export const listApps = () => invoke<AppEntry[]>("list_apps");
+
+export function onResult(handler: (result: ResultView) => void): Promise<UnlistenFn> {
+  return listen<ResultView>(RESULT_EVENT, (event) => handler(event.payload));
+}
 
 export function onInput(handler: (input: InputView) => void): Promise<UnlistenFn> {
   return listen<InputView>(INPUT_EVENT, (event) => handler(event.payload));

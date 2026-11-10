@@ -557,3 +557,47 @@ button.control:hover {
 .control-does.unmapped {
   font-style: italic;
 }
+
+/* The Test screen */
+
+.dry-run {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--card);
+}
+
+.dry-run.off {
+  border-color: var(--danger);
+}
+
+.feed-row {
+  padding: 8px 14px;
+}
+
+.outcome {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.outcome.ran {
+  color: var(--on);
+  font-weight: 600;
+}
+
+.outcome.dry {
+  color: var(--accent);
+}
+
+.outcome.failed {
+  color: var(--danger);
+  white-space: normal;
+}
+
+.outcome.muted {
+  color: var(--muted);
+}
