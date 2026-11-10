@@ -1,6 +1,6 @@
 //! Transport: framing over a raw HID link, tested through MockTransport, which
 //! runs the same framing code as UsbHid. The last test is HIL (ignored by
-//! default): `just hil-transport` with the board plugged in.
+//! default): `just hil-app` with the board plugged in.
 
 use std::thread;
 use std::time::{Duration, Instant};
@@ -161,7 +161,7 @@ fn encode_check() -> DeviceMessage {
 /// for a HELLO, and reads one. Needs the board plugged in, any firmware.
 #[cfg(target_os = "macos")]
 #[test]
-#[ignore = "needs the board: just hil-transport"]
+#[ignore = "needs the board: just hil-app"]
 fn usb_hid_reads_a_hello_from_the_board() {
     use detent_lib::transport::Hid;
     let mut hid = Hid::new().expect("hidapi starts");

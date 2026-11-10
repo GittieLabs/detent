@@ -9,7 +9,9 @@ use std::time::{Duration, Instant};
 use detent_protocol::codec::{encode_device, DeviceMessage};
 use detent_protocol::VENDOR_REPORT_ID;
 
-use super::{HidTransport, RawHid};
+use std::ffi::CString;
+
+use super::{Bus, Channel, DeviceTransport, HidTransport, RawHid, TransportError};
 
 /// [`HidTransport`] over a scripted link: the real framing, fake hardware.
 pub type MockTransport = HidTransport<MockHid>;
@@ -111,5 +113,104 @@ impl RawHid for MockHid {
         let n = s.write_limit.map_or(data.len(), |l| l.min(data.len()));
         s.writes.push(data[..n].to_vec());
         Ok(n)
+    }
+}
+
+#[derive(Debug, Default)]
+struct BusState {
+    attached: Vec<(Channel, MockHid)>,
+    next_path: u32,
+    opens: usize,
+    fail_opens: bool,
+}
+
+/// A scripted device list: attach, detach, and replug units. Opening a unit
+/// gives a [`MockTransport`] over the [`MockHid`] that `attach` returned.
+#[derive(Debug, Clone, Default)]
+pub struct MockBus {
+    shared: Arc<Mutex<BusState>>,
+}
+
+impl MockBus {
+    fn state(&self) -> MutexGuard<'_, BusState> {
+        self.shared.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Plugs in a vendor channel; returns its device side.
+    pub fn attach(&self, vid: u16, pid: u16, serial: Option<&str>) -> MockHid {
+        let mut s = self.state();
+        s.next_path += 1;
+        let channel = Channel {
+            path: CString::new(format!("mock:{}", s.next_path)).expect("no NUL"),
+            vid,
+            pid,
+            serial: serial.map(str::to_owned),
+            product: Some("Detent Dev".into()),
+        };
+        let hid = MockHid::default();
+        s.attached.push((channel, hid.clone()));
+        hid
+    }
+
+    /// Unplugs every unit with this serial: gone from the list, and its open
+    /// transport fails.
+    pub fn detach(&self, serial: &str) {
+        let mut s = self.state();
+        for (_, hid) in s
+            .attached
+            .iter()
+            .filter(|(c, _)| c.serial.as_deref() == Some(serial))
+        {
+            hid.unplug();
+        }
+        s.attached
+            .retain(|(c, _)| c.serial.as_deref() != Some(serial));
+    }
+
+    /// Takes a unit off the list while its open transport keeps working, as
+    /// when the OS drops an entry before reads start failing.
+    pub fn remove_quietly(&self, serial: &str) {
+        self.state()
+            .attached
+            .retain(|(c, _)| c.serial.as_deref() != Some(serial));
+    }
+
+    /// Makes every open fail (or work again).
+    pub fn fail_opens(&self, fail: bool) {
+        self.state().fail_opens = fail;
+    }
+
+    /// How many times anything was opened.
+    pub fn opens(&self) -> usize {
+        self.state().opens
+    }
+}
+
+impl Bus for MockBus {
+    fn scan(&mut self) -> Result<Vec<Channel>, TransportError> {
+        Ok(self
+            .state()
+            .attached
+            .iter()
+            .map(|(c, _)| c.clone())
+            .collect())
+    }
+
+    fn open_channel(
+        &mut self,
+        channel: &Channel,
+    ) -> Result<Box<dyn DeviceTransport>, TransportError> {
+        let mut s = self.state();
+        if s.fail_opens {
+            return Err(TransportError::Disconnected("mock open refused".into()));
+        }
+        let hid = s
+            .attached
+            .iter()
+            .find(|(c, _)| c.path == channel.path)
+            .map(|(_, h)| h.clone())
+            .ok_or_else(|| TransportError::Disconnected("mock channel gone".into()))?;
+        s.opens += 1;
+        Ok(Box::new(HidTransport::from_raw(hid)))
     }
 }

@@ -7,7 +7,7 @@ use std::ffi::CString;
 use detent_protocol::{USAGE, USAGE_PAGE};
 use hidapi::{HidApi, HidDevice};
 
-use super::{HidTransport, RawHid, TransportError};
+use super::{Bus, DeviceTransport, HidTransport, RawHid, TransportError};
 
 /// [`HidTransport`] over a real HID device.
 pub type UsbHid = HidTransport<HidDevice>;
@@ -77,5 +77,18 @@ impl Hid {
     pub fn open(&self, channel: &Channel) -> Result<UsbHid, TransportError> {
         let device = self.api.open_path(&channel.path).map_err(hid_err)?;
         Ok(HidTransport::from_raw(device))
+    }
+}
+
+impl Bus for Hid {
+    fn scan(&mut self) -> Result<Vec<Channel>, TransportError> {
+        self.channels()
+    }
+
+    fn open_channel(
+        &mut self,
+        channel: &Channel,
+    ) -> Result<Box<dyn DeviceTransport>, TransportError> {
+        Ok(Box::new(self.open(channel)?))
     }
 }

@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 use detent_protocol::{REPORT_LEN, VENDOR_REPORT_ID};
 
-pub use mock::{MockHid, MockTransport};
+pub use mock::{MockBus, MockHid, MockTransport};
 pub use usb::{Channel, Hid, UsbHid};
 
 /// Why the link stopped working. Any error means the device is gone or
@@ -51,6 +51,18 @@ pub trait DeviceTransport: Send {
 
     /// Sends one encoded app to device report.
     fn write(&mut self, report: &[u8; REPORT_LEN]) -> Result<(), TransportError>;
+}
+
+/// The list of attached vendor channels and a way to open them: hidapi
+/// ([`Hid`]) for real, [`MockBus`] in tests.
+pub trait Bus: Send {
+    /// Vendor channel entries attached now.
+    fn scan(&mut self) -> Result<Vec<Channel>, TransportError>;
+    /// Opens one, non exclusive.
+    fn open_channel(
+        &mut self,
+        channel: &Channel,
+    ) -> Result<Box<dyn DeviceTransport>, TransportError>;
 }
 
 /// A raw HID link: reads and writes whole HID reports, report ID first, the
