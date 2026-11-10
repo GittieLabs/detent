@@ -78,12 +78,12 @@ Tasks:
 - [x] Transport: `app/src-tauri/src/transport/` with the `DeviceTransport` trait, `UsbHid` over hidapi (non exclusive, report ID 6 in and out, foreign report IDs dropped, D-036), and a scripted `MockTransport`. Tests: unit through MockTransport (reports in and out, foreign IDs dropped, disconnect surfaces as an error); HIL: `UsbHid` reads a HELLO from the board. Done 2026-11-09: one `HidTransport` does the framing over a raw link; `UsbHid` runs it over hidapi (non exclusive), `MockTransport` over a scripted `MockHid` that can push reports from another thread and unplug (D-061). `Hid::channels` and `Hid::open` for the devices module. 10 unit tests in `tests/transport.rs` (dropping foreign IDs mutation caught). HIL `just hil-app` (then `hil-transport`) PASS on the board (`E072A1FC4EDC`, release firmware): opened non exclusive and read a HELLO with 5 buttons and the encoder in Volume mode.
 - [x] Devices: `app/src-tauri/src/devices/` polls the device list every second, opens allowlisted units only (others listed, never read; ignore list honored), sends REQUEST_HELLO then HELLO_ACK paired, decodes events with the codec and tags them with a `DeviceId`, marks a unit disconnected after 6 s without HEARTBEAT, and reopens after replug. Tests: integration against MockTransport (attach, HELLO, presses, detach, garbage, heartbeat loss, an unknown device ignored, an ignored device stays ignored). Done 2026-11-09: `Devices::step(now)` over a `Bus` (`Hid` or `MockBus`), emitting Connected, Hello, Input, Rejected, Disconnected (link, detached, heartbeat), OpenFailed, and Unknown events tagged with `DeviceId` (VID, PID, serial) (D-062). 19 integration tests in `tests/devices.rs`; mutations (ignore list skipped, garbage counted as heard) caught. HIL `just hil-app` PASS on the board: connected, HELLO 9 ms after REQUEST_HELLO, acked, still up after 7 s on heartbeats. The LED and OLED showing paired is acceptance step 2.
 - [x] Engine: wire devices, router (frontmost app from `macos`), and actions on a background thread in the app, started at launch from the config, with a log of each event, resolved mapping, action result, and press to dispatch time. Tray shows the device as connected or not. Tests: integration of the whole pipeline (MockTransport, RecordingExecutor, a fake frontmost provider), including dispatch time well under 100 ms; HIL: the debug firmware's TEST_INJECT drives the real app with Dry run. Done 2026-11-09: engine built (D-063): `Engine` plus a worker thread, log at `~/Library/Logs/Detent/detent.log`, tray device line, `--dry-run` and `--config` (D-064). 10 pipeline tests in `tests/engine.rs`, worst of 20 dispatches under 50 ms; inlining actions on the engine thread was caught. HIL PASS (see `acceptance.md` M2 results): debug firmware's TEST_INJECT drove the real app in dry run; every press resolved to its mapping, dispatch 0.2 to 0.7 ms, nothing run; board back on release firmware.
-- [ ] M2 acceptance pass on a signed build: `just build-dev`, a hand written config, and the steps in `acceptance.md` M2, ending with a real button opening Mail. In progress 2026-11-09: signed `Detent.app` built (`just build-dev`) and paired with the board. Step 1 found that `macos-check frontmost` read the same app forever: AppKit only refreshes the frontmost app while the process's main run loop runs, and the check tool never ran it. Fixed by running the run loop between reads (`macos::run_loop_for`); the app's own main run loop already runs, which step 7 confirms.
+- [x] M2 acceptance pass on a signed build: `just build-dev`, a hand written config, and the steps in `acceptance.md` M2, ending with a real button opening Mail. Done 2026-11-09: signed `Detent.app` (Mac Developer identity), Keith's config, steps 1 to 8 PASS (see `acceptance.md` M2 results). Found and fixed on the way: `macos-check frontmost` read a stale app (no run loop; `macos::run_loop_for`), and step 5's script `activate` alone opens no Finder window and needs no Automation permission (script now counts windows, reopens if none, activates).
 
 Exit criteria:
 
 - [x] Router and codec unit tests pass; integration tests pass against MockTransport. Passed 2026-11-09 in CI (`3bc5a3b`): router, codec, transport, devices, and engine pipeline tests.
-- [ ] A real button opens Mail (signed build, `acceptance.md` M2).
+- [x] A real button opens Mail (signed build, `acceptance.md` M2). Keith, 2026-11-09: quit Mail, pressed button 1, Mail opened (step 6).
 
 ## M3 App shell and pairing
 
@@ -124,6 +124,10 @@ Exit criteria:
 ## M7 Hardening and v0.1
 
 Debug mode and log export, crash recovery, config migration tests, notarized release build.
+
+Noted during M2 (do here, not before):
+
+- [ ] An AppleScript's first run waits on macOS's Automation prompt, and that wait counts against its timeout (5 s by default): in M2 step 5 the first press took 4.6 s. A slow click on Allow stops the script (the grant still sticks). Don't count prompt time, or retry once after a timeout on the first run against an app. Found 2026-11-09.
 
 Exit criteria:
 

@@ -23,7 +23,7 @@
     },
     {
       "device": "E072A1FC4EDC", "control": 4, "trigger": "press", "scope": "everywhere",
-      "action": { "type": "applescript", "source": "tell application \"Finder\" to activate" }
+      "action": { "type": "applescript", "source": "tell application \"Finder\"\nif (count Finder windows) is 0 then reopen\nactivate\nend tell" }
     },
     {
       "device": "E072A1FC4EDC", "control": 4, "trigger": "long_press", "scope": "everywhere",
