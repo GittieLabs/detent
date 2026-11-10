@@ -2,7 +2,7 @@
 
 Changes every session. This is the only place progress is tracked.
 
-**Current milestone: M6 Dashboard and encoder menu** (not yet planned: run `/plan-milestone`)
+**Current milestone: M6 Dashboard and encoder menu**
 
 Milestones are ordered by risk: macOS signing and permissions, then the USB protocol, are proven before any UI exists. The engine runs headless before it gets a window. The next milestone starts only when every exit criterion of the current one passes on a signed build.
 
@@ -155,18 +155,29 @@ Exit criteria:
 - [x] One button is Extrude in Plasticity and Mute everywhere else (signed build, `acceptance.md` M5 step 2). Passed 2026-11-10.
 - [x] Secure Input behavior verified and stated in the UI (signed build, `acceptance.md` M5 step 3). Passed 2026-11-10.
 
-## M6 Dashboard and encoder menu
+## M6 Dashboard and encoder menu (current)
 
 The Open dashboard action: the app's own dashboard page (content to be decided, D-055) full screen in an app window on a chosen display, app owned OLED menu items via MENU and MENU_SELECT with their Device menu editor on the Mappings screen (moved from M4, D-078), Mapped encoder mode, STATUS messages.
 
+Tasks, riskiest first. Every firmware flash needs Keith's OK.
+
+- [ ] Firmware: app owned menu items and STATUS. `lib/menu` keeps up to 8 app items after the firmware ones (MENU fills them by index, `total = 0` clears, a partial set isn't shown until complete, items clear on unmount); selecting one sends MENU_SELECT with its `item_id`; STATUS sets the status screen's last line (`text_len = 0` clears, cleared on unmount); `src/main.cpp` routes both. No wire change (protocol v1 already defines them). Tests: native `lib/menu` tests (fill, clear, partial, order, select, labels at 16 chars, status set and clear); `lib/report` parse tests against the golden vectors; HIL with `ctl-probe` sending MENU and STATUS (a small `--menu` and `--status` mode); `acceptance.md` M6 step 1.
+- [ ] Encoder mode from HEARTBEAT: the devices module reports a mode change (`DeviceEvent::Mode`) when a heartbeat's mode differs from the last HELLO or heartbeat; the app state recomputes which controls the device handles. Tests: `tests/devices.rs` (a mode change is reported once), `tests/app_state.rs` (controls follow the mode); `acceptance.md` M6 step 3.
+- [ ] Mapped encoder mappings: in Mapped mode the encoder's row offers Turn left, Turn right and Push in the editor; turns run once per detent (the router already counts detents). Tests: `app_state` (encoder triggers accepted only in Mapped mode), `tsc --noEmit`; `acceptance.md` M6 step 3.
+- [ ] Device menu items in the config and engine: per unit, an ordered list of items with a label (1 to 16 printable ASCII) and one action from the action list; the engine sends them as MENU after each HELLO ack and after a reload that changes them, and runs an item's action on MENU_SELECT (dry run and Pause apply as for presses). Log where they live in the config. Tests: `store` (parse, label rules with paths, round trip), `tests/engine.rs` with the mock bus (MENU sent after HELLO, resent on change, MENU_SELECT runs the action, unknown ids ignored).
+- [ ] Device menu editor on Mappings: a "Device menu" group under the controls listing the firmware items greyed (Volume, Mapped, Setup, Device info) then the app items, each with its label, action chip and Edit, Remove, Move up and Move down; adding and editing use the same panel as mappings, with a label field that counts to 16. Tests: `app_state` edits (add, edit, remove, reorder, label rules), `tsc --noEmit`; `acceptance.md` M6 step 1.
+- [ ] STATUS from actions: after an action runs, the device's OLED status line shows a short result (`Vol 38%`, `Muted`, `Sent E`, `Opened Mail`, at most 20 printable ASCII); cleared after a few seconds. Log the wording rules. Tests: unit tests for the status text from each result (ASCII only, 20 chars, never empty when sent); engine test that STATUS goes out after a result and the clear after the timeout; `acceptance.md` M6 step 2.
+- [ ] Open dashboard action: `open_dashboard { display }` shows the app's dashboard page full screen in a borderless window on the named display (falling back to the main one), with no IPC capabilities; a second press hides it. Unplugging that display moves the window to the main display without crashing. Dashboard content: PLACEHOLDER page until Keith decides (open question, D-055). Tests: store and executor tests for the action; a unit test for choosing the display (named, missing, fallback); `acceptance.md` M6 steps 4 and 5 (the exit criteria).
+- [ ] M6 acceptance pass on a signed build: `just build-dev`, the board on release firmware with M6's changes, and the steps in `acceptance.md` M6.
+
 Noted during M4:
 
-- [ ] Encoder mode changes after HELLO arrive only in HEARTBEAT; fold them into the app state so the drawing and `set_mapping` follow a switch to Mapped mode without a reconnect (D-081).
+- [x] Encoder mode changes after HELLO arrive only in HEARTBEAT; fold them into the app state so the drawing and `set_mapping` follow a switch to Mapped mode without a reconnect (D-081). Planned above.
 
 Exit criteria:
 
-- One button shows the app's dashboard full screen on the secondary display (what it shows is an open question, D-055).
-- Unplugging that display doesn't crash or strand the window.
+- [ ] One button shows the app's dashboard full screen on the secondary display (signed build, `acceptance.md` M6 step 4; what it shows is an open question, D-055).
+- [ ] Unplugging that display doesn't crash or strand the window (signed build, `acceptance.md` M6 step 5).
 
 ## M7 Hardening and v0.1
 

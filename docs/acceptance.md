@@ -196,3 +196,15 @@ Results:
   - Step 2 re-check: `PASS`. Button 3 in Plasticity logged `send_shortcut e: sent e`.
   - M5 exit criteria both pass on a signed build.
 
+## M6
+
+Needs a signed build (`just build-dev`), a paired board on release firmware with M6's changes (flashed with Keith's OK), and a second display for steps 4 and 5, which are the exit criteria.
+
+1. Device menu. On Mappings, add two Device menu items: "Mail" opens Mail, "Mute" toggles mute. Long press the encoder: the OLED menu lists Volume, Mapped, Setup, Device info, then Mail and Mute. Select Mail: Mail opens. Move Mute above Mail in Detent: within a second the OLED order follows. Unplug and replug: the items come back.
+2. Status line. Press a mapped button: the OLED's status screen shows a short result (for example `Vol 38%` or `Muted`) for a few seconds, then clears.
+3. Mapped mode. Switch the board to Mapped from its menu. Within a few seconds, without replugging, Mappings shows the encoder's Turn left, Turn right and Push as editable. Map Turn right to volume up by 2%: each detent raises the volume 2%. Switch back to Volume: the encoder shows as handled by the device again and turns change the volume as before.
+4. Exit criterion: dashboard. Map a button to Open dashboard on the secondary display. A press shows the dashboard full screen on that display, without taking focus from the app in front; a second press hides it.
+5. Exit criterion: display unplugged. With the dashboard showing on the secondary display, unplug that display. Detent doesn't crash, and the dashboard moves to the main display (or hides) rather than being stranded off screen. Plug it back in: the next press shows it there again.
+
+Results:
+
