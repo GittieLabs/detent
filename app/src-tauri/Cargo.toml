@@ -17,6 +17,9 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_path_to_error = "0.1.20"  # field paths in config syntax errors
 
 # Native macOS bindings, used only from src/macos/ (the one unsafe module). Same
 # objc2 family and versions Tauri already pulls in (D-053).
@@ -27,8 +30,6 @@ objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std"
 objc2-core-audio = { version = "0.3.2", default-features = false, features = ["std", "AudioHardware", "objc2-core-audio-types"] }
 objc2-audio-toolbox = { version = "0.3.2", default-features = false, features = ["std", "objc2-core-audio"] }
 
-[dev-dependencies]
-serde_json = "1"
 
 [lints]
 workspace = true

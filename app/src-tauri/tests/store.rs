@@ -1,0 +1,358 @@
+//! Config schema v1: parsing, validation, and error messages that say where.
+
+use detent_lib::store::{
+    load, parse, Action, ConfigError, Scope, Trigger, DEFAULT_APPLESCRIPT_TIMEOUT_MS,
+    DEFAULT_VOLUME_STEP,
+};
+
+const EXAMPLE: &str = include_str!("../examples/config.example.json");
+
+/// A valid config with one device and one mapping; tests change one thing.
+fn base(mapping_extra: &str) -> String {
+    format!(
+        r#"{{
+  "version": 1,
+  "devices": [{{ "name": "Desk", "vid": "0x303A", "pid": "0x8FDE", "serial": "E072A1FC4EDC" }}],
+  "mappings": [{{ "device": "E072A1FC4EDC", "control": 1, "trigger": "press", "scope": "everywhere",
+                 "action": {{ "type": "open_app", "bundle_id": "com.apple.mail" }} {mapping_extra} }}]
+}}"#
+    )
+}
+
+/// Replaces `from` with `to` once, failing loudly if `from` isn't there, so a
+/// typo in a test can't quietly test the unmodified config.
+fn edit(json: &str, from: &str, to: &str) -> String {
+    assert!(
+        json.contains(from),
+        "test bug: {from:?} not found in the config"
+    );
+    json.replacen(from, to, 1)
+}
+
+fn err(json: &str) -> String {
+    match parse(json) {
+        Ok(c) => panic!("expected an error, parsed {c:?}"),
+        Err(e) => e.to_string(),
+    }
+}
+
+fn assert_err(json: &str, expected: &str) {
+    let e = err(json);
+    assert!(
+        e.contains(expected),
+        "error {e:?} should contain {expected:?}"
+    );
+}
+
+// --- valid configs ---
+
+#[test]
+fn example_config_parses() {
+    let c = parse(EXAMPLE).expect("the example is valid");
+    assert_eq!(c.version, 1);
+    assert!(!c.devices.is_empty());
+    assert!(!c.mappings.is_empty());
+}
+
+#[test]
+fn minimal_config_has_empty_lists() {
+    let c = parse(r#"{ "version": 1 }"#).unwrap();
+    assert!(c.devices.is_empty() && c.ignored.is_empty() && c.mappings.is_empty());
+}
+
+#[test]
+fn parses_every_field() {
+    let json = r#"{
+      "version": 1,
+      "devices": [{ "name": "Desk", "vid": "0x303A", "pid": "0x8FDE", "serial": "E072A1FC4EDC" }],
+      "ignored": [{ "vid": "0x303A", "pid": "0x8FDE", "serial": "AAAAAAAAAAAA" }],
+      "mappings": [
+        { "device": "E072A1FC4EDC", "control": 1, "trigger": "press", "scope": "everywhere",
+          "action": { "type": "open_app", "bundle_id": "com.apple.mail" } },
+        { "device": "E072A1FC4EDC", "control": 1, "trigger": "press", "scope": { "app": "com.apple.Safari" },
+          "action": { "type": "mute_toggle" } },
+        { "device": "E072A1FC4EDC", "control": 2, "trigger": "long_press", "scope": "everywhere",
+          "action": { "type": "applescript", "source": "beep" } },
+        { "device": "E072A1FC4EDC", "control": 5, "trigger": "clockwise", "scope": "everywhere",
+          "action": { "type": "volume_up" } },
+        { "device": "E072A1FC4EDC", "control": 5, "trigger": "counterclockwise", "scope": "everywhere",
+          "action": { "type": "volume_down", "step": 0.125 } },
+        { "device": "E072A1FC4EDC", "control": 3, "trigger": "press", "scope": "everywhere",
+          "action": { "type": "volume_set", "level": 0.25 } },
+        { "device": "E072A1FC4EDC", "control": 4, "trigger": "press", "scope": "everywhere",
+          "action": { "type": "applescript", "source": "beep", "timeout_ms": 2000 } }
+      ]
+    }"#;
+    let c = parse(json).unwrap();
+    let d = &c.devices[0];
+    assert_eq!(
+        (d.vid, d.pid, d.serial.as_str(), d.name.as_str()),
+        (0x303A, 0x8FDE, "E072A1FC4EDC", "Desk")
+    );
+    assert_eq!(c.ignored[0].serial, "AAAAAAAAAAAA");
+    let m = &c.mappings;
+    assert_eq!(m[0].trigger, Trigger::Press);
+    assert_eq!(m[0].scope, Scope::Everywhere);
+    assert_eq!(
+        m[0].action,
+        Action::OpenApp {
+            bundle_id: "com.apple.mail".into()
+        }
+    );
+    assert_eq!(m[1].scope, Scope::App("com.apple.Safari".into()));
+    assert_eq!(m[1].action, Action::MuteToggle);
+    assert_eq!(m[2].trigger, Trigger::LongPress);
+    assert_eq!(
+        m[2].action,
+        Action::AppleScript {
+            source: "beep".into(),
+            timeout_ms: DEFAULT_APPLESCRIPT_TIMEOUT_MS
+        }
+    );
+    assert_eq!(m[3].trigger, Trigger::Clockwise);
+    assert_eq!(
+        m[3].action,
+        Action::VolumeUp {
+            step: DEFAULT_VOLUME_STEP
+        }
+    );
+    assert_eq!(m[4].trigger, Trigger::Counterclockwise);
+    assert_eq!(m[4].action, Action::VolumeDown { step: 0.125 });
+    assert_eq!(m[5].action, Action::VolumeSet { level: 0.25 });
+    assert_eq!(
+        m[6].action,
+        Action::AppleScript {
+            source: "beep".into(),
+            timeout_ms: 2000
+        }
+    );
+}
+
+#[test]
+fn hex_ids_are_case_insensitive_and_accept_numbers() {
+    let c = parse(&edit(&base(""), r#""vid": "0x303A""#, r#""vid": "0x303a""#)).unwrap();
+    assert_eq!(c.devices[0].vid, 0x303A);
+    let c = parse(&edit(&base(""), r#""pid": "0x8FDE""#, r#""pid": 36830"#)).unwrap();
+    assert_eq!(c.devices[0].pid, 0x8FDE);
+}
+
+// --- syntax and structure ---
+
+#[test]
+fn malformed_json_reports_line_and_column() {
+    let e = err("{\n  \"version\": 1,\n  \"devices\": [,]\n}");
+    assert!(e.contains("line 3"), "{e}");
+}
+
+#[test]
+fn version_is_required_and_must_be_1() {
+    assert_err(r#"{ "devices": [] }"#, "missing field `version`");
+    assert_err(
+        r#"{ "version": 2 }"#,
+        "unsupported config version 2 (this Detent reads version 1)",
+    );
+}
+
+#[test]
+fn unknown_fields_are_rejected_with_their_path() {
+    assert_err(
+        r#"{ "version": 1, "colour": "red" }"#,
+        "unknown field `colour`",
+    );
+    assert_err(&base(r#", "colour": "red""#), "mappings[0]");
+    assert_err(&base(r#", "colour": "red""#), "unknown field `colour`");
+}
+
+#[test]
+fn unknown_trigger_and_action_types_name_the_field() {
+    let e = err(&edit(
+        &base(""),
+        r#""trigger": "press""#,
+        r#""trigger": "double_tap""#,
+    ));
+    assert!(
+        e.contains("mappings[0].trigger") && e.contains("double_tap"),
+        "{e}"
+    );
+    let e = err(&edit(
+        &base(""),
+        r#""type": "open_app""#,
+        r#""type": "launch""#,
+    ));
+    assert!(
+        e.contains("mappings[0].action") && e.contains("launch"),
+        "{e}"
+    );
+}
+
+// --- devices ---
+
+#[test]
+fn bad_ids_are_rejected() {
+    assert_err(&edit(&base(""), "\"0x303A\"", "\"0xZZ\""), "devices[0].vid");
+    assert_err(
+        &edit(&base(""), "\"0x303A\"", "\"0x1FFFF\""),
+        "devices[0].vid",
+    );
+    assert_err(&edit(&base(""), "\"0x8FDE\"", "\"8FDE\""), "devices[0].pid");
+}
+
+#[test]
+fn device_fields_must_be_non_empty_and_serials_unique() {
+    assert_err(
+        &edit(&base(""), r#""name": "Desk""#, r#""name": " ""#),
+        "devices[0].name: must not be empty",
+    );
+    let json = edit(
+        &base(""),
+        r#""serial": "E072A1FC4EDC" }"#,
+        r#""serial": "" }"#,
+    );
+    assert_err(&json, "devices[0].serial: must not be empty");
+    let dup = edit(
+        &base(""),
+        r#""serial": "E072A1FC4EDC" }]"#,
+        r#""serial": "E072A1FC4EDC" }, { "name": "Two", "vid": "0x303A", "pid": "0x8FDE", "serial": "E072A1FC4EDC" }]"#,
+    );
+    assert_err(
+        &dup,
+        "devices[1].serial: E072A1FC4EDC is already listed in devices[0]",
+    );
+}
+
+// --- mappings ---
+
+#[test]
+fn mappings_must_name_a_listed_device() {
+    assert_err(
+        &edit(
+            &base(""),
+            r#""device": "E072A1FC4EDC""#,
+            r#""device": "NOPE""#,
+        ),
+        "mappings[0].device: NOPE isn't in devices",
+    );
+}
+
+#[test]
+fn app_scope_needs_a_bundle_id() {
+    assert_err(
+        &edit(
+            &base(""),
+            r#""scope": "everywhere""#,
+            r#""scope": { "app": "" }"#,
+        ),
+        "mappings[0].scope.app: must be a bundle ID",
+    );
+    assert_err(
+        &edit(
+            &base(""),
+            r#""scope": "everywhere""#,
+            r#""scope": { "app": "Safari" }"#,
+        ),
+        "mappings[0].scope.app: must be a bundle ID",
+    );
+}
+
+#[test]
+fn duplicate_mappings_are_ambiguous() {
+    // Written out in full: building this by string replacement once matched
+    // nothing and silently tested a valid config.
+    let config = |second_scope: &str| {
+        format!(
+            r#"{{
+  "version": 1,
+  "devices": [{{ "name": "Desk", "vid": "0x303A", "pid": "0x8FDE", "serial": "E072A1FC4EDC" }}],
+  "mappings": [
+    {{ "device": "E072A1FC4EDC", "control": 1, "trigger": "press", "scope": "everywhere",
+       "action": {{ "type": "open_app", "bundle_id": "com.apple.mail" }} }},
+    {{ "device": "E072A1FC4EDC", "control": 1, "trigger": "press", "scope": {second_scope},
+       "action": {{ "type": "mute_toggle" }} }}
+  ]
+}}"#
+        )
+    };
+    assert_err(
+        &config(r#""everywhere""#),
+        "mappings[1]: same device, control, trigger, and scope as mappings[0]",
+    );
+    // A different scope is not a duplicate: app scope overrides Everywhere.
+    let ok = parse(&config(r#"{ "app": "com.apple.Safari" }"#)).unwrap();
+    assert_eq!(ok.mappings.len(), 2);
+}
+
+#[test]
+fn control_must_fit_a_byte() {
+    assert_err(
+        &edit(&base(""), r#""control": 1"#, r#""control": 300"#),
+        "mappings[0].control",
+    );
+}
+
+// --- actions ---
+
+#[test]
+fn action_values_are_checked() {
+    let act = |a: &str| {
+        edit(
+            &base(""),
+            r#"{ "type": "open_app", "bundle_id": "com.apple.mail" }"#,
+            a,
+        )
+    };
+    assert_err(
+        &act(r#"{ "type": "open_app", "bundle_id": "Mail" }"#),
+        "mappings[0].action.bundle_id: must be a bundle ID",
+    );
+    assert_err(
+        &act(r#"{ "type": "volume_set", "level": 1.5 }"#),
+        "mappings[0].action.level: must be from 0 to 1",
+    );
+    assert_err(
+        &act(r#"{ "type": "volume_up", "step": 0 }"#),
+        "mappings[0].action.step: must be more than 0 and at most 1",
+    );
+    assert_err(
+        &act(r#"{ "type": "volume_down", "step": 2 }"#),
+        "mappings[0].action.step: must be more than 0 and at most 1",
+    );
+    assert_err(&act(r#"{ "type": "volume_set" }"#), "missing field `level`");
+    assert_err(
+        &act(r#"{ "type": "applescript", "source": "  " }"#),
+        "mappings[0].action.source: must not be empty",
+    );
+    assert_err(
+        &act(r#"{ "type": "applescript", "source": "beep", "timeout_ms": 10 }"#),
+        "mappings[0].action.timeout_ms: must be from 100 to 60000",
+    );
+}
+
+// --- loading files ---
+
+fn temp_file(name: &str, contents: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("detent-store-test-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join(name);
+    std::fs::write(&path, contents).unwrap();
+    path
+}
+
+#[test]
+fn load_reads_a_file() {
+    let path = temp_file("ok.json", &base(""));
+    assert_eq!(load(&path).unwrap().mappings.len(), 1);
+}
+
+#[test]
+fn load_reports_a_missing_file_and_bad_contents_with_the_path() {
+    let missing = std::env::temp_dir().join("detent-store-test-no-such-file.json");
+    let e = load(&missing).unwrap_err();
+    assert!(matches!(e, ConfigError::Missing(_)), "{e:?}");
+    assert!(e.to_string().contains("no config at"), "{e}");
+    let bad = temp_file("bad.json", r#"{ "version": 9 }"#);
+    let e = load(&bad).unwrap_err().to_string();
+    assert!(
+        e.contains("bad.json") && e.contains("unsupported config version 9"),
+        "{e}"
+    );
+}
