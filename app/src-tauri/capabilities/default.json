@@ -18,6 +18,8 @@
     "allow-unignore",
     "allow-set-paused",
     "allow-list-apps",
-    "allow-set-dry-run"
+    "allow-set-dry-run",
+    "allow-set-mapping",
+    "allow-remove-mapping"
   ]
 }

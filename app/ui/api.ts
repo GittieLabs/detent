@@ -4,6 +4,26 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
+/** One control from the unit's HELLO (`app_state::ControlView`). */
+export interface ControlView {
+  id: number;
+  type: "button" | "encoder";
+  label: string; // "Button 1", "Encoder", "Encoder push"
+  handled_by_device: boolean;
+}
+
+/** Everywhere, or only while this bundle ID is frontmost. */
+export type Scope = "everywhere" | { app: string };
+
+/** A config mapping (`store::Mapping`). */
+export interface Mapping {
+  device: string; // serial
+  control: number;
+  trigger: Trigger;
+  scope: Scope;
+  action: Action;
+}
+
 export interface PairedUnit {
   name: string;
   vid: number;
@@ -14,6 +34,8 @@ export interface PairedUnit {
   firmware: string | null;
   buttons: number;
   encoders: number;
+  controls: ControlView[]; // empty until its HELLO this session
+  mappings: Mapping[];
 }
 
 export interface Candidate {
@@ -100,6 +122,9 @@ export const ignore = (vid: number, pid: number, serial: string) =>
 export const unignore = (serial: string) => invoke<AppState>("unignore", { serial });
 export const setPaused = (on: boolean) => invoke<AppState>("set_paused", { on });
 export const setDryRun = (on: boolean) => invoke<void>("set_dry_run", { on });
+export const setMapping = (mapping: Mapping) => invoke<AppState>("set_mapping", { mapping });
+export const removeMapping = (serial: string, control: number, trigger: Trigger, scope: Scope) =>
+  invoke<AppState>("remove_mapping", { serial, control, trigger, scope });
 export const listApps = () => invoke<AppEntry[]>("list_apps");
 
 export function onInput(handler: (input: InputView) => void): Promise<UnlistenFn> {

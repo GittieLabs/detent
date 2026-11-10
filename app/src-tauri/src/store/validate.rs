@@ -78,6 +78,19 @@ fn check_action(action: &Action, path: &str) -> Result<(), Problem> {
         .map_err(|e| problem(format!("{path}.{}", e.field), e.message))
 }
 
+impl Scope {
+    /// The rule the loader applies to an app scope's bundle ID.
+    pub fn check(&self) -> Result<(), ArgError> {
+        match self {
+            Scope::App(id) if !is_bundle_id(id) => Err(ArgError {
+                field: "app",
+                message: BUNDLE_ID,
+            }),
+            _ => Ok(()),
+        }
+    }
+}
+
 /// An action argument out of range, by field name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ArgError {

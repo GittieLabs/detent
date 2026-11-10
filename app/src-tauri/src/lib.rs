@@ -8,6 +8,7 @@ pub mod devices;
 pub mod engine;
 #[cfg(target_os = "macos")]
 pub mod macos;
+pub mod models;
 pub mod router;
 pub mod store;
 pub mod transport;

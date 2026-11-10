@@ -425,3 +425,226 @@ fn a_resolution_becomes_an_input_view_for_the_test_screen() {
     assert_eq!(app_state::input_view(&unmapped).unwrap().action, None);
     assert_eq!(app_state::input_view(&Record::DryRun { on: true }), None);
 }
+
+// Mappings (M4): each unit's controls from its HELLO, and mapping edits.
+
+use detent_lib::app_state::ControlView;
+use detent_lib::store::{Action, Mapping, Scope, Trigger};
+
+/// The Detent Dev layout: buttons 1 to 4, the encoder 5, its push switch 6.
+fn dev_hello(mode: EncoderMode) -> Hello {
+    let button = |id| Control {
+        id,
+        kind: ControlKind::Button,
+    };
+    Hello {
+        encoder_mode: mode,
+        controls: vec![
+            button(1),
+            button(2),
+            button(3),
+            button(4),
+            button(6),
+            Control {
+                id: 5,
+                kind: ControlKind::Encoder,
+            },
+        ],
+        ..hello()
+    }
+}
+
+fn seen(mode: EncoderMode) -> AppState {
+    let mut s = AppState::new(&config());
+    s.apply(&connected(PAIRED));
+    s.apply(&dev(DeviceEvent::Hello {
+        id: id(PAIRED),
+        hello: dev_hello(mode),
+    }));
+    s
+}
+
+fn mapping(control: u8, trigger: Trigger, scope: Scope, action: Action) -> Mapping {
+    Mapping {
+        device: PAIRED.into(),
+        control,
+        trigger,
+        scope,
+        action,
+    }
+}
+
+#[test]
+fn a_unit_lists_its_controls_from_hello_with_the_encoder_handled_by_the_device() {
+    let s = seen(EncoderMode::Volume);
+    let controls = &s.paired[0].controls;
+    let summary: Vec<_> = controls
+        .iter()
+        .map(|c| (c.id, c.label.as_str(), c.handled_by_device))
+        .collect();
+    assert_eq!(
+        summary,
+        [
+            (1, "Button 1", false),
+            (2, "Button 2", false),
+            (3, "Button 3", false),
+            (4, "Button 4", false),
+            (6, "Encoder push", true),
+            (5, "Encoder", true),
+        ]
+    );
+    // Mapped mode hands both to the app (mapping them arrives in M6).
+    let s = seen(EncoderMode::Mapped);
+    assert!(s.paired[0].controls.iter().all(|c| !c.handled_by_device));
+    // Not seen this session: no controls to draw.
+    assert!(AppState::new(&config()).paired[0].controls.is_empty());
+}
+
+#[test]
+fn a_unit_lists_its_own_mappings_and_they_follow_the_config() {
+    let mut s = seen(EncoderMode::Volume);
+    assert_eq!(s.paired[0].mappings, config().mappings);
+    let c = app_state::remove_mapping(&config(), PAIRED, 1, Trigger::Press, &Scope::Everywhere)
+        .unwrap();
+    s.set_config(&c);
+    assert_eq!(s.paired[0].mappings.len(), 1);
+    assert_eq!(s.paired[0].controls.len(), 6, "controls survive a reload");
+}
+
+#[test]
+fn setting_a_mapping_adds_or_replaces_and_leaves_app_scoped_ones_alone() {
+    let s = seen(EncoderMode::Volume);
+    let controls = &s.paired[0].controls;
+    let safari = mapping(
+        3,
+        Trigger::Press,
+        Scope::App("com.apple.Safari".into()),
+        Action::MuteToggle,
+    );
+    let mut c = config();
+    c.mappings.push(safari.clone());
+
+    // A new control and trigger: added.
+    let calc = mapping(
+        3,
+        Trigger::LongPress,
+        Scope::Everywhere,
+        Action::OpenApp {
+            bundle_id: "com.apple.calculator".into(),
+        },
+    );
+    let c = app_state::set_mapping(&c, controls, calc.clone()).unwrap();
+    assert_eq!(c.mappings.len(), 4);
+    assert!(c.mappings.contains(&calc));
+
+    // Same control, trigger and scope: replaced in place.
+    let quieter = mapping(
+        2,
+        Trigger::Press,
+        Scope::Everywhere,
+        Action::VolumeDown { step: 0.0625 },
+    );
+    let c2 = app_state::set_mapping(&c, controls, quieter.clone()).unwrap();
+    assert_eq!(c2.mappings.len(), 4);
+    assert_eq!(c2.mappings[1], quieter, "kept its place");
+
+    // An Everywhere edit on control 3 press leaves the Safari one alone.
+    let mute = mapping(3, Trigger::Press, Scope::Everywhere, Action::MuteToggle);
+    let c3 = app_state::set_mapping(&c2, controls, mute.clone()).unwrap();
+    assert!(c3.mappings.contains(&safari) && c3.mappings.contains(&mute));
+    assert!(store::to_json(&c3).is_ok(), "still a valid config");
+}
+
+#[test]
+fn removing_a_mapping_needs_an_exact_match() {
+    let c = app_state::remove_mapping(&config(), PAIRED, 2, Trigger::Press, &Scope::Everywhere)
+        .unwrap();
+    assert_eq!(c.mappings.len(), 1);
+    assert_eq!(
+        app_state::remove_mapping(&c, PAIRED, 2, Trigger::Press, &Scope::Everywhere),
+        Err(EditError::NotMapped)
+    );
+    assert_eq!(
+        app_state::remove_mapping(
+            &config(),
+            PAIRED,
+            1,
+            Trigger::Press,
+            &Scope::App("com.apple.Safari".into())
+        ),
+        Err(EditError::NotMapped),
+        "scope must match too"
+    );
+}
+
+#[test]
+fn bad_mappings_are_refused_with_a_reason() {
+    let s = seen(EncoderMode::Volume);
+    let controls = &s.paired[0].controls;
+    let set = |m| app_state::set_mapping(&config(), controls, m);
+    let mute = |control, trigger| mapping(control, trigger, Scope::Everywhere, Action::MuteToggle);
+
+    assert_eq!(
+        set(mute(9, Trigger::Press)),
+        Err(EditError::NoSuchControl(9))
+    );
+    assert_eq!(
+        set(mute(6, Trigger::Press)),
+        Err(EditError::HandledByDevice(6))
+    );
+    assert_eq!(
+        set(mute(1, Trigger::Clockwise)),
+        Err(EditError::WrongTrigger(1))
+    );
+    let loud = mapping(
+        1,
+        Trigger::Press,
+        Scope::Everywhere,
+        Action::VolumeSet { level: 2.0 },
+    );
+    assert_eq!(
+        set(loud).unwrap_err().to_string(),
+        "level: must be from 0 to 1"
+    );
+    let bad_scope = mapping(
+        1,
+        Trigger::Press,
+        Scope::App("Safari".into()),
+        Action::MuteToggle,
+    );
+    assert_eq!(
+        set(bad_scope).unwrap_err().to_string(),
+        "app: must be a bundle ID such as com.apple.mail"
+    );
+    let mut other = mute(1, Trigger::Press);
+    other.device = OTHER.into();
+    assert_eq!(set(other), Err(EditError::NotPaired(OTHER.into())));
+    // No controls known (the unit hasn't connected this session).
+    let none: &[ControlView] = &[];
+    assert_eq!(
+        app_state::set_mapping(&config(), none, mute(1, Trigger::Press)),
+        Err(EditError::NoSuchControl(1))
+    );
+}
+
+#[test]
+fn mappings_and_controls_cross_to_the_window_as_the_ui_expects() {
+    // What `ui/api.ts` sends for `set_mapping`.
+    let m: Mapping = serde_json::from_str(
+        r#"{ "device": "E072A1FC4EDC", "control": 1, "trigger": "long_press",
+             "scope": { "app": "com.apple.Safari" },
+             "action": { "type": "volume_set", "level": 0.25 } }"#,
+    )
+    .unwrap();
+    assert_eq!(m.trigger, Trigger::LongPress);
+    assert_eq!(m.scope, Scope::App("com.apple.Safari".into()));
+    let everywhere: Scope = serde_json::from_str(r#""everywhere""#).unwrap();
+    assert_eq!(everywhere, Scope::Everywhere);
+
+    let s = seen(EncoderMode::Volume);
+    let json = serde_json::to_value(&s.paired[0].controls[0]).unwrap();
+    assert_eq!(
+        json,
+        serde_json::json!({ "id": 1, "type": "button", "label": "Button 1", "handled_by_device": false })
+    );
+}

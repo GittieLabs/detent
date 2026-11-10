@@ -4,12 +4,59 @@
 
 use std::fmt;
 
-use detent_protocol::codec::{ControlKind, Hello};
+use detent_protocol::codec::{ControlKind, EncoderMode, Hello};
 use serde::Serialize;
 
 use crate::devices::{DeviceEvent, DeviceId};
 use crate::engine::{describe, Record};
-use crate::store::{Action, Config, DeviceEntry, Trigger, UnitRef};
+use crate::models;
+use crate::store::{Action, ArgError, Config, DeviceEntry, Mapping, Scope, Trigger, UnitRef};
+
+/// Button or encoder, as the drawing shows it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ControlType {
+    Button,
+    Encoder,
+}
+
+/// One control of a unit, from its HELLO, as the drawing shows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ControlView {
+    pub id: u8,
+    #[serde(rename = "type")]
+    pub kind: ControlType,
+    /// `Button 1`, `Encoder`, `Encoder push`.
+    pub label: String,
+    /// The device handles it itself (the encoder and its push switch in
+    /// Volume and Menu modes), so it can't be mapped.
+    pub handled_by_device: bool,
+}
+
+/// A unit's controls from its HELLO, in HELLO order.
+pub fn controls_of(pid: u16, hello: &Hello) -> Vec<ControlView> {
+    let push = models::encoder_push(pid);
+    let device_mode = hello.encoder_mode != EncoderMode::Mapped;
+    hello
+        .controls
+        .iter()
+        .map(|c| {
+            let (kind, label, encoderish) = match c.kind {
+                ControlKind::Encoder => (ControlType::Encoder, "Encoder".to_owned(), true),
+                ControlKind::Button if Some(c.id) == push => {
+                    (ControlType::Button, "Encoder push".to_owned(), true)
+                }
+                ControlKind::Button => (ControlType::Button, format!("Button {}", c.id), false),
+            };
+            ControlView {
+                id: c.id,
+                kind,
+                label,
+                handled_by_device: encoderish && device_mode,
+            }
+        })
+        .collect()
+}
 
 /// One resolved input, for the Test screen's live view (sent as the `input`
 /// event, not folded into [`AppState`]).
@@ -57,7 +104,7 @@ pub fn input_view(record: &Record) -> Option<InputView> {
 }
 
 /// A paired unit as the Devices screen shows it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PairedUnit {
     pub name: String,
     pub vid: u16,
@@ -70,6 +117,10 @@ pub struct PairedUnit {
     pub firmware: Option<String>,
     pub buttons: usize,
     pub encoders: usize,
+    /// From its last HELLO this session; empty until then.
+    pub controls: Vec<ControlView>,
+    /// Its mappings, from the config.
+    pub mappings: Vec<Mapping>,
 }
 
 /// An unpaired unit the wizard has open read only (D-066).
@@ -97,7 +148,7 @@ pub struct UnknownUnit {
 }
 
 /// Everything the settings window and the tray show.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AppState {
     pub paired: Vec<PairedUnit>,
     pub candidates: Vec<Candidate>,
@@ -190,6 +241,13 @@ impl AppState {
                     firmware: live.and_then(|u| u.firmware.clone()),
                     buttons: live.map_or(0, |u| u.buttons),
                     encoders: live.map_or(0, |u| u.encoders),
+                    controls: live.map(|u| u.controls.clone()).unwrap_or_default(),
+                    mappings: config
+                        .mappings
+                        .iter()
+                        .filter(|m| same(&m.device, &d.serial))
+                        .cloned()
+                        .collect(),
                 }
             })
             .collect();
@@ -256,6 +314,7 @@ impl AppState {
                 if let Some(u) = self.paired_mut(id) {
                     u.firmware = Some(firmware_of(hello));
                     (u.buttons, u.encoders) = (buttons, encoders);
+                    u.controls = controls_of(id.pid, hello);
                 }
             }
             DeviceEvent::Disconnected { id, .. } => {
@@ -329,6 +388,16 @@ pub enum EditError {
     NotPaired(String),
     AlreadyIgnored(String),
     NotIgnored(String),
+    /// The unit doesn't report this control (or hasn't connected yet).
+    NoSuchControl(u8),
+    /// The device handles this control itself in its current mode.
+    HandledByDevice(u8),
+    /// A button takes press or long press; an encoder, a direction.
+    WrongTrigger(u8),
+    /// An argument the config loader would refuse.
+    Invalid(ArgError),
+    /// No mapping with that control, trigger and scope.
+    NotMapped,
 }
 
 impl fmt::Display for EditError {
@@ -338,6 +407,14 @@ impl fmt::Display for EditError {
             Self::AlreadyPaired(s) => write!(f, "{s} is already paired"),
             Self::NotPaired(s) => write!(f, "{s} isn't paired"),
             Self::AlreadyIgnored(s) => write!(f, "{s} is already ignored"),
+            Self::NoSuchControl(c) => write!(f, "this device has no control {c}"),
+            Self::HandledByDevice(c) => write!(
+                f,
+                "control {c} is handled by the device in its current encoder mode"
+            ),
+            Self::WrongTrigger(c) => write!(f, "control {c} can't fire on that trigger"),
+            Self::Invalid(e) => write!(f, "{e}"),
+            Self::NotMapped => write!(f, "there's no such mapping"),
             Self::NotIgnored(s) => write!(f, "{s} isn't ignored"),
         }
     }
@@ -378,6 +455,71 @@ pub fn pair(
         pid,
         serial: serial.to_owned(),
     });
+    Ok(c)
+}
+
+/// Adds a mapping, or replaces the one with the same device, control,
+/// trigger and scope in place. `controls` are the unit's, from its HELLO.
+pub fn set_mapping(
+    config: &Config,
+    controls: &[ControlView],
+    mapping: Mapping,
+) -> Result<Config, EditError> {
+    if !is_paired(config, &mapping.device) {
+        return Err(EditError::NotPaired(mapping.device));
+    }
+    let control = controls
+        .iter()
+        .find(|c| c.id == mapping.control)
+        .ok_or(EditError::NoSuchControl(mapping.control))?;
+    if control.handled_by_device {
+        return Err(EditError::HandledByDevice(mapping.control));
+    }
+    let fits = match control.kind {
+        ControlType::Button => matches!(mapping.trigger, Trigger::Press | Trigger::LongPress),
+        ControlType::Encoder => matches!(
+            mapping.trigger,
+            Trigger::Clockwise | Trigger::Counterclockwise
+        ),
+    };
+    if !fits {
+        return Err(EditError::WrongTrigger(mapping.control));
+    }
+    mapping.scope.check().map_err(EditError::Invalid)?;
+    mapping.action.check_args().map_err(EditError::Invalid)?;
+    let mut c = config.clone();
+    let slot = c.mappings.iter_mut().find(|m| {
+        same(&m.device, &mapping.device)
+            && m.control == mapping.control
+            && m.trigger == mapping.trigger
+            && m.scope == mapping.scope
+    });
+    match slot {
+        Some(m) => *m = mapping,
+        None => c.mappings.push(mapping),
+    }
+    Ok(c)
+}
+
+/// Removes the mapping with exactly this device, control, trigger and scope.
+pub fn remove_mapping(
+    config: &Config,
+    serial: &str,
+    control: u8,
+    trigger: Trigger,
+    scope: &Scope,
+) -> Result<Config, EditError> {
+    let mut c = config.clone();
+    let before = c.mappings.len();
+    c.mappings.retain(|m| {
+        !(same(&m.device, serial)
+            && m.control == control
+            && m.trigger == trigger
+            && m.scope == *scope)
+    });
+    if c.mappings.len() == before {
+        return Err(EditError::NotMapped);
+    }
     Ok(c)
 }
 

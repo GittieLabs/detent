@@ -15,6 +15,8 @@ fn main() {
         "set_paused",
         "list_apps",
         "set_dry_run",
+        "set_mapping",
+        "remove_mapping",
     ];
     tauri_build::try_build(
         tauri_build::Attributes::new()

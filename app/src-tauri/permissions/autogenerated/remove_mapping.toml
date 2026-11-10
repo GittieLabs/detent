@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-remove-mapping"
+description = "Enables the remove_mapping command without any pre-configured scope."
+commands.allow = ["remove_mapping"]
+
+[[permission]]
+identifier = "deny-remove-mapping"
+description = "Denies the remove_mapping command without any pre-configured scope."
+commands.deny = ["remove_mapping"]

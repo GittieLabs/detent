@@ -4,7 +4,7 @@
 //! may call them (capability `default`, D-071).
 
 use detent_lib::app_state::{self, AppState, EditError};
-use detent_lib::store::{self, Config};
+use detent_lib::store::{self, Config, Mapping, Scope, Trigger};
 use tauri::State;
 
 use crate::launch::Shared;
@@ -67,6 +67,35 @@ pub fn set_paused_now(shared: &Shared, on: bool) -> Answer {
 #[tauri::command]
 pub fn set_paused(shared: State<'_, Shared>, on: bool) -> Answer {
     set_paused_now(&shared, on)
+}
+
+/// Adds a mapping or replaces the one with the same control, trigger and
+/// scope, checked against the unit's controls from its HELLO.
+#[tauri::command]
+pub fn set_mapping(shared: State<'_, Shared>, mapping: Mapping) -> Answer {
+    let controls = shared
+        .state
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .paired
+        .iter()
+        .find(|u| u.serial.eq_ignore_ascii_case(&mapping.device))
+        .map(|u| u.controls.clone())
+        .unwrap_or_default();
+    edit(&shared, |c| app_state::set_mapping(c, &controls, mapping))
+}
+
+#[tauri::command]
+pub fn remove_mapping(
+    shared: State<'_, Shared>,
+    serial: String,
+    control: u8,
+    trigger: Trigger,
+    scope: Scope,
+) -> Answer {
+    edit(&shared, |c| {
+        app_state::remove_mapping(c, &serial, control, trigger, &scope)
+    })
 }
 
 /// Turns dry run on or off (the Test screen, D-079). The state follows when
@@ -153,4 +182,6 @@ pub const ALL: &[&str] = &[
     "set_paused",
     "list_apps",
     "set_dry_run",
+    "set_mapping",
+    "remove_mapping",
 ];
