@@ -2,7 +2,9 @@
 //! by bundle ID. Used by the router (app scope) and the Open app action.
 
 use objc2_app_kit::NSWorkspace;
-use objc2_foundation::NSString;
+use std::time::Duration;
+
+use objc2_foundation::{NSDate, NSRunLoop, NSString};
 
 /// Why an app couldn't be opened.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,6 +28,12 @@ impl std::error::Error for OpenAppError {}
 
 /// The bundle ID of the frontmost app, or `None` when there isn't one with a
 /// bundle (rare: a bare executable, or no GUI session). Never prompts.
+///
+/// AppKit keeps this value current from notifications delivered on the main
+/// run loop, so the process must be running one: the Tauri app does, from any
+/// thread. A command line tool that never runs it reads the same app forever
+/// (seen in acceptance M2 step 1); such a tool calls [`run_loop_for`] on its
+/// main thread between reads.
 pub fn frontmost_bundle_id() -> Option<String> {
     // objc2 marks these NSWorkspace and NSRunningApplication calls safe; they
     // may be made from any thread.
@@ -33,6 +41,14 @@ pub fn frontmost_bundle_id() -> Option<String> {
     let app = workspace.frontmostApplication()?;
     let id = app.bundleIdentifier()?;
     Some(id.to_string())
+}
+
+/// Runs the calling thread's run loop for `d`, delivering pending AppKit
+/// notifications. For command line tools on their main thread; the app's
+/// main run loop already runs.
+pub fn run_loop_for(d: Duration) {
+    let until = NSDate::dateWithTimeIntervalSinceNow(d.as_secs_f64());
+    NSRunLoop::currentRunLoop().runUntilDate(&until);
 }
 
 /// Opens (or brings forward) the app with this bundle ID. Returns once Launch

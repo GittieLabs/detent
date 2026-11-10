@@ -23,7 +23,9 @@ fn main() -> std::process::ExitCode {
                     "  {}",
                     macos::frontmost_bundle_id().unwrap_or_else(|| "(none)".into())
                 );
-                sleep(Duration::from_secs(1));
+                // Not sleep: the frontmost app only updates while the main
+                // run loop runs (see `frontmost_bundle_id`).
+                macos::run_loop_for(Duration::from_secs(1));
             }
             Ok(())
         }
