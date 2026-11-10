@@ -661,6 +661,7 @@ dependencies = [
  "objc2-core-audio",
  "objc2-foundation",
  "objc2-service-management",
+ "plist",
  "serde",
  "serde_json",
  "serde_path_to_error",

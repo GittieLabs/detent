@@ -2,7 +2,7 @@
 //! from each bundle's `Info.plist`, merged with the running apps by bundle ID.
 //! Pure except for [`list`], which reads this Mac.
 
-use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -59,12 +59,10 @@ pub fn installed_in(folders: &[PathBuf]) -> Vec<AppEntry> {
 /// first, so their names and `running` win, then installed ones. Sorted by
 /// name, ignoring case.
 pub fn merge(running: Vec<AppEntry>, installed: Vec<AppEntry>) -> Vec<AppEntry> {
-    let mut seen: HashMap<String, usize> = HashMap::new();
+    let mut seen: HashSet<String> = HashSet::new();
     let mut out: Vec<AppEntry> = Vec::new();
     for app in running.into_iter().chain(installed) {
-        let key = app.bundle_id.to_lowercase();
-        if !seen.contains_key(&key) {
-            seen.insert(key, out.len());
+        if seen.insert(app.bundle_id.to_lowercase()) {
             out.push(app);
         }
     }
