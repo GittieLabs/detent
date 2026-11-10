@@ -5,7 +5,7 @@ mod commands;
 mod launch;
 mod tray;
 
-use tauri::{Manager, RunEvent, Runtime, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Manager, RunEvent, Runtime, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 /// Label of the settings window. Matches `capabilities/default.json`.
 pub const SETTINGS_WINDOW: &str = "main";
@@ -26,6 +26,17 @@ fn main() {
                 open_settings(app.handle())?;
             }
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            // Closing the settings window mid wizard closes the candidates it
+            // had open read only (D-066); reopening starts on Devices.
+            if window.label() == SETTINGS_WINDOW && matches!(event, WindowEvent::Destroyed) {
+                if let Some(shared) = window.try_state::<launch::Shared>() {
+                    if shared.state.lock().is_ok_and(|s| s.identifying) {
+                        let _ = commands::set_identifying(&shared, false);
+                    }
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_state,

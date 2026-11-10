@@ -178,6 +178,7 @@ fn candidates_are_found_described_and_picked() {
             buttons: 2,
             encoders: 1,
             picked: false,
+            suggested_name: "Detent Dev".into(),
         }]
     );
     s.apply(&dev(DeviceEvent::CandidatePressed(id(OTHER))));
@@ -331,4 +332,41 @@ fn edit_errors_read_well() {
         EditError::AlreadyPaired(OTHER.into()).to_string(),
         format!("{OTHER} is already paired")
     );
+}
+
+fn found(s: &mut AppState, serial: &str, product: Option<&str>) {
+    s.apply(&dev(DeviceEvent::CandidateFound {
+        id: id(serial),
+        product: product.map(Into::into),
+    }));
+}
+
+#[test]
+fn a_candidates_name_is_suggested_from_its_model() {
+    let mut s = AppState::new(&config());
+    s.set_identifying(true);
+    found(&mut s, OTHER, Some("Detent Dev"));
+    found(&mut s, "112233445566", None);
+    let names: Vec<_> = s
+        .candidates
+        .iter()
+        .map(|c| c.suggested_name.as_str())
+        .collect();
+    assert_eq!(names, ["Detent Dev", "Detent"]);
+}
+
+#[test]
+fn a_suggested_name_never_repeats_a_paired_one() {
+    let c = app_state::rename(&config(), PAIRED, "detent dev").unwrap();
+    let c = app_state::pair(&c, VID, PID, "112233445566", "Detent Dev 2").unwrap();
+    let mut s = AppState::new(&c);
+    s.set_identifying(true);
+    found(&mut s, OTHER, Some("Detent Dev"));
+    assert_eq!(s.candidates[0].suggested_name, "Detent Dev 3");
+
+    // Renaming the paired units frees the name, and the suggestion follows.
+    let c = app_state::rename(&c, PAIRED, "Desk").unwrap();
+    let c = app_state::rename(&c, "112233445566", "Shelf").unwrap();
+    s.set_config(&c);
+    assert_eq!(s.candidates[0].suggested_name, "Detent Dev");
 }

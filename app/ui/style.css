@@ -212,3 +212,57 @@ button[disabled] {
   background: var(--bg);
   color: var(--text);
 }
+
+/* Pairing wizard */
+
+.wizard {
+  max-width: 560px;
+}
+
+.steps {
+  color: var(--muted);
+}
+
+.lead {
+  margin: 0 0 14px;
+}
+
+.picked {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.check.disabled {
+  color: var(--muted);
+}
+
+.hint-inline {
+  display: block;
+  font-size: 12px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}

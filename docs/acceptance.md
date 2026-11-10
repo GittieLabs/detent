@@ -119,9 +119,13 @@ Needs a signed build (`just build-dev`), the board on release firmware, and Dete
 4. Sleep and wake. With the board connected, sleep the Mac (Apple menu, Sleep), wait 30 s, wake it. Within a few seconds of waking the board is connected again and a mapped button works, with no relaunch.
 5. Tray. The tray shows the connection state, and Pause stops presses running anything (the log still shows them) until it's turned off, including across a relaunch. Plug in a second, unpaired unit if one is available: the tray shows "new device found" and it opens the wizard. Unplug and replug: state updates without a relaunch.
 6. Ignore. In the wizard, Ignore a candidate (or an unpaired unit). It moves to the Ignored list and never appears as a candidate again until un-ignored.
+7. Closing mid wizard. Open Pair new device with an unpaired board plugged in, then close the window before pairing. The board stays unpaired (LED still blinking). Open Detent again from the tray: it shows the Devices screen, not the wizard, with the board under "Plugged in, not paired". Pair new device again finds it, and a press picks it.
 
 Results:
 
 - Early checks of task 1, 2026-11-09, signed build after `1eafc76` plus the NotFound fix (not the acceptance pass; steps 3 and 4 still to run on the final build):
   - Open at Login: the first build greyed the item out ("needs the built app"): a never registered bundle reports SMAppService `NotFound`, which was mapped to unavailable. Fixed to mean off; Keith then turned it on and Detent appeared in Login Items. Reboot not yet tried.
   - Sleep and wake: Keith slept the Mac for about 35 s (pmset: 22:12:33 to 22:13:08). It went into DarkWake with TCP keep alive, so the CPU kept running: no clock gap, no `Slept` reopen, and the board stayed connected with heartbeats. Button 2 then stepped the volume 38 to 81%, dispatch 0.3 to 1.2 ms. The wake reopen path (D-068) is still untested on hardware: it needs a full sleep that stops the CPU.
+- Early checks of task 6, 2026-11-10, signed build of the wizard on top of `6a86806` (Mac Developer identity), a throwaway config with no devices, board `E072A1FC4EDC` on release firmware (not the acceptance pass, which task 8 runs on the final build):
+  - Step 2: `PASS`, Keith. Paired through the wizard in under 2 minutes with no docs.
+  - Step 7: `PASS`, Keith. Closing the window mid wizard left the board unpaired; reopening showed Devices, and the wizard found the board again.

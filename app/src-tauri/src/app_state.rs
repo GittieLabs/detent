@@ -39,6 +39,8 @@ pub struct Candidate {
     pub encoders: usize,
     /// The user pressed a button on this one most recently.
     pub picked: bool,
+    /// The wizard's prefilled name: from the model, never a paired unit's.
+    pub suggested_name: String,
 }
 
 /// An attached Detent unit that's neither paired nor ignored.
@@ -87,6 +89,23 @@ fn same(a: &str, b: &str) -> bool {
     a.eq_ignore_ascii_case(b)
 }
 
+/// `Detent Dev` for model `Dev` (`Detent` with no model), with ` 2`, ` 3`, ...
+/// added while a paired unit already has that name.
+fn suggested_name(model: &Option<String>, paired: &[PairedUnit]) -> String {
+    let base = match model {
+        Some(m) => format!("Detent {m}"),
+        None => "Detent".to_owned(),
+    };
+    let taken = |name: &str| paired.iter().any(|u| same(&u.name, name));
+    if !taken(&base) {
+        return base;
+    }
+    (2..)
+        .map(|n| format!("{base} {n}"))
+        .find(|name| !taken(name))
+        .expect("some suffix is free")
+}
+
 impl AppState {
     pub fn new(config: &Config) -> Self {
         let mut s = Self {
@@ -132,6 +151,9 @@ impl AppState {
         };
         self.unknown.retain(|u| !listed(&u.serial));
         self.candidates.retain(|c| !listed(&Some(c.serial.clone())));
+        for c in &mut self.candidates {
+            c.suggested_name = suggested_name(&c.model, &self.paired);
+        }
     }
 
     /// Opens or closes the wizard's identification. Closing clears candidates.
@@ -200,11 +222,13 @@ impl AppState {
             }
             DeviceEvent::CandidateFound { id, product } => {
                 if self.identifying && self.candidate_mut(id).is_none() {
+                    let model = model_of(product);
                     self.candidates.push(Candidate {
+                        suggested_name: suggested_name(&model, &self.paired),
                         vid: id.vid,
                         pid: id.pid,
                         serial: id.serial.clone(),
-                        model: model_of(product),
+                        model,
                         firmware: None,
                         buttons: 0,
                         encoders: 0,

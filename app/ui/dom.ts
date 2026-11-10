@@ -9,6 +9,7 @@ export interface Props {
   disabled?: boolean;
   type?: string;
   value?: string;
+  checked?: boolean;
   ariaLabel?: string;
   onClick?: (event: MouseEvent) => void;
   onKey?: (event: KeyboardEvent) => void;
@@ -23,6 +24,7 @@ export function el(tag: string, props: Props = {}, ...children: Child[]): HTMLEl
   if (props.type) node.setAttribute("type", props.type);
   if (props.disabled) node.setAttribute("disabled", "");
   if (props.value !== undefined && node instanceof HTMLInputElement) node.value = props.value;
+  if (props.checked && node instanceof HTMLInputElement) node.checked = true;
   if (props.onClick) node.addEventListener("click", props.onClick);
   if (props.onKey) node.addEventListener("keydown", props.onKey);
   const onInput = props.onInput;
@@ -38,4 +40,25 @@ export function el(tag: string, props: Props = {}, ...children: Child[]): HTMLEl
 
 export function button(label: string, onClick: () => void, props: Props = {}): HTMLElement {
   return el("button", { type: "button", ...props, onClick: () => onClick() }, label);
+}
+
+/**
+ * Re-renders `root` with `render` and keeps the caret in a text field that had
+ * it, matched by its aria-label, so a state push while typing loses nothing.
+ */
+export function keepingFocus(root: HTMLElement, render: () => void): void {
+  const active = document.activeElement;
+  const field =
+    active instanceof HTMLInputElement && root.contains(active)
+      ? { label: active.getAttribute("aria-label"), start: active.selectionStart, end: active.selectionEnd }
+      : null;
+  render();
+  if (!field?.label) return;
+  for (const input of root.querySelectorAll("input")) {
+    if (input.getAttribute("aria-label") === field.label) {
+      input.focus();
+      if (field.start !== null && field.end !== null) input.setSelectionRange(field.start, field.end);
+      return;
+    }
+  }
 }

@@ -25,6 +25,7 @@ export interface Candidate {
   buttons: number;
   encoders: number;
   picked: boolean;
+  suggested_name: string; // the wizard's prefilled name
 }
 
 export interface UnknownUnit {

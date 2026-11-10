@@ -4,7 +4,7 @@
 
 import * as api from "./api";
 import type { AppState, PairedUnit, UnknownUnit } from "./api";
-import { button, el } from "./dom";
+import { button, el, keepingFocus } from "./dom";
 
 /** What the screen is in the middle of; lives only in the window. */
 interface Local {
@@ -19,6 +19,8 @@ const local: Local = { renaming: null, draft: "", confirmUnpair: null, error: nu
 export interface Screen {
   /** Re-renders from the latest state. */
   show(state: AppState): void;
+  /** Shows an error above the lists, e.g. when the wizard couldn't start. */
+  error(message: string): void;
 }
 
 export function devicesScreen(root: HTMLElement, openWizard: (() => void) | null): Screen {
@@ -225,7 +227,9 @@ export function devicesScreen(root: HTMLElement, openWizard: (() => void) | null
           )
         : null,
     ];
-    root.replaceChildren(...parts.filter((p): p is HTMLElement => p !== null));
+    keepingFocus(root, () =>
+      root.replaceChildren(...parts.filter((p): p is HTMLElement => p !== null)),
+    );
   }
 
   return {
@@ -236,6 +240,10 @@ export function devicesScreen(root: HTMLElement, openWizard: (() => void) | null
       if (local.renaming && !serials.has(local.renaming)) local.renaming = null;
       if (local.confirmUnpair && !serials.has(local.confirmUnpair.serial)) local.confirmUnpair = null;
       render(state);
+    },
+    error(message: string) {
+      local.error = message;
+      rerender();
     },
   };
 }

@@ -46,7 +46,7 @@ fn edit(shared: &Shared, edit: impl FnOnce(&Config) -> Result<Config, EditError>
     Ok(state)
 }
 
-fn set_identifying(shared: &Shared, on: bool) -> Answer {
+pub fn set_identifying(shared: &Shared, on: bool) -> Answer {
     if let Some(engine) = &shared.engine {
         engine.identify(on);
     }
