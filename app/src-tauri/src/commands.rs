@@ -21,7 +21,16 @@ fn snapshot(shared: &Shared) -> AppState {
 }
 
 /// Applies `edit` to the config, saves it, reloads the engine, and publishes.
-fn edit(shared: &Shared, edit: impl FnOnce(&Config) -> Result<Config, EditError>) -> Answer {
+/// A refusal is logged as well as shown, so the log explains a failed save.
+fn edit(shared: &Shared, change: impl FnOnce(&Config) -> Result<Config, EditError>) -> Answer {
+    let answer = apply_edit(shared, change);
+    if let Err(e) = &answer {
+        shared.say(&format!("settings edit refused: {e}"));
+    }
+    answer
+}
+
+fn apply_edit(shared: &Shared, edit: impl FnOnce(&Config) -> Result<Config, EditError>) -> Answer {
     if !shared.writable {
         return Err(
             "The config file couldn't be read, so Detent won't overwrite it. \

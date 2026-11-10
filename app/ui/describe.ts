@@ -15,11 +15,11 @@ export function actionText(action: Action, appName: AppName = idName): string {
     case "open_app":
       return `Open ${appName(action.bundle_id)}`;
     case "volume_up":
-      return `Volume up ${pct(action.step)}`;
+      return `Volume up by ${pct(action.step)}`;
     case "volume_down":
-      return `Volume down ${pct(action.step)}`;
+      return `Volume down by ${pct(action.step)}`;
     case "volume_set":
-      return `Set volume to ${pct(action.level)}`;
+      return `Volume set to ${pct(action.level)}`;
     case "mute_toggle":
       return "Mute or unmute";
     case "applescript":

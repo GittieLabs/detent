@@ -63,9 +63,19 @@ pub struct Shared {
     pub app: AppHandle,
     pub tray: tray::Tray,
     pub dry_run: bool,
+    /// Detent's log, shared with the engine's sink.
+    pub log: Option<Arc<FileLog>>,
 }
 
 impl Shared {
+    /// Writes a line to Detent's log (and stderr).
+    pub fn say(&self, line: &str) {
+        eprintln!("detent: {line}");
+        if let Some(log) = &self.log {
+            log.line(line);
+        }
+    }
+
     /// Pushes the state to the settings window and the tray.
     pub fn publish(&self, state: &AppState) {
         publish(&self.app, &self.tray, state, self.dry_run);
@@ -79,7 +89,7 @@ fn publish(app: &AppHandle, tray: &tray::Tray, state: &AppState, dry_run: bool) 
 
 /// Logs every record, folds it into the app state, and publishes changes.
 struct AppSink {
-    log: Option<FileLog>,
+    log: Option<Arc<FileLog>>,
     state: Arc<Mutex<AppState>>,
     app: AppHandle,
     tray: tray::Tray,
@@ -136,7 +146,7 @@ pub fn empty_config() -> Config {
 /// The app keeps running either way.
 pub fn start(launch: &Launch, app: AppHandle, tray: tray::Tray) -> Shared {
     let log = default_log_path().and_then(|p| match FileLog::open(&p) {
-        Ok(log) => Some(log),
+        Ok(log) => Some(Arc::new(log)),
         Err(e) => {
             eprintln!("detent: no log file at {}: {e}", p.display());
             None
@@ -195,7 +205,7 @@ pub fn start(launch: &Launch, app: AppHandle, tray: tray::Tray) -> Shared {
     let engine = match Hid::new() {
         Ok(bus) => {
             let sink = Arc::new(AppSink {
-                log,
+                log: log.clone(),
                 state: state.clone(),
                 app: app.clone(),
                 tray: tray.clone(),
@@ -229,6 +239,7 @@ pub fn start(launch: &Launch, app: AppHandle, tray: tray::Tray) -> Shared {
         app,
         tray,
         dry_run: launch.dry_run,
+        log,
     };
     let snapshot = shared
         .state

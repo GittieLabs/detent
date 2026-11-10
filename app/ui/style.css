@@ -47,7 +47,7 @@ body {
 
 main {
   padding: 20px 24px 32px;
-  max-width: 720px;
+  max-width: 960px;
 }
 
 .bar {
@@ -412,4 +412,135 @@ button.control:hover {
   background: var(--banner);
   border: 1px solid var(--banner-line);
   color: var(--text);
+}
+
+/* The mapping editor */
+
+.editor {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.editor > .device {
+  flex: 1 1 380px;
+}
+
+.panel {
+  flex: 0 1 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.empty-panel {
+  color: var(--muted);
+  text-align: center;
+  padding: 32px 16px;
+}
+
+.panel-title {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.panel .actions {
+  margin-top: 4px;
+}
+
+.segmented {
+  display: flex;
+  padding: 2px;
+  gap: 2px;
+  background: var(--line);
+  border-radius: 8px;
+}
+
+.seg {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 4px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.seg.active {
+  background: var(--card);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.15);
+  font-weight: 600;
+}
+
+.mapped-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.field-input {
+  font: inherit;
+  font-weight: normal;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  width: 100%;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.field-input.number {
+  width: 90px;
+}
+
+.field-input.script {
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  resize: vertical;
+}
+
+.with-unit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: normal;
+}
+
+.note {
+  margin: 0;
+  color: var(--on);
+}
+
+.note.error {
+  color: var(--danger);
+}
+
+.per-app h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 8px 0 6px;
+}
+
+.per-app .hint {
+  margin: 6px 0 0;
 }

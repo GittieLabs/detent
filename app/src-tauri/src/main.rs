@@ -88,7 +88,7 @@ pub fn open_settings<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()>
         None => {
             WebviewWindowBuilder::new(app, SETTINGS_WINDOW, WebviewUrl::App("index.html".into()))
                 .title("Detent")
-                .inner_size(720.0, 480.0)
+                .inner_size(900.0, 600.0)
                 .build()?
         }
     };
