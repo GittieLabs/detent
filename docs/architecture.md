@@ -79,11 +79,11 @@ The engine modules are a library (`detent_lib`, `src/lib.rs`) that `main.rs`, th
 4a. **`engine`** Wires the above on background threads (D-063): the engine thread steps `devices`, resolves each input with `router`, and queues actions to one worker thread that runs them in order, so a slow script never stalls input or heartbeats. Every event, resolution, and result goes to a `Sink`: the app logs to `~/Library/Logs/Detent/detent.log` and drives the tray's device line.
 5. **`store`** Versioned JSON at `~/Library/Application Support/Detent/config.json`. Schema migrations from v1 onward. No database.
 6. **`windows`** The settings window and dashboard windows. A dashboard window loads its action's URL full screen (borderless maximized if native full screen fights Spaces) on the chosen display.
-7. **`macos`** The only module allowed `unsafe`. Accessibility check (`AXIsProcessTrusted`), CGEvent keystroke posting, NSWorkspace frontmost app and app launch, CoreAudio volume.
+7. **`macos`** The only module allowed `unsafe`. Accessibility check (`AXIsProcessTrusted`), CGEvent keystroke posting, NSWorkspace frontmost app and app launch, CoreAudio volume, SMAppService login item.
 
 ## Background behavior
 
-Menu bar app with no Dock icon (`LSUIElement`). Closing the settings window hides it; Quit lives only in the tray menu. Launch at login via SMAppService (`tauri-plugin-autostart`). The devices module reopens paired units after sleep, wake, and replug without user action.
+Menu bar app with no Dock icon (`LSUIElement`). Closing the settings window hides it; Quit lives only in the tray menu. Launch at login via SMAppService, called directly from `macos/` (D-067); after a wake from sleep the devices module reopens every unit at once (D-068). The devices module reopens paired units after sleep, wake, and replug without user action.
 
 ## Security
 
