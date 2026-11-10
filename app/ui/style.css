@@ -544,3 +544,16 @@ button.control:hover {
 .per-app .hint {
   margin: 6px 0 0;
 }
+
+.trigger-label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.control.lit .trigger-label {
+  color: var(--accent-text);
+}
+
+.control-does.unmapped {
+  font-style: italic;
+}

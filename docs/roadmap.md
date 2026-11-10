@@ -135,6 +135,10 @@ Exit criteria:
 
 Only in app scope, Send shortcut action via CGEvent, permission banner with Fix button.
 
+Noted during M4 (plan these in):
+
+- [ ] Visible volume feedback: Detent's volume actions go through CoreAudio, which shows no macOS volume HUD, so Keith couldn't see a long press change the volume (2026-11-10). Once Accessibility is granted for Send shortcut, send Volume up and down as real volume keys to get the native HUD (fixed system steps), keeping Set volume on the exact CoreAudio path; log the choice in `decisions.md`.
+
 Exit criteria:
 
 - One button is Extrude in Plasticity and Mute everywhere else.

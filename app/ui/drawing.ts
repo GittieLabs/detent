@@ -3,7 +3,7 @@
 // on a press). Which controls exist and which the device handles comes from
 // the Rust side (`app_state::ControlView`, D-081).
 
-import type { AppState, ControlView, Mapping, PairedUnit } from "./api";
+import type { AppState, ControlView, Mapping, PairedUnit, Trigger } from "./api";
 import { type AppName, actionText, idName } from "./describe";
 import { el } from "./dom";
 
@@ -20,15 +20,29 @@ export interface DrawOptions {
 /** The encoder and its push switch are drawn as the knob. */
 const onKnob = (c: ControlView) => c.type === "encoder" || c.label === "Encoder push";
 
-/** What a control does everywhere on a press, in a few words. */
-function summary(c: ControlView, mappings: Mapping[], appName: AppName): string {
-  if (c.handled_by_device) return c.type === "encoder" ? "Volume (on the device)" : "Mute (on the device)";
+/**
+ * What a control does everywhere, one labelled line per trigger, in the
+ * panel's words: "Press: …" always, "Long press: …" when it has one.
+ */
+function summary(c: ControlView, mappings: Mapping[], appName: AppName): HTMLElement[] {
+  if (c.handled_by_device) {
+    const what = c.type === "encoder" ? "Volume (on the device)" : "Mute (on the device)";
+    return [el("span", { class: "control-does" }, what)];
+  }
   const mine = mappings.filter((m) => m.control === c.id && m.scope === "everywhere");
-  const press = mine.find((m) => m.trigger === "press");
-  const long = mine.find((m) => m.trigger === "long_press");
-  const parts = [press ? actionText(press.action, appName) : "Not mapped"];
-  if (long) parts.push(`hold: ${actionText(long.action, appName)}`);
-  return parts.join(" · ");
+  const line = (trigger: Trigger, label: string, always: boolean) => {
+    const m = mine.find((x) => x.trigger === trigger);
+    if (!m && !always) return null;
+    return el(
+      "span",
+      { class: m ? "control-does" : "control-does unmapped" },
+      el("span", { class: "trigger-label" }, `${label}: `),
+      m ? actionText(m.action, appName) : "nothing",
+    );
+  };
+  return [line("press", "Press", true), line("long_press", "Long press", false)].filter(
+    (x): x is HTMLElement => x !== null,
+  );
 }
 
 function appBadge(c: ControlView, mappings: Mapping[], appName: AppName): HTMLElement | null {
@@ -65,7 +79,7 @@ function control(c: ControlView, unit: PairedUnit, opts: DrawOptions): HTMLEleme
       onClick: pickable && onPick ? () => onPick(c) : undefined,
     },
     el("span", { class: "control-name" }, c.label),
-    el("span", { class: "control-does" }, summary(c, unit.mappings, appName)),
+    ...summary(c, unit.mappings, appName),
     appBadge(c, unit.mappings, appName),
   );
 }
