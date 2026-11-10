@@ -122,4 +122,6 @@ Needs a signed build (`just build-dev`), the board on release firmware, and Dete
 
 Results:
 
-- (none yet)
+- Early checks of task 1, 2026-11-09, signed build after `1eafc76` plus the NotFound fix (not the acceptance pass; steps 3 and 4 still to run on the final build):
+  - Open at Login: the first build greyed the item out ("needs the built app"): a never registered bundle reports SMAppService `NotFound`, which was mapped to unavailable. Fixed to mean off; Keith then turned it on and Detent appeared in Login Items. Reboot not yet tried.
+  - Sleep and wake: Keith slept the Mac for about 35 s (pmset: 22:12:33 to 22:13:08). It went into DarkWake with TCP keep alive, so the CPU kept running: no clock gap, no `Slept` reopen, and the board stayed connected with heartbeats. Button 2 then stepped the volume 38 to 81%, dispatch 0.3 to 1.2 ms. The wake reopen path (D-068) is still untested on hardware: it needs a full sleep that stops the CPU.

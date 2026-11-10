@@ -72,21 +72,22 @@ pub fn login_item_view(state: Option<Login>) -> (&'static str, bool, bool) {
         Some(Login::On) => ("Open at Login", true, true),
         Some(Login::Off) => ("Open at Login", false, true),
         Some(Login::NeedsApproval) => ("Open at Login: allow in System Settings", true, true),
-        Some(Login::Unavailable) | None => ("Open at Login: needs the built app", false, false),
+        Some(Login::Unavailable) | None => ("Open at Login: not available", false, false),
     }
 }
 
-/// Flips open at login and returns the state that results.
-fn toggle_login(current: Option<Login>) -> Option<Login> {
+/// Text shown when macOS refused to change open at login.
+pub const LOGIN_FAILED: &str = "Open at Login: couldn't change it";
+
+/// Flips open at login. Returns the state that results, or the error.
+fn toggle_login(current: Option<Login>) -> Result<Option<Login>, String> {
     #[cfg(target_os = "macos")]
     {
         let on = !matches!(current, Some(Login::On | Login::NeedsApproval));
-        if let Err(e) = detent_lib::macos::set_login_item(on) {
-            eprintln!("detent: open at login: {e}");
-        }
+        detent_lib::macos::set_login_item(on)?;
     }
     let _ = current;
-    login_status()
+    Ok(login_status())
 }
 
 fn show_login<R: Runtime>(item: &CheckMenuItem<R>, state: Option<Login>) {
@@ -169,7 +170,14 @@ pub fn build<R: Runtime>(app: &AppHandle<R>, dry_run: bool) -> tauri::Result<Men
                     eprintln!("detent: could not open settings window: {err}");
                 }
             }
-            ID_LOGIN => show_login(&login, toggle_login(login_status())),
+            ID_LOGIN => match toggle_login(login_status()) {
+                Ok(state) => show_login(&login, state),
+                Err(e) => {
+                    eprintln!("detent: open at login: {e}");
+                    show_login(&login, login_status());
+                    let _ = login.set_text(LOGIN_FAILED);
+                }
+            },
             ID_QUIT => app.exit(0),
             _ => {}
         })
@@ -245,7 +253,7 @@ mod tests {
         );
         assert_eq!(
             login_item_view(Some(Login::Unavailable)),
-            ("Open at Login: needs the built app", false, false)
+            ("Open at Login: not available", false, false)
         );
         assert_eq!(
             login_item_view(None),

@@ -13,8 +13,7 @@ pub enum LoginItem {
     On,
     /// Registered, but the user must allow it in System Settings > Login Items.
     NeedsApproval,
-    /// macOS can't find this app as a login item: an unbundled binary such
-    /// as `cargo run`, or a bundle macOS doesn't know.
+    /// A status macOS added after this was written.
     Unavailable,
 }
 
@@ -31,7 +30,10 @@ pub fn login_item() -> LoginItem {
     match status {
         SMAppServiceStatus::Enabled => LoginItem::On,
         SMAppServiceStatus::RequiresApproval => LoginItem::NeedsApproval,
-        SMAppServiceStatus::NotRegistered => LoginItem::Off,
+        // A bundle that has never registered reports NotFound, not
+        // NotRegistered (seen on a signed build, M3). Both mean off; if
+        // registering then fails, `set_login_item` says why.
+        SMAppServiceStatus::NotRegistered | SMAppServiceStatus::NotFound => LoginItem::Off,
         _ => LoginItem::Unavailable,
     }
 }
