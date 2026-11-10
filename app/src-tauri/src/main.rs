@@ -22,6 +22,9 @@ fn main() {
             let device_line = tray::build(app.handle(), launch.dry_run)?;
             // Kept for the app's lifetime; the process exit ends its threads.
             app.manage(launch::start(&launch, app.handle().clone(), device_line));
+            if launch.settings {
+                open_settings(app.handle())?;
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

@@ -1,10 +1,11 @@
 //! Launch options and the engine's hookup to the tray and log.
 //!
-//!   detent [--dry-run] [--config PATH]
+//!   detent [--dry-run] [--config PATH] [--settings]
 //!
 //! `--dry-run` resolves and logs every press but runs nothing (until M3's
 //! Test screen has its toggle, D-064). `--config` reads another config file
-//! instead of `~/Library/Application Support/Detent/config.json`. Unknown
+//! instead of `~/Library/Application Support/Detent/config.json`.
+//! `--settings` opens the settings window at launch. Unknown
 //! arguments are ignored: macOS and Tauri may pass their own.
 
 use std::path::PathBuf;
@@ -25,6 +26,7 @@ use crate::tray;
 pub struct Launch {
     pub dry_run: bool,
     pub config: Option<PathBuf>,
+    pub settings: bool,
 }
 
 pub fn parse_args(args: &[String]) -> Launch {
@@ -33,6 +35,7 @@ pub fn parse_args(args: &[String]) -> Launch {
     while let Some(a) = it.next() {
         match a.as_str() {
             "--dry-run" => launch.dry_run = true,
+            "--settings" => launch.settings = true,
             "--config" => launch.config = it.next().map(PathBuf::from),
             _ => {}
         }
@@ -262,12 +265,19 @@ mod tests {
         let want = Launch {
             dry_run: true,
             config: Some("/tmp/c.json".into()),
+            settings: false,
         };
         assert_eq!(parse_args(&args("--config /tmp/c.json --dry-run")), want);
         assert_eq!(
             parse_args(&args("-psn_0_12345 --dry-run --config /tmp/c.json")),
             want
         );
+    }
+
+    #[test]
+    fn settings_opens_the_window_at_launch() {
+        assert!(parse_args(&args("--settings")).settings);
+        assert!(!parse_args(&args("--dry-run")).settings);
     }
 
     #[test]
