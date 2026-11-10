@@ -12,7 +12,7 @@ mod keys;
 mod login;
 mod workspace;
 
-pub use accessibility::accessibility_trusted;
+pub use accessibility::{accessibility_trusted, request_accessibility};
 pub use apps::running_apps;
 pub use audio::{muted, set_muted, set_volume, volume, AudioError};
 pub use keys::{post_combos, secure_input_on};

@@ -71,6 +71,7 @@ export interface AppState {
   identifying: boolean;
   paused: boolean;
   dry_run: boolean; // only while the Test screen shows (D-079)
+  accessibility: { granted: boolean; needed: boolean; banner: boolean };
   problem: string | null;
 }
 
@@ -137,6 +138,7 @@ export const ignore = (vid: number, pid: number, serial: string) =>
 export const unignore = (serial: string) => invoke<AppState>("unignore", { serial });
 export const setPaused = (on: boolean) => invoke<AppState>("set_paused", { on });
 export const setDryRun = (on: boolean) => invoke<void>("set_dry_run", { on });
+export const fixAccessibility = () => invoke<AppState>("fix_accessibility");
 export const setMapping = (mapping: Mapping) => invoke<AppState>("set_mapping", { mapping });
 export const applyTemplate = (serial: string) =>
   invoke<AppState>("apply_template", { serial });

@@ -58,6 +58,7 @@ fn main() {
             commands::set_mapping,
             commands::remove_mapping,
             commands::apply_template,
+            commands::fix_accessibility,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build the Detent app");

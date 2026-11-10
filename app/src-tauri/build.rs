@@ -18,6 +18,7 @@ fn main() {
         "set_mapping",
         "remove_mapping",
         "apply_template",
+        "fix_accessibility",
     ];
     tauri_build::try_build(
         tauri_build::Attributes::new()

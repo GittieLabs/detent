@@ -601,3 +601,9 @@ button.control:hover {
 .outcome.muted {
   color: var(--muted);
 }
+
+.banner.permission {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}

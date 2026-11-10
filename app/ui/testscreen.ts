@@ -6,6 +6,7 @@
 import type { AppState, InputView, ResultView } from "./api";
 import * as api from "./api";
 import { type AppName, actionText, idName, namesFrom, triggerText } from "./describe";
+import { accessibilityBanner } from "./banners";
 import { drawUnit, pickUnit, unitPicker } from "./drawing";
 import { el } from "./dom";
 
@@ -136,6 +137,10 @@ export function testScreen(root: HTMLElement, chosen: { serial: string | null })
         state.paused
           ? el("div", { class: "banner" }, el("strong", {}, "Paused. "), "Nothing runs until Pause is off in the menu bar.")
           : null,
+        accessibilityBanner(state, (m) => {
+          note = m;
+          rerender();
+        }),
         note ? el("div", { class: "banner" }, note) : null,
         drawUnit(unit, {
           appName,

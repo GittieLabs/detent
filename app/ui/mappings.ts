@@ -7,6 +7,7 @@
 import type { Action, AppEntry, AppState, ControlView, Mapping, PairedUnit, Trigger } from "./api";
 import * as api from "./api";
 import { type AppName, actionText, idName, namesFrom, triggerText } from "./describe";
+import { accessibilityBanner } from "./banners";
 import { drawUnit, pickUnit, unitPicker } from "./drawing";
 import { button, el, keepingFocus } from "./dom";
 import type { Screen } from "./devices";
@@ -406,6 +407,10 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
               rerender();
             }),
           ),
+          accessibilityBanner(state, (m) => {
+            note = { text: m, error: true };
+            rerender();
+          }),
           el(
             "div",
             { class: "editor" },

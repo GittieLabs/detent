@@ -200,6 +200,27 @@ pub struct UnknownUnit {
     pub serial: Option<String>,
 }
 
+/// The Accessibility grant as the UI needs it (M5): shortcuts need it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+pub struct Accessibility {
+    /// Detent holds the grant (rechecked every couple of seconds).
+    pub granted: bool,
+    /// Some mapping sends a shortcut.
+    pub needed: bool,
+    /// Show the banner with its Fix button: needed and not granted.
+    banner: bool,
+}
+
+impl Accessibility {
+    pub fn banner(&self) -> bool {
+        self.banner
+    }
+
+    fn refresh(&mut self) {
+        self.banner = self.needed && !self.granted;
+    }
+}
+
 /// Everything the settings window and the tray show.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AppState {
@@ -213,6 +234,7 @@ pub struct AppState {
     pub paused: bool,
     /// Actions are recorded, not run (the Test screen, D-079).
     pub dry_run: bool,
+    pub accessibility: Accessibility,
     /// Why Detent can't run normally (no config loaded, USB unavailable).
     pub problem: Option<String>,
 }
@@ -269,6 +291,7 @@ impl AppState {
             identifying: false,
             paused: false,
             dry_run: false,
+            accessibility: Accessibility::default(),
             problem: None,
         };
         s.set_config(config);
@@ -307,6 +330,11 @@ impl AppState {
             .collect();
         self.ignored = config.ignored.clone();
         self.paused = config.paused;
+        self.accessibility.needed = config
+            .mappings
+            .iter()
+            .any(|m| matches!(m.action, Action::SendShortcut { .. }));
+        self.accessibility.refresh();
         let listed = |serial: &Option<String>| {
             serial.as_deref().is_some_and(|s| {
                 config.devices.iter().any(|d| same(&d.serial, s))
@@ -318,6 +346,15 @@ impl AppState {
         for c in &mut self.candidates {
             c.suggested_name = suggested_name(&c.model, &self.paired);
         }
+    }
+
+    /// Records whether Detent holds the Accessibility grant. Returns whether
+    /// that changed, so the app only pushes real changes.
+    pub fn set_accessibility(&mut self, granted: bool) -> bool {
+        let before = self.accessibility;
+        self.accessibility.granted = granted;
+        self.accessibility.refresh();
+        self.accessibility != before
     }
 
     /// Opens or closes the wizard's identification. Closing clears candidates.

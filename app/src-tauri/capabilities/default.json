@@ -21,6 +21,7 @@
     "allow-set-dry-run",
     "allow-set-mapping",
     "allow-remove-mapping",
-    "allow-apply-template"
+    "allow-apply-template",
+    "allow-fix-accessibility"
   ]
 }

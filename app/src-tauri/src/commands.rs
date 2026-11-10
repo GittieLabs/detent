@@ -113,6 +113,23 @@ pub fn apply_template(shared: State<'_, Shared>, serial: String) -> Answer {
     edit(&shared, |c| app_state::apply_template(c, &serial))
 }
 
+/// The banner's Fix: macOS's Accessibility prompt and the Settings pane.
+/// The state follows when the grant is next checked (within about 2 s).
+#[tauri::command]
+pub fn fix_accessibility(shared: State<'_, Shared>) -> AppState {
+    #[cfg(target_os = "macos")]
+    let granted = detent_lib::macos::request_accessibility();
+    #[cfg(not(target_os = "macos"))]
+    let granted = false;
+    let state = {
+        let mut state = shared.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.set_accessibility(granted);
+        state.clone()
+    };
+    shared.publish(&state);
+    state
+}
+
 /// Turns dry run on or off (the Test screen, D-079). The state follows when
 /// the engine confirms it, within about 20 ms.
 pub fn set_dry_run_now(shared: &Shared, on: bool) {
@@ -200,4 +217,5 @@ pub const ALL: &[&str] = &[
     "set_mapping",
     "remove_mapping",
     "apply_template",
+    "fix_accessibility",
 ];

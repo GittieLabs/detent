@@ -798,3 +798,38 @@ fn an_action_result_reads_plainly_for_the_test_screen() {
     assert_eq!(v.action, "volume_up 25%");
     assert_eq!(app_state::result_view(&Record::DryRun { on: true }), None);
 }
+
+// Accessibility banner (M5): shown only when a shortcut mapping needs the
+// grant and Detent doesn't have it.
+
+#[test]
+fn the_accessibility_banner_shows_only_when_a_shortcut_needs_it() {
+    let mut s = AppState::new(&config());
+    assert!(!s.accessibility.needed, "no shortcut mapping");
+    assert!(!s.accessibility.banner());
+
+    let shortcut = Mapping {
+        device: PAIRED.into(),
+        control: 1,
+        trigger: Trigger::LongPress,
+        scope: Scope::Everywhere,
+        action: Action::SendShortcut {
+            keys: "cmd+shift+e".into(),
+        },
+    };
+    let mut c = config();
+    c.mappings.push(shortcut);
+    s.set_config(&c);
+    assert!(s.accessibility.needed);
+    assert!(s.accessibility.banner(), "not granted yet");
+
+    assert!(s.set_accessibility(true), "a change");
+    assert!(!s.accessibility.banner());
+    assert!(!s.set_accessibility(true), "no change, no push");
+
+    s.set_config(&config());
+    s.set_accessibility(false);
+    assert!(!s.accessibility.banner(), "no longer needed");
+    let json = serde_json::to_value(&s).unwrap();
+    assert_eq!(json["accessibility"]["banner"], false);
+}

@@ -84,6 +84,43 @@ impl Shared {
     }
 }
 
+fn accessibility_granted() -> bool {
+    #[cfg(target_os = "macos")]
+    return detent_lib::macos::accessibility_trusted();
+    #[cfg(not(target_os = "macos"))]
+    return false;
+}
+
+/// How often the Accessibility grant is rechecked, so the banner clears soon
+/// after it's turned on in System Settings, with no relaunch.
+const ACCESSIBILITY_EVERY: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Rechecks the grant in the background and publishes when it changes. The
+/// check is one cheap call that never prompts.
+fn watch_accessibility(
+    app: AppHandle,
+    tray: tray::Tray,
+    state: Arc<Mutex<AppState>>,
+    dry_run: bool,
+) {
+    let spawned = std::thread::Builder::new()
+        .name("detent-accessibility".into())
+        .spawn(move || loop {
+            std::thread::sleep(ACCESSIBILITY_EVERY);
+            let granted = accessibility_granted();
+            let changed = {
+                let mut s = state.lock().unwrap_or_else(|e| e.into_inner());
+                s.set_accessibility(granted).then(|| s.clone())
+            };
+            if let Some(s) = changed {
+                publish(&app, &tray, &s, dry_run);
+            }
+        });
+    if let Err(e) = spawned {
+        eprintln!("detent: no accessibility watcher: {e}");
+    }
+}
+
 fn publish(app: &AppHandle, tray: &tray::Tray, state: &AppState, dry_run: bool) {
     let _ = app.emit(STATE_EVENT, state);
     tray.show(&tray::view(state, dry_run));
@@ -205,7 +242,9 @@ pub fn start(launch: &Launch, app: AppHandle, tray: tray::Tray) -> Shared {
     }
     let mut initial = AppState::new(&config);
     initial.problem = problem;
+    initial.set_accessibility(accessibility_granted());
     let state = Arc::new(Mutex::new(initial));
+    watch_accessibility(app.clone(), tray.clone(), state.clone(), launch.dry_run);
 
     let engine = match Hid::new() {
         Ok(bus) => {

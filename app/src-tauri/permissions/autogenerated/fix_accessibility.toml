@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fix-accessibility"
+description = "Enables the fix_accessibility command without any pre-configured scope."
+commands.allow = ["fix_accessibility"]
+
+[[permission]]
+identifier = "deny-fix-accessibility"
+description = "Denies the fix_accessibility command without any pre-configured scope."
+commands.deny = ["fix_accessibility"]
