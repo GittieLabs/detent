@@ -8,8 +8,53 @@ use detent_protocol::codec::{ControlKind, Hello};
 use serde::Serialize;
 
 use crate::devices::{DeviceEvent, DeviceId};
-use crate::engine::Record;
-use crate::store::{Config, DeviceEntry, UnitRef};
+use crate::engine::{describe, Record};
+use crate::store::{Action, Config, DeviceEntry, Trigger, UnitRef};
+
+/// One resolved input, for the Test screen's live view (sent as the `input`
+/// event, not folded into [`AppState`]).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct InputView {
+    pub serial: String,
+    pub control: u8,
+    pub trigger: Trigger,
+    pub frontmost: Option<String>,
+    /// The log's short form of the action that applies, if any.
+    pub action: Option<String>,
+    /// The action itself, for the UI to describe in its own words.
+    pub mapping: Option<Action>,
+    pub count: u8,
+    pub paused: bool,
+    pub dry_run: bool,
+}
+
+/// The live view of a [`Record::Resolved`]; `None` for other records.
+pub fn input_view(record: &Record) -> Option<InputView> {
+    let Record::Resolved {
+        id,
+        control,
+        trigger,
+        frontmost,
+        action,
+        count,
+        paused,
+        dry_run,
+    } = record
+    else {
+        return None;
+    };
+    Some(InputView {
+        serial: id.serial.clone(),
+        control: *control,
+        trigger: *trigger,
+        frontmost: frontmost.clone(),
+        action: action.as_ref().map(describe),
+        mapping: action.clone(),
+        count: *count,
+        paused: *paused,
+        dry_run: *dry_run,
+    })
+}
 
 /// A paired unit as the Devices screen shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -62,6 +107,8 @@ pub struct AppState {
     pub identifying: bool,
     /// Presses run nothing (the tray's Pause).
     pub paused: bool,
+    /// Actions are recorded, not run (the Test screen, D-079).
+    pub dry_run: bool,
     /// Why Detent can't run normally (no config loaded, USB unavailable).
     pub problem: Option<String>,
 }
@@ -117,6 +164,7 @@ impl AppState {
             ignored: Vec::new(),
             identifying: false,
             paused: false,
+            dry_run: false,
             problem: None,
         };
         s.set_config(config);
@@ -183,6 +231,11 @@ impl AppState {
     /// Folds in one engine record. Returns whether anything the UI shows
     /// changed, so the app only pushes real changes.
     pub fn apply(&mut self, record: &Record) -> bool {
+        if let Record::DryRun { on } = record {
+            let changed = self.dry_run != *on;
+            self.dry_run = *on;
+            return changed;
+        }
         let Record::Device(event) = record else {
             return false;
         };

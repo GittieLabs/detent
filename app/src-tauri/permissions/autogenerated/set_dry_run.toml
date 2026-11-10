@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-dry-run"
+description = "Enables the set_dry_run command without any pre-configured scope."
+commands.allow = ["set_dry_run"]
+
+[[permission]]
+identifier = "deny-set-dry-run"
+description = "Denies the set_dry_run command without any pre-configured scope."
+commands.deny = ["set_dry_run"]

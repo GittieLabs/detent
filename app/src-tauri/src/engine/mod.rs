@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime};
 
-use crate::actions::{Executor, Outcome};
+use crate::actions::{Executor, Outcome, RecordingExecutor};
 use crate::devices::{DeviceEvent, DeviceId, Devices, Options};
 use crate::router::{trigger_of, Router};
 use crate::store::{Action, Config, Trigger};
@@ -39,6 +39,8 @@ pub enum Record {
         count: u8,
         /// Detent is paused: the action is logged, not run.
         paused: bool,
+        /// Dry run (the Test screen, D-079): the action is recorded, not run.
+        dry_run: bool,
     },
     /// An action finished. `waited` is from the report being read to the
     /// action starting (press to dispatch, less USB transit); `took` is the
@@ -52,6 +54,8 @@ pub enum Record {
     },
     /// A new config was put in place without a relaunch.
     Reloaded { devices: usize, mappings: usize },
+    /// Dry run turned on or off (D-079).
+    DryRun { on: bool },
 }
 
 /// A wall clock gain over the monotonic clock this big means the Mac slept.
@@ -115,6 +119,7 @@ impl fmt::Display for Record {
                 action,
                 count,
                 paused,
+                dry_run,
             } => {
                 write!(f, "{} {}", id.serial, input_name(*control, *trigger))?;
                 if *count > 1 {
@@ -131,6 +136,8 @@ impl fmt::Display for Record {
                 }
                 if *paused && action.is_some() {
                     write!(f, " (paused, not run)")?;
+                } else if *dry_run && action.is_some() {
+                    write!(f, " (dry run)")?;
                 }
                 Ok(())
             }
@@ -140,6 +147,10 @@ impl fmt::Display for Record {
                     "config reloaded: {devices} device(s), {mappings} mapping(s)"
                 )
             }
+            Record::DryRun { on: true } => {
+                write!(f, "dry run on: actions are logged, not run")
+            }
+            Record::DryRun { on: false } => write!(f, "dry run off"),
             Record::Ran {
                 id,
                 action,
@@ -167,13 +178,20 @@ struct Job {
     id: DeviceId,
     action: Action,
     read_at: Instant,
+    /// Run on the recording executor instead (D-079).
+    dry_run: bool,
 }
 
 fn worker(jobs: Receiver<Job>, executor: Arc<dyn Executor>, sink: Arc<dyn Sink>) {
+    let recording = RecordingExecutor::default();
     // Ends when the engine drops its sender.
     for job in jobs {
         let started = Instant::now();
-        let outcome = executor.run(&job.action);
+        let outcome = if job.dry_run {
+            recording.run(&job.action)
+        } else {
+            executor.run(&job.action)
+        };
         sink.record(&Record::Ran {
             id: job.id,
             action: job.action,
@@ -192,6 +210,8 @@ pub struct Engine<B> {
     sink: Arc<dyn Sink>,
     /// The config's Pause: input is resolved and logged, never queued.
     paused: bool,
+    /// Dry run: actions go to a recording executor (D-079).
+    dry_run: bool,
     jobs: Sender<Job>,
     /// Kept so the worker is owned by the engine; dropping `jobs` ends it.
     _worker: JoinHandle<()>,
@@ -219,6 +239,7 @@ impl<B: Bus + 'static> Engine<B> {
             frontmost,
             sink,
             paused: config.paused,
+            dry_run: false,
             jobs,
             _worker: worker,
         }
@@ -234,6 +255,13 @@ impl<B: Bus + 'static> Engine<B> {
             devices: config.devices.len(),
             mappings: config.mappings.len(),
         });
+    }
+
+    /// Turns dry run on or off (D-079): from the next input, actions are
+    /// recorded instead of run. Logged as [`Record::DryRun`].
+    pub fn set_dry_run(&mut self, on: bool) {
+        self.dry_run = on;
+        self.sink.record(&Record::DryRun { on });
     }
 
     /// One turn: read devices, then resolve and queue any input.
@@ -261,6 +289,7 @@ impl<B: Bus + 'static> Engine<B> {
                 action: action.clone(),
                 count,
                 paused: self.paused,
+                dry_run: self.dry_run,
             });
             if self.paused {
                 continue;
@@ -271,6 +300,7 @@ impl<B: Bus + 'static> Engine<B> {
                         id: id.clone(),
                         action: action.clone(),
                         read_at,
+                        dry_run: self.dry_run,
                     });
                 }
             }
@@ -292,6 +322,7 @@ impl<B: Bus + 'static> Engine<B> {
                             Command::Reload(config) => self.reload(&config),
                             Command::Identify(true) => self.devices.start_identify(),
                             Command::Identify(false) => self.devices.end_identify(),
+                            Command::DryRun(on) => self.set_dry_run(on),
                         }
                     }
                     let now = (Instant::now(), SystemTime::now());
@@ -321,6 +352,7 @@ impl<B: Bus + 'static> Engine<B> {
 enum Command {
     Reload(Config),
     Identify(bool),
+    DryRun(bool),
 }
 
 pub struct EngineHandle {
@@ -341,6 +373,11 @@ impl EngineHandle {
     /// units are opened read only and report `Candidate*` events.
     pub fn identify(&self, on: bool) {
         let _ = self.commands.send(Command::Identify(on));
+    }
+
+    /// Turns dry run on or off (D-079), before the next read.
+    pub fn set_dry_run(&self, on: bool) {
+        let _ = self.commands.send(Command::DryRun(on));
     }
 
     /// Stops reading devices, tells paired units they're released, and

@@ -172,8 +172,9 @@ fn a_press_runs_its_mapping_and_is_logged_end_to_end() {
             action,
             count,
             paused,
+            dry_run,
         } => {
-            assert!(!paused);
+            assert!(!paused && !dry_run);
             assert_eq!(id.serial, SERIAL);
             assert_eq!((control, trigger, count), (1, Trigger::Press, 1));
             assert_eq!(frontmost, None);
@@ -414,4 +415,39 @@ fn stopping_tells_the_unit_it_is_no_longer_paired() {
         detent_protocol::codec::decode_app(&last[1..]).unwrap().msg,
         detent_protocol::codec::AppMessage::HelloAck { paired: false }
     );
+}
+
+#[test]
+fn dry_run_resolves_and_records_but_never_calls_the_executor() {
+    let r = Rig::start();
+    let engine = r.engine.as_ref().unwrap();
+    engine.set_dry_run(true);
+    let on = r.expect(|x| matches!(x, Record::DryRun { .. }));
+    assert_eq!(on, Record::DryRun { on: true });
+    assert_eq!(on.to_string(), "dry run on: actions are logged, not run");
+
+    r.hid.push_device(0, &press(1));
+    let rec = r.expect(|x| matches!(x, Record::Resolved { .. }));
+    assert!(
+        matches!(&rec, Record::Resolved { action: Some(a), dry_run: true, .. } if *a == mail()),
+        "{rec:?}"
+    );
+    match r.expect(|x| matches!(x, Record::Ran { .. })) {
+        Record::Ran {
+            action, outcome, ..
+        } => {
+            assert_eq!(action, mail());
+            assert_eq!(outcome, Ok(Done::Recorded));
+        }
+        _ => unreachable!(),
+    }
+    r.no_call();
+
+    engine.set_dry_run(false);
+    assert_eq!(
+        r.expect(|x| matches!(x, Record::DryRun { .. })),
+        Record::DryRun { on: false }
+    );
+    r.hid.push_device(1, &press(1));
+    assert_eq!(r.call().0, mail());
 }

@@ -17,6 +17,7 @@
     "allow-ignore",
     "allow-unignore",
     "allow-set-paused",
-    "allow-list-apps"
+    "allow-list-apps",
+    "allow-set-dry-run"
   ]
 }

@@ -383,3 +383,45 @@ fn pausing_is_a_config_edit_the_state_follows() {
     s.set_config(&app_state::set_paused(&c, false));
     assert!(!s.paused);
 }
+
+#[test]
+fn the_dry_run_flag_follows_the_engine() {
+    let mut s = AppState::new(&config());
+    assert!(!s.dry_run);
+    assert!(s.apply(&Record::DryRun { on: true }));
+    assert!(s.dry_run);
+    assert!(!s.apply(&Record::DryRun { on: true }), "no change, no push");
+    s.apply(&Record::DryRun { on: false });
+    assert!(!s.dry_run);
+}
+
+#[test]
+fn a_resolution_becomes_an_input_view_for_the_test_screen() {
+    use detent_lib::store::{Action, Trigger};
+    let resolved = Record::Resolved {
+        id: id(PAIRED),
+        control: 2,
+        trigger: Trigger::Press,
+        frontmost: Some("com.apple.Safari".into()),
+        action: Some(Action::MuteToggle),
+        count: 1,
+        paused: false,
+        dry_run: true,
+    };
+    let view = app_state::input_view(&resolved).expect("a view");
+    assert_eq!(view.serial, PAIRED);
+    assert_eq!(view.control, 2);
+    assert_eq!(view.trigger, Trigger::Press);
+    assert_eq!(view.frontmost.as_deref(), Some("com.apple.Safari"));
+    assert_eq!(view.action.as_deref(), Some("mute_toggle"));
+    assert!(view.dry_run && !view.paused);
+    let json = serde_json::to_value(&view).unwrap();
+    assert_eq!(json["trigger"], "press");
+
+    let mut unmapped = resolved.clone();
+    if let Record::Resolved { action, .. } = &mut unmapped {
+        *action = None;
+    }
+    assert_eq!(app_state::input_view(&unmapped).unwrap().action, None);
+    assert_eq!(app_state::input_view(&Record::DryRun { on: true }), None);
+}

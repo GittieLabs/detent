@@ -47,11 +47,44 @@ export interface AppState {
   ignored: UnitRef[];
   identifying: boolean;
   paused: boolean;
+  dry_run: boolean; // only while the Test screen shows (D-079)
   problem: string | null;
 }
 
 /** The event the Rust side sends with the whole state after any change. */
 const STATE_EVENT = "state";
+/** The event carrying each resolved input, for the Test screen. */
+const INPUT_EVENT = "input";
+
+export type Trigger = "press" | "long_press" | "clockwise" | "counterclockwise";
+
+/** A config action, as `store::Action` serializes it. */
+export type Action =
+  | { type: "open_app"; bundle_id: string }
+  | { type: "volume_up"; step: number }
+  | { type: "volume_down"; step: number }
+  | { type: "volume_set"; level: number }
+  | { type: "mute_toggle" }
+  | { type: "applescript"; source: string; timeout_ms: number };
+
+/** One resolved input (`app_state::InputView`). */
+export interface InputView {
+  serial: string;
+  control: number;
+  trigger: Trigger;
+  frontmost: string | null;
+  action: string | null; // the log's short form
+  mapping: Action | null;
+  count: number;
+  paused: boolean;
+  dry_run: boolean;
+}
+
+export interface AppEntry {
+  bundle_id: string;
+  name: string;
+  running: boolean;
+}
 
 export const getState = () => invoke<AppState>("get_state");
 export const startPairing = () => invoke<AppState>("start_pairing");
@@ -66,6 +99,12 @@ export const ignore = (vid: number, pid: number, serial: string) =>
   invoke<AppState>("ignore", { vid, pid, serial });
 export const unignore = (serial: string) => invoke<AppState>("unignore", { serial });
 export const setPaused = (on: boolean) => invoke<AppState>("set_paused", { on });
+export const setDryRun = (on: boolean) => invoke<void>("set_dry_run", { on });
+export const listApps = () => invoke<AppEntry[]>("list_apps");
+
+export function onInput(handler: (input: InputView) => void): Promise<UnlistenFn> {
+  return listen<InputView>(INPUT_EVENT, (event) => handler(event.payload));
+}
 
 export function onState(handler: (state: AppState) => void): Promise<UnlistenFn> {
   return listen<AppState>(STATE_EVENT, (event) => handler(event.payload));

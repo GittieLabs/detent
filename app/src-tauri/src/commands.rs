@@ -69,6 +69,19 @@ pub fn set_paused(shared: State<'_, Shared>, on: bool) -> Answer {
     set_paused_now(&shared, on)
 }
 
+/// Turns dry run on or off (the Test screen, D-079). The state follows when
+/// the engine confirms it, within about 20 ms.
+pub fn set_dry_run_now(shared: &Shared, on: bool) {
+    if let Some(engine) = &shared.engine {
+        engine.set_dry_run(on);
+    }
+}
+
+#[tauri::command]
+pub fn set_dry_run(shared: State<'_, Shared>, on: bool) {
+    set_dry_run_now(&shared, on);
+}
+
 /// Apps for the app picker (D-080). Async, so the folder scan runs off the
 /// main thread.
 #[tauri::command]
@@ -139,4 +152,5 @@ pub const ALL: &[&str] = &[
     "unignore",
     "set_paused",
     "list_apps",
+    "set_dry_run",
 ];

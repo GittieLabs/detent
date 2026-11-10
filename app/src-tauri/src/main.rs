@@ -35,6 +35,10 @@ fn main() {
                     if shared.state.lock().is_ok_and(|s| s.identifying) {
                         let _ = commands::set_identifying(&shared, false);
                     }
+                    // Dry run lives only while Test shows (D-079).
+                    if shared.state.lock().is_ok_and(|s| s.dry_run) {
+                        commands::set_dry_run_now(&shared, false);
+                    }
                 }
             }
         })
@@ -50,6 +54,7 @@ fn main() {
             commands::unignore,
             commands::set_paused,
             commands::list_apps,
+            commands::set_dry_run,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build the Detent app");

@@ -14,6 +14,7 @@ fn main() {
         "unignore",
         "set_paused",
         "list_apps",
+        "set_dry_run",
     ];
     tauri_build::try_build(
         tauri_build::Attributes::new()
