@@ -83,3 +83,20 @@ Results:
 - Step 6: `PASS`, 2026-11-07, firmware `6be3447` (debug build, same behavior as release). Keith turned the encoder with no probe running and the macOS volume moved (after rewiring A/B from D4/D5 to D8/D9; the debug pin finder showed the mistake). In a traced run of his presses: six short presses each toggled mute on release; a long press opened the menu at 600 ms without muting; a short press in the menu selected instead of muting; a second long press returned to Volume.
 - Step 1: `PASS`, 2026-11-07, build `da68b77` (spike firmware). Keith confirmed no macOS permission dialog appeared. Evidence, run by Claude (spike firmware, build after `31a5fc6`): `ctl-probe` launched through Terminal.app, whose Input Monitoring status was `unknown` (never granted), opened the vendor channel non exclusive and read reports; the status was still `unknown` afterwards, so no prompt was raised. Volume keys (Consumer Control) changed the macOS volume while the probe held the device open shared, and didn't when it was open exclusive.
 - Step 2, evidence run by Claude on 2026-11-07 (build after `dc896ca`): `ioreg` shows vendor `12346`, product `36830`, serial `E072A1FC4EDC` (matches the ROM's MAC `E0:72:A1:FC:4E:DC`), product `Detent Dev`, vendor name `GittieLabs`. Not marked PASS: the second unit check needs Keith and a second board.
+
+## M2
+
+Needs a signed build (`just build-dev`), the board on release firmware with its buttons and encoder, and a hand written config at `~/Library/Application Support/Detent/config.json` (start from `app/src-tauri/examples/`). Step 6 is the exit criterion.
+
+1. macOS bindings (task 1). The task names a small test command: it opens Mail by bundle ID, prints the frontmost app's bundle ID while you switch apps, and steps the volume and mute (then restores them).
+2. Device opens (Devices and Engine tasks). Launch Detent with the board allowlisted in the config. The board's LED goes solid (HELLO_ACK paired) and the OLED shows `USB: paired`. Remove the board from the allowlist and relaunch: the LED keeps blinking and Detent never reads it.
+3. Volume action. Map a button to Volume up and another to Mute; each press changes the volume or mute with the native HUD.
+4. (Open dashboard is deferred to M6 with its content still to be decided, D-055. No step here.)
+5. Run AppleScript. Map a button to `tell application "Finder" to activate`. The first press shows macOS's Automation prompt naming Detent; after allowing, presses bring Finder forward.
+6. Exit criterion: map a button (Everywhere) to Open app `com.apple.mail`. Quit Mail, press the button: Mail opens.
+7. App scope. Map the same button to Volume mute only when Safari is frontmost. With Safari in front the press mutes; anywhere else it opens Mail.
+8. Heartbeat and replug. Unplug the board: within 6 s Detent shows it disconnected (tray). Replug: it reconnects and presses work again, with no relaunch.
+
+Results:
+
+- (none yet)

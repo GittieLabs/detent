@@ -2,7 +2,7 @@
 
 Changes every session. This is the only place progress is tracked.
 
-**Current milestone: M1 Device speaks**
+**Current milestone: M2 Headless engine**
 
 Milestones are ordered by risk: macOS signing and permissions, then the USB protocol, are proven before any UI exists. The engine runs headless before it gets a window. The next milestone starts only when every exit criterion of the current one passes on a signed build.
 
@@ -57,19 +57,33 @@ Exit criteria:
 - [x] The encoder in Volume mode moves the macOS volume with `ctl-probe` closed (manual, `acceptance.md`). Keith confirmed 2026-11-07.
 - [x] Codec rejects malformed reports without panicking (proptest in `cargo test`). Both directions, 2048 cases per property, 2026-11-07.
 
-## M2 Headless engine
+## M2 Headless engine (current)
+
+Goal: the app turns device events into Mac actions with no UI. The devices module opens allowlisted units and tracks heartbeats; the router picks one mapping per event (app scope, then Everywhere); three actions run (Open app, Volume, Run AppleScript; Open dashboard is deferred, D-055), all driven by a hand written JSON config. MockTransport and RecordingExecutor make the whole pipeline testable without hardware.
+
+Riskiest unknown: the native macOS calls the actions need (NSWorkspace to launch apps, open URLs, and read the frontmost app; CoreAudio for volume and mute), all `unsafe` bridging in `macos/`, called from a background thread inside a running Tauri app. Task 1 proves them before anything depends on them.
 
 Carried over from M1 (hardware Keith doesn't have yet; not M1 exit criteria):
 
 - [x] Press each of the four buttons with `just probe` running and see BUTTON down, long press, and up (`acceptance.md` M1 step 5). Keith, 2026-11-09: all four pass on D0 to D3, no pin changes needed.
 - [ ] Plug in a second board and confirm a different USB serial (`acceptance.md` M1 step 2). Waits on a second XIAO.
 
-Devices module with allowlist and heartbeat, router, and four actions (Open app, Open URL, Volume, AppleScript), driven by a hand written JSON config. MockTransport and RecordingExecutor.
+
+Tasks:
+
+- [ ] macOS bindings: in `app/src-tauri/src/macos/`, safe wrappers for the frontmost app's bundle ID and opening an app by bundle ID (NSWorkspace via the `objc2` crates), and default output volume get and set and mute get and set (CoreAudio). Called from a non main thread, as the engine will. Add a lib target (`app/src-tauri/src/lib.rs`) so engine modules are testable outside Tauri (D-052). Tests: macOS only unit tests (frontmost ID is non empty; volume set then restored; mute toggled then restored, skipped when there's no output device, as on CI); `acceptance.md` M2 step 1 (opens Mail, follows the frontmost app).
+- [ ] Config schema v1 and store: `app/src-tauri/src/store/` reads versioned JSON from `~/Library/Application Support/Detent/config.json`: allowlisted units (VID, PID, serial, name), and mappings of control plus trigger (button press or long press; encoder clockwise or counterclockwise), scope (Everywhere or an app bundle ID), and action (Open app, Volume up, down, set, mute, Run AppleScript; Open dashboard waits on D-055). Unknown fields, unknown versions, and bad values are errors with a path to the field. A commented example config in `app/src-tauri/examples/`. Tests: unit (good and bad samples, every validation rule, the example parses).
+- [ ] Router: `app/src-tauri/src/router.rs` resolves an event (device, control, trigger) plus the frontmost bundle ID to at most one mapping: app scope beats Everywhere, otherwise nothing. Pure. Tests: table driven unit tests, including the acceptance scenario "app scope beats Everywhere; Everywhere used with no app match".
+- [ ] Actions: `app/src-tauri/src/actions/` with an `Action` trait and one executor per type (Open app, Volume, Run AppleScript through `osascript` with a timeout, D-053), each returning a result Debug can show; `RecordingExecutor` for tests and Dry run. Tests: unit for argument validation, the recording executor, and AppleScript timeout and error reporting (a harmless script); real effects in `acceptance.md`.
+- [ ] Transport: `app/src-tauri/src/transport/` with the `DeviceTransport` trait, `UsbHid` over hidapi (non exclusive, report ID 6 in and out, foreign report IDs dropped, D-036), and a scripted `MockTransport`. Tests: unit through MockTransport (reports in and out, foreign IDs dropped, disconnect surfaces as an error); HIL: `UsbHid` reads a HELLO from the board.
+- [ ] Devices: `app/src-tauri/src/devices/` polls the device list every second, opens allowlisted units only (others listed, never read; ignore list honored), sends REQUEST_HELLO then HELLO_ACK paired, decodes events with the codec and tags them with a `DeviceId`, marks a unit disconnected after 6 s without HEARTBEAT, and reopens after replug. Tests: integration against MockTransport (attach, HELLO, presses, detach, garbage, heartbeat loss, an unknown device ignored, an ignored device stays ignored).
+- [ ] Engine: wire devices, router (frontmost app from `macos`), and actions on a background thread in the app, started at launch from the config, with a log of each event, resolved mapping, action result, and press to dispatch time. Tray shows the device as connected or not. Tests: integration of the whole pipeline (MockTransport, RecordingExecutor, a fake frontmost provider), including dispatch time well under 100 ms; HIL: the debug firmware's TEST_INJECT drives the real app with Dry run.
+- [ ] M2 acceptance pass on a signed build: `just build-dev`, a hand written config, and the steps in `acceptance.md` M2, ending with a real button opening Mail.
 
 Exit criteria:
 
-- Router and codec unit tests pass; integration tests pass against MockTransport.
-- A real button opens Mail.
+- [ ] Router and codec unit tests pass; integration tests pass against MockTransport.
+- [ ] A real button opens Mail (signed build, `acceptance.md` M2).
 
 ## M3 App shell and pairing
 
@@ -100,11 +114,11 @@ Exit criteria:
 
 ## M6 Dashboard and encoder menu
 
-Full screen dashboard window on a chosen display, app owned OLED menu items via MENU and MENU_SELECT, Mapped encoder mode, STATUS messages.
+The Open dashboard action: the app's own dashboard page (content to be decided, D-055) full screen in an app window on a chosen display, app owned OLED menu items via MENU and MENU_SELECT, Mapped encoder mode, STATUS messages.
 
 Exit criteria:
 
-- One button shows Homepage full screen on the secondary display.
+- One button shows the app's dashboard full screen on the secondary display (what it shows is an open question, D-055).
 - Unplugging that display doesn't crash or strand the window.
 
 ## M7 Hardening and v0.1
@@ -128,7 +142,9 @@ Multiple connected devices, Bluetooth transport, then Windows.
 - [ ] Button count on the first device. Doesn't block app work; HELLO reports it.
 - [ ] Exact ESP32-S3 board (assumed XIAO ESP32-S3).
 - [ ] App and tray icons are placeholders (a knob outline in `app/src-tauri/icons/`). Final artwork before v0.1.
-- [ ] Homepage container URL, once it's running.
+- [x] Homepage container URL, once it's running. Not needed: Keith dropped the Homepage use on 2026-11-09 (D-055).
+- [x] M2's summary said "Open URL", which isn't in the fixed v1 action list. Keith, 2026-11-09: defer it; Open dashboard should open the app's own dashboard instead (D-055).
+- [ ] What should the app's dashboard show? It's the target of the Open dashboard action (a web page shown in an app window, M6). Until decided, Open dashboard isn't built and `product.md` still describes it as a URL.
 - [ ] Pin wiring on the first device: which XIAO pins carry each button, the encoder A, B, and switch, and the OLED's I2C. `firmware/include/board_pins.h` uses a PLACEHOLDER map until then.
 - [ ] Model name for the USB product string `Detent <model name>`. Placeholder `Detent Dev`.
 - [ ] `protocol.md` says changes need a version bump, but v1 is a draft until the end of M1. May the draft change at version 1 (still one atomic commit of doc, crate, and header) until the freeze? Placeholder: yes, version stays 1 until the freeze. Moot since the 2026-11-07 freeze: the placeholder was followed, and every change from now on bumps the version. Keith to confirm and tick.
