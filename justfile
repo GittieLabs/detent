@@ -24,6 +24,10 @@ build-dev:
 hil:
     scripts/hil.sh
 
+# Exercise the macOS bindings by hand: open <bundle-id> | frontmost | volume | mute
+macos-check *ARGS:
+    cargo run -q -p detent --example macos_check -- {{ARGS}}
+
 # Run ctl-probe, e.g. `just probe`, `just probe --raw`, `just probe --count-hellos 20`
 probe *ARGS:
     cargo run -q -p ctl-probe -- {{ARGS}}

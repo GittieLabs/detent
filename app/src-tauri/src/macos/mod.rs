@@ -6,5 +6,9 @@
 #![allow(unsafe_code)]
 
 mod accessibility;
+mod audio;
+mod workspace;
 
 pub use accessibility::accessibility_trusted;
+pub use audio::{muted, set_muted, set_volume, volume, AudioError};
+pub use workspace::{frontmost_bundle_id, open_app, OpenAppError};

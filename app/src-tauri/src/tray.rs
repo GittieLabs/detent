@@ -16,7 +16,7 @@ pub const ID_QUIT: &str = "quit";
 /// doesn't exist.
 pub fn accessibility_status() -> Option<bool> {
     #[cfg(target_os = "macos")]
-    return Some(crate::macos::accessibility_trusted());
+    return Some(detent_lib::macos::accessibility_trusted());
     #[cfg(not(target_os = "macos"))]
     return None;
 }

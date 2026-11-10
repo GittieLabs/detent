@@ -70,6 +70,8 @@ Two builds: `xiao_esp32s3` (release) and `xiao_esp32s3_debug` (adds TEST_INJECT,
 
 ## App modules (`app/src-tauri/src/`)
 
+The engine modules are a library (`detent_lib`, `src/lib.rs`) that `main.rs`, the Tauri app, uses, so integration tests reach them without starting Tauri (D-052).
+
 1. **`transport`** A `DeviceTransport` trait. `UsbHid` implementation over the `hidapi` crate. A `MockTransport` for tests. Bluetooth later is another implementation; nothing above this changes. Note: on macOS, open the vendor entry non exclusive (hidapi's default is exclusive, which swallows the volume keys), and every read and write carries the leading report ID `0x06`; drop reads with any other ID.
 2. **`devices`** Watches attach and detach (poll the device list once a second unless an IOKit notification path proves reliable), checks the allowlist of paired units and the ignore list, opens paired units, tracks HEARTBEAT (6 s without one means disconnected), and tags events with a `DeviceId`. Unknown devices raise a "new device found" tray badge and nothing else.
 3. **`router`** Takes an event plus the frontmost app's bundle ID (NSWorkspace, no permission needed) and resolves exactly one mapping: app scope first, then Everywhere, else nothing.

@@ -1,7 +1,5 @@
 //! Detent: macOS menu bar app. Tray only in M0; see `docs/roadmap.md`.
 
-#[cfg(target_os = "macos")]
-mod macos;
 mod tray;
 
 use tauri::{Manager, RunEvent, Runtime, WebviewUrl, WebviewWindowBuilder};
