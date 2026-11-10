@@ -128,7 +128,7 @@ Tasks, riskiest first:
 
 Exit criteria:
 
-- [ ] Keith creates three mappings without reading anything (signed build, `acceptance.md` M4 step 1).
+- [x] Keith creates three mappings without reading anything (signed build, `acceptance.md` M4 step 1). Passed with notes 2026-11-10.
 - [ ] Dry run never executes an action (tests, and `acceptance.md` M4 step 2 on a signed build).
 
 ## M5 App scope and shortcuts
