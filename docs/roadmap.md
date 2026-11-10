@@ -115,6 +115,10 @@ Exit criteria:
 
 Device drawing from HELLO, mapping editor, Device menu editor (MENU messages), Test screen with Dry run.
 
+Noted during M3 (plan these in):
+
+- [ ] Starter template (D-077): replace the wizard's placeholder checkbox. The `Detent Dev` template is built into the app per model; ticking the box on Done adds its mappings for the new unit's serial, never replacing mappings it already has. Tests: `app_state` unit tests (applied for the new serial, skipped when unticked, nothing duplicated); `tsc --noEmit`; an acceptance step pairing the second board with the box ticked.
+
 Exit criteria:
 
 - Keith creates three mappings without reading anything.
@@ -166,7 +170,7 @@ Multiple connected devices, Bluetooth transport, then Windows.
 - [x] Homepage container URL, once it's running. Not needed: Keith dropped the Homepage use on 2026-11-09 (D-055).
 - [x] M2's summary said "Open URL", which isn't in the fixed v1 action list. Keith, 2026-11-09: defer it; Open dashboard should open the app's own dashboard instead (D-055).
 - [ ] What should the app's dashboard show? It's the target of the Open dashboard action (a web page shown in an app window, M6). Until decided, Open dashboard isn't built and `product.md` still describes it as a URL.
-- [ ] Starter template for the pairing wizard's last step: which mappings a fresh `Detent Dev` gets when the box is ticked (for example button 1 Open Mail, 2 and 3 volume, 4 mute, encoder volume). Placeholder in M3: an empty template, with the checkbox shown but explained as "nothing yet".
+- [x] Starter template for the pairing wizard's last step: which mappings a fresh `Detent Dev` gets when the box is ticked. Keith, 2026-11-10: his current setup (D-077). Built in M4. Placeholder in M3: an empty template, with the checkbox shown but explained as "nothing yet".
 - [ ] Pin wiring on the first device: which XIAO pins carry each button, the encoder A, B, and switch, and the OLED's I2C. `firmware/include/board_pins.h` uses a PLACEHOLDER map until then.
 - [ ] Model name for the USB product string `Detent <model name>`. Placeholder `Detent Dev`.
 - [ ] `protocol.md` says changes need a version bump, but v1 is a draft until the end of M1. May the draft change at version 1 (still one atomic commit of doc, crate, and header) until the freeze? Placeholder: yes, version stays 1 until the freeze. Moot since the 2026-11-07 freeze: the placeholder was followed, and every change from now on bumps the version. Keith to confirm and tick.
