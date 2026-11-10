@@ -1,0 +1,328 @@
+//! The whole pipeline: MockBus -> devices -> router (fake frontmost app) ->
+//! a probe executor, on the engine's real threads with real time.
+
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+use detent_lib::actions::{Done, Executor, Outcome};
+use detent_lib::devices::{DeviceEvent, Options};
+use detent_lib::engine::{Engine, Record, Sink};
+use detent_lib::store::{self, Action, Config, Trigger};
+use detent_lib::transport::{MockBus, MockHid};
+use detent_protocol::codec::{ButtonAction, DeviceMessage};
+use detent_protocol::ids::{PID, VID};
+
+const SERIAL: &str = "E072A1FC4EDC";
+const WAIT: Duration = Duration::from_secs(2);
+
+fn config() -> Config {
+    store::parse(&format!(
+        r#"{{ "version": 1,
+          "devices": [{{ "name": "desk", "vid": "0x303A", "pid": "0x8FDE", "serial": "{SERIAL}" }}],
+          "mappings": [
+            {{ "device": "{SERIAL}", "control": 1, "trigger": "press", "scope": "everywhere",
+               "action": {{ "type": "open_app", "bundle_id": "com.apple.mail" }} }},
+            {{ "device": "{SERIAL}", "control": 1, "trigger": "press", "scope": {{ "app": "com.apple.Safari" }},
+               "action": {{ "type": "mute_toggle" }} }},
+            {{ "device": "{SERIAL}", "control": 2, "trigger": "press", "scope": "everywhere",
+               "action": {{ "type": "applescript", "source": "slow" }} }},
+            {{ "device": "{SERIAL}", "control": 5, "trigger": "clockwise", "scope": "everywhere",
+               "action": {{ "type": "volume_up", "step": 0.125 }} }}
+          ] }}"#
+    ))
+    .expect("test config parses")
+}
+
+fn mail() -> Action {
+    Action::OpenApp {
+        bundle_id: "com.apple.mail".into(),
+    }
+}
+
+fn press(control: u8) -> DeviceMessage {
+    DeviceMessage::Button {
+        control,
+        action: ButtonAction::Down,
+    }
+}
+
+/// Reports each action it's given, with the time it was called. Blocks on
+/// AppleScript actions until released, to stand in for a slow script.
+struct ProbeExecutor {
+    calls: Mutex<Sender<(Action, Instant)>>,
+    release: Mutex<Receiver<()>>,
+}
+
+impl Executor for ProbeExecutor {
+    fn run(&self, action: &Action) -> Outcome {
+        let _ = self
+            .calls
+            .lock()
+            .unwrap()
+            .send((action.clone(), Instant::now()));
+        if matches!(action, Action::AppleScript { .. }) {
+            let _ = self
+                .release
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(10));
+        }
+        Ok(Done::Recorded)
+    }
+}
+
+struct ChannelSink(Mutex<Sender<Record>>);
+
+impl Sink for ChannelSink {
+    fn record(&self, r: &Record) {
+        let _ = self.0.lock().unwrap().send(r.clone());
+    }
+}
+
+struct Rig {
+    hid: MockHid,
+    bus: MockBus,
+    frontmost: Arc<Mutex<Option<String>>>,
+    calls: Receiver<(Action, Instant)>,
+    records: Receiver<Record>,
+    release: Sender<()>,
+    engine: Option<detent_lib::engine::EngineHandle>,
+}
+
+impl Rig {
+    fn start() -> Self {
+        let bus = MockBus::default();
+        let hid = bus.attach(VID, PID, Some(SERIAL));
+        let (calls_tx, calls) = mpsc::channel();
+        let (release, release_rx) = mpsc::channel();
+        let (records_tx, records) = mpsc::channel();
+        let frontmost = Arc::new(Mutex::new(None::<String>));
+        let front = frontmost.clone();
+        let engine = Engine::new(
+            bus.clone(),
+            &config(),
+            Arc::new(ProbeExecutor {
+                calls: Mutex::new(calls_tx),
+                release: Mutex::new(release_rx),
+            }),
+            Arc::new(move || front.lock().unwrap().clone()),
+            Arc::new(ChannelSink(Mutex::new(records_tx))),
+            Options {
+                read_wait: Duration::from_millis(2),
+                ..Options::default()
+            },
+        )
+        .spawn();
+        let rig = Self {
+            hid,
+            bus,
+            frontmost,
+            calls,
+            records,
+            release,
+            engine: Some(engine),
+        };
+        rig.expect(|r| matches!(r, Record::Device(DeviceEvent::Connected(_))));
+        rig
+    }
+
+    /// Waits for a record matching `f`, skipping others.
+    fn expect(&self, f: impl Fn(&Record) -> bool) -> Record {
+        let deadline = Instant::now() + WAIT;
+        loop {
+            let left = deadline.saturating_duration_since(Instant::now());
+            match self.records.recv_timeout(left) {
+                Ok(r) if f(&r) => return r,
+                Ok(_) => {}
+                Err(_) => panic!("no matching record within {WAIT:?}"),
+            }
+        }
+    }
+
+    fn call(&self) -> (Action, Instant) {
+        self.calls.recv_timeout(WAIT).expect("an action ran")
+    }
+
+    fn no_call(&self) {
+        assert!(self.calls.recv_timeout(Duration::from_millis(100)).is_err());
+    }
+}
+
+impl Drop for Rig {
+    fn drop(&mut self) {
+        let _ = self.release.send(());
+        if let Some(e) = self.engine.take() {
+            e.stop();
+        }
+    }
+}
+
+#[test]
+fn a_press_runs_its_mapping_and_is_logged_end_to_end() {
+    let r = Rig::start();
+    r.hid.push_device(0, &press(1));
+    assert_eq!(r.call().0, mail());
+    match r.expect(|x| matches!(x, Record::Resolved { .. })) {
+        Record::Resolved {
+            id,
+            control,
+            trigger,
+            frontmost,
+            action,
+            count,
+        } => {
+            assert_eq!(id.serial, SERIAL);
+            assert_eq!((control, trigger, count), (1, Trigger::Press, 1));
+            assert_eq!(frontmost, None);
+            assert_eq!(action, Some(mail()));
+        }
+        _ => unreachable!(),
+    }
+    match r.expect(|x| matches!(x, Record::Ran { .. })) {
+        Record::Ran {
+            action, outcome, ..
+        } => {
+            assert_eq!(action, mail());
+            assert_eq!(outcome, Ok(Done::Recorded));
+        }
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn dispatch_is_well_under_100_ms() {
+    let r = Rig::start();
+    let mut worst = Duration::ZERO;
+    for i in 0..20u8 {
+        let pushed = Instant::now();
+        r.hid.push_device(i, &press(1));
+        let (_, called) = r.call();
+        worst = worst.max(called - pushed);
+    }
+    assert!(worst < Duration::from_millis(50), "worst {worst:?}");
+    match r.expect(|x| matches!(x, Record::Ran { .. })) {
+        Record::Ran { waited, .. } => assert!(waited < Duration::from_millis(50), "{waited:?}"),
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn the_frontmost_app_picks_the_app_scoped_mapping() {
+    let r = Rig::start();
+    *r.frontmost.lock().unwrap() = Some("com.apple.Safari".into());
+    r.hid.push_device(0, &press(1));
+    assert_eq!(r.call().0, Action::MuteToggle);
+    *r.frontmost.lock().unwrap() = Some("com.apple.Terminal".into());
+    r.hid.push_device(1, &press(1));
+    assert_eq!(r.call().0, mail());
+}
+
+#[test]
+fn an_encoder_turn_runs_once_per_detent() {
+    let r = Rig::start();
+    r.hid.push_device(
+        0,
+        &DeviceMessage::Encoder {
+            control: 5,
+            delta: 3,
+        },
+    );
+    for _ in 0..3 {
+        assert_eq!(r.call().0, Action::VolumeUp { step: 0.125 });
+    }
+    r.no_call();
+}
+
+#[test]
+fn unmapped_input_and_releases_run_nothing_but_are_logged() {
+    let r = Rig::start();
+    r.hid.push_device(0, &press(9));
+    let rec = r.expect(|x| matches!(x, Record::Resolved { .. }));
+    assert!(matches!(rec, Record::Resolved { action: None, .. }));
+    r.hid.push_device(
+        1,
+        &DeviceMessage::Button {
+            control: 1,
+            action: ButtonAction::Up,
+        },
+    );
+    r.expect(|x| matches!(x, Record::Device(DeviceEvent::Input { .. })));
+    r.no_call();
+}
+
+#[test]
+fn a_slow_action_does_not_stall_input() {
+    let r = Rig::start();
+    r.hid.push_device(0, &press(2)); // the blocking script
+    assert!(matches!(r.call().0, Action::AppleScript { .. }));
+    // The engine thread still reads and resolves while the worker is busy.
+    r.hid.push_device(1, &press(1));
+    let rec = r.expect(|x| matches!(x, Record::Resolved { control: 1, .. }));
+    assert!(matches!(
+        rec,
+        Record::Resolved {
+            action: Some(_),
+            ..
+        }
+    ));
+    r.no_call();
+    // Released, the queued action runs, in order.
+    r.release.send(()).unwrap();
+    assert_eq!(r.call().0, mail());
+}
+
+#[test]
+fn unplug_and_replug_are_logged_and_presses_work_again() {
+    let mut r = Rig::start();
+    r.bus.detach(SERIAL);
+    r.expect(|x| matches!(x, Record::Device(DeviceEvent::Disconnected { .. })));
+    r.hid = r.bus.attach(VID, PID, Some(SERIAL));
+    r.expect(|x| matches!(x, Record::Device(DeviceEvent::Connected(_))));
+    r.hid.push_device(0, &press(1));
+    assert_eq!(r.call().0, mail());
+}
+
+#[test]
+fn stop_returns_promptly() {
+    let mut r = Rig::start();
+    let started = Instant::now();
+    r.engine.take().unwrap().stop();
+    assert!(started.elapsed() < Duration::from_millis(500));
+}
+
+#[test]
+fn records_read_well_in_the_log() {
+    let r = Rig::start();
+    r.hid.push_device(0, &press(1));
+    let resolved = r
+        .expect(|x| matches!(x, Record::Resolved { .. }))
+        .to_string();
+    assert!(
+        resolved.contains("button 1 press") && resolved.contains("open_app com.apple.mail"),
+        "{resolved}"
+    );
+    let ran = r.expect(|x| matches!(x, Record::Ran { .. })).to_string();
+    assert!(ran.contains("recorded (dry run)"), "{ran}");
+}
+
+#[test]
+fn the_log_file_appends_and_starts_over_past_1_mb() {
+    use detent_lib::engine::FileLog;
+    let dir = std::env::temp_dir().join(format!("detent-log-test-{}", std::process::id()));
+    let path = dir.join("nested/detent.log");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    FileLog::open(&path).unwrap().line("first");
+    FileLog::open(&path).unwrap().line("second");
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(text.lines().count(), 2, "{text}");
+    assert!(text.lines().last().unwrap().ends_with(" second"));
+
+    std::fs::write(&path, vec![b'x'; 1024 * 1024 + 1]).unwrap();
+    FileLog::open(&path).unwrap().line("fresh");
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(text.lines().count(), 1);
+    assert!(text.ends_with(" fresh\n"));
+    let _ = std::fs::remove_dir_all(&dir);
+}

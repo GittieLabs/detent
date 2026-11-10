@@ -3,6 +3,7 @@
 
 pub mod actions;
 pub mod devices;
+pub mod engine;
 #[cfg(target_os = "macos")]
 pub mod macos;
 pub mod router;

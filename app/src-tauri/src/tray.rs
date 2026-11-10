@@ -9,6 +9,7 @@ use tauri::{
 
 pub const TRAY_ID: &str = "detent";
 pub const ID_ACCESSIBILITY: &str = "accessibility";
+pub const ID_DEVICE: &str = "device";
 pub const ID_OPEN: &str = "open";
 pub const ID_QUIT: &str = "quit";
 
@@ -30,7 +31,44 @@ pub fn accessibility_label(trusted: Option<bool>) -> &'static str {
     }
 }
 
-pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+/// What the engine is doing, for the tray's device line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeviceStatus<'a> {
+    /// Not started yet.
+    Starting,
+    /// Running; names of the connected units.
+    Running(&'a [String]),
+    /// The config is missing or invalid (details in the log).
+    ConfigProblem,
+    UsbUnavailable,
+}
+
+/// Text of the device line.
+pub fn device_label(status: &DeviceStatus, dry_run: bool) -> String {
+    let base = match status {
+        DeviceStatus::Starting => "Starting".to_owned(),
+        DeviceStatus::Running([]) => "No device connected".to_owned(),
+        DeviceStatus::Running([one]) => format!("Connected: {one}"),
+        DeviceStatus::Running(many) => format!("Connected: {} devices", many.len()),
+        DeviceStatus::ConfigProblem => "Config problem: see the log".to_owned(),
+        DeviceStatus::UsbUnavailable => "USB unavailable: see the log".to_owned(),
+    };
+    if dry_run {
+        format!("{base} (dry run)")
+    } else {
+        base
+    }
+}
+
+/// Builds the tray. Returns the device line, which the engine keeps current.
+pub fn build<R: Runtime>(app: &AppHandle<R>, dry_run: bool) -> tauri::Result<MenuItem<R>> {
+    let device = MenuItem::with_id(
+        app,
+        ID_DEVICE,
+        device_label(&DeviceStatus::Starting, dry_run),
+        false,
+        None::<&str>,
+    )?;
     let accessibility = MenuItem::with_id(
         app,
         ID_ACCESSIBILITY,
@@ -43,6 +81,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let menu = Menu::with_items(
         app,
         &[
+            &device,
             &accessibility,
             &PredefinedMenuItem::separator(app)?,
             &open,
@@ -73,7 +112,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             _ => {}
         })
         .build(app)?;
-    Ok(())
+    Ok(device)
 }
 
 #[cfg(test)]
@@ -98,8 +137,39 @@ mod tests {
     }
 
     #[test]
+    fn device_label_covers_every_state() {
+        let one = ["Desk controller".to_owned()];
+        let two = ["a".to_owned(), "b".to_owned()];
+        assert_eq!(
+            device_label(&DeviceStatus::Running(&[]), false),
+            "No device connected"
+        );
+        assert_eq!(
+            device_label(&DeviceStatus::Running(&one), false),
+            "Connected: Desk controller"
+        );
+        assert_eq!(
+            device_label(&DeviceStatus::Running(&two), false),
+            "Connected: 2 devices"
+        );
+        assert_eq!(
+            device_label(&DeviceStatus::ConfigProblem, false),
+            "Config problem: see the log"
+        );
+        assert_eq!(
+            device_label(&DeviceStatus::Running(&one), true),
+            "Connected: Desk controller (dry run)"
+        );
+        assert_eq!(device_label(&DeviceStatus::Starting, false), "Starting");
+        assert_eq!(
+            device_label(&DeviceStatus::UsbUnavailable, false),
+            "USB unavailable: see the log"
+        );
+    }
+
+    #[test]
     fn menu_ids_are_distinct() {
-        let ids = [ID_ACCESSIBILITY, ID_OPEN, ID_QUIT];
+        let ids = [ID_DEVICE, ID_ACCESSIBILITY, ID_OPEN, ID_QUIT];
         for (i, a) in ids.iter().enumerate() {
             for b in &ids[i + 1..] {
                 assert_ne!(a, b);

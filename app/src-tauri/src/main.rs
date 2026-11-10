@@ -1,5 +1,7 @@
-//! Detent: macOS menu bar app. Tray only in M0; see `docs/roadmap.md`.
+//! Detent: macOS menu bar app. The tray, plus the engine on background
+//! threads (`detent_lib::engine`); see `docs/roadmap.md`.
 
+mod launch;
 mod tray;
 
 use tauri::{Manager, RunEvent, Runtime, WebviewUrl, WebviewWindowBuilder};
@@ -8,13 +10,19 @@ use tauri::{Manager, RunEvent, Runtime, WebviewUrl, WebviewWindowBuilder};
 pub const SETTINGS_WINDOW: &str = "main";
 
 fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let launch = launch::parse_args(&args);
     let app = tauri::Builder::default()
-        .setup(|app| {
+        .setup(move |app| {
             // Belt and braces with LSUIElement in Info.plist: `tauri dev` runs an
             // unbundled binary that never reads the plist.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-            tray::build(app.handle())?;
+            let device_line = tray::build(app.handle(), launch.dry_run)?;
+            // Kept for the app's lifetime; the process exit ends its threads.
+            if let Some(engine) = launch::start(&launch, device_line) {
+                app.manage(engine);
+            }
             Ok(())
         })
         .build(tauri::generate_context!())

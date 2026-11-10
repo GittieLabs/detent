@@ -86,7 +86,7 @@ Results:
 
 ## M2
 
-Needs a signed build (`just build-dev`), the board on release firmware with its buttons and encoder, and a hand written config at `~/Library/Application Support/Detent/config.json` (start from `app/src-tauri/examples/`). Step 6 is the exit criterion.
+Needs a signed build (`just build-dev`), the board on release firmware with its buttons and encoder, and a hand written config at `~/Library/Application Support/Detent/config.json` (start from `app/src-tauri/examples/`). Step 6 is the exit criterion. Detent logs every event, resolved mapping, and action result (with dispatch time) to `~/Library/Logs/Detent/detent.log`; the tray's first line shows the connected device.
 
 1. macOS bindings (task 1). Run `just macos-check open com.apple.mail` (Mail opens or comes forward), `just macos-check frontmost` (switch apps; each one's bundle ID prints), `just macos-check volume` (the menu bar volume jumps up for 2 s, then returns), and `just macos-check mute` (mutes for 2 s, then unmutes).
 2. Device opens (Devices and Engine tasks). Launch Detent with the board allowlisted in the config. The board's LED goes solid (HELLO_ACK paired) and the OLED shows `USB: paired`. Remove the board from the allowlist and relaunch: the LED keeps blinking and Detent never reads it.
