@@ -1,9 +1,9 @@
-// A unit drawn from its HELLO (architecture.md, UX): buttons as keys, the
-// encoder as a knob. Shared by Mappings (click to edit) and Test (lights up
-// on a press). Which controls exist and which the device handles comes from
-// the Rust side (`app_state::ControlView`, D-081).
+// A unit's controls from its HELLO as a grouped list (D-085). Shared by
+// Mappings (click to edit) and Test (lights up on a press). Which controls
+// exist and which the device handles comes from the Rust side
+// (`app_state::ControlView`, D-081).
 
-import type { AppState, ControlView, Mapping, PairedUnit, Trigger } from "./api";
+import type { AppState, ControlView, Mapping, PairedUnit, Scope, Trigger } from "./api";
 import { type AppName, actionText, idName } from "./describe";
 import { el } from "./dom";
 
@@ -12,79 +12,162 @@ export interface DrawOptions {
   selected?: number | null;
   /** The control just pressed (Test). */
   lit?: number | null;
-  /** Makes mappable controls clickable. */
-  onPick?: (control: ControlView) => void;
+  /**
+   * Makes mappable controls clickable. A chip passes its trigger and scope,
+   * so the panel opens on that exact mapping.
+   */
+  onPick?: (control: ControlView, trigger?: Trigger, scope?: Scope) => void;
   appName?: AppName;
 }
 
-/** The encoder and its push switch are drawn as the knob. */
-const onKnob = (c: ControlView) => c.type === "encoder" || c.label === "Encoder push";
+/** One trigger of one control: a cell in a control's row. */
+interface Cell {
+  label: string;
+  control: ControlView;
+  trigger: Trigger;
+}
 
-/**
- * What a control does everywhere, one labelled line per trigger, in the
- * panel's words: "Press: …" always, "Long press: …" when it has one.
- */
-function summary(c: ControlView, mappings: Mapping[], appName: AppName): HTMLElement[] {
-  if (c.handled_by_device) {
-    const what = c.type === "encoder" ? "Volume (on the device)" : "Mute (on the device)";
-    return [el("span", { class: "control-does" }, what)];
+/** One row: a control (or, for an encoder, the knob and its push switch). */
+interface Row {
+  name: string;
+  controls: ControlView[];
+  cells: Cell[];
+  /** Set when the device handles it all itself: shown instead of cells. */
+  onDevice: string | null;
+}
+
+/** The encoder's push switch: a button the drawing shows on the knob's row. */
+const isPush = (c: ControlView) => c.type === "button" && c.label === "Encoder push";
+
+function rowsOf(unit: PairedUnit): { title: string; rows: Row[] }[] {
+  const buttons = unit.controls.filter((c) => c.type === "button" && !isPush(c));
+  const encoders = unit.controls.filter((c) => c.type === "encoder");
+  const push = unit.controls.find(isPush) ?? null;
+  const groups: { title: string; rows: Row[] }[] = [];
+  if (buttons.length) {
+    groups.push({
+      title: buttons.length === 1 ? "Button" : "Buttons",
+      rows: buttons.map((c) => ({
+        name: c.label,
+        controls: [c],
+        cells: [
+          { label: "Press", control: c, trigger: "press" },
+          { label: "Long press", control: c, trigger: "long_press" },
+        ],
+        onDevice: null,
+      })),
+    });
   }
-  const mine = mappings.filter((m) => m.control === c.id && m.scope === "everywhere");
-  const line = (trigger: Trigger, label: string, always: boolean) => {
-    const m = mine.find((x) => x.trigger === trigger);
-    if (!m && !always) return null;
-    return el(
-      "span",
-      { class: m ? "control-does" : "control-does unmapped" },
-      el("span", { class: "trigger-label" }, `${label}: `),
-      m ? actionText(m.action, appName) : "nothing",
-    );
-  };
-  return [line("press", "Press", true), line("long_press", "Long press", false)].filter(
-    (x): x is HTMLElement => x !== null,
-  );
+  if (encoders.length) {
+    groups.push({
+      title: encoders.length === 1 ? "Encoder" : "Encoders",
+      rows: encoders.map((c, i) => {
+        // One push switch per device today; it belongs to the first knob.
+        const sw = i === 0 ? push : null;
+        const controls = sw ? [c, sw] : [c];
+        const onDevice = controls.every((x) => x.handled_by_device)
+          ? `Turn: volume${sw ? " · Push: mute" : ""}, on the device`
+          : null;
+        const cells: Cell[] = [];
+        if (!c.handled_by_device) {
+          cells.push({ label: "Turn left", control: c, trigger: "counterclockwise" });
+          cells.push({ label: "Turn right", control: c, trigger: "clockwise" });
+        }
+        if (sw && !sw.handled_by_device) cells.push({ label: "Push", control: sw, trigger: "press" });
+        return { name: c.label, controls, cells, onDevice };
+      }),
+    });
+  } else if (push) {
+    // A push switch with no knob reported: list it with the buttons.
+    groups.push({
+      title: "Switch",
+      rows: [
+        {
+          name: push.label,
+          controls: [push],
+          cells: [{ label: "Press", control: push, trigger: "press" }],
+          onDevice: push.handled_by_device ? "Handled on the device" : null,
+        },
+      ],
+    });
+  }
+  return groups;
 }
 
-function appBadge(c: ControlView, mappings: Mapping[], appName: AppName): HTMLElement | null {
-  const apps = new Set(
-    mappings
-      .filter((m) => m.control === c.id && m.scope !== "everywhere")
-      .map((m) => (m.scope === "everywhere" ? "" : appName(m.scope.app))),
-  );
-  if (apps.size === 0) return null;
-  const names = [...apps];
-  return el(
-    "span",
-    { class: "badge", title: `Does something else in ${names.join(", ")}` },
-    names.length === 1 ? `in ${names[0]}` : `in ${names.length} apps`,
-  );
+const scopeName = (scope: Scope, appName: AppName) =>
+  scope === "everywhere" ? "Everywhere" : appName(scope.app);
+
+/** Everywhere first, then apps by name. */
+function ordered(mappings: Mapping[], appName: AppName): Mapping[] {
+  return [...mappings].sort((a, b) => {
+    if (a.scope === "everywhere") return -1;
+    if (b.scope === "everywhere") return 1;
+    return scopeName(a.scope, appName).localeCompare(scopeName(b.scope, appName));
+  });
 }
 
-function control(c: ControlView, unit: PairedUnit, opts: DrawOptions): HTMLElement {
+function cellView(cell: Cell, unit: PairedUnit, opts: DrawOptions): HTMLElement {
   const appName = opts.appName ?? idName;
-  const classes = ["control", onKnob(c) ? (c.type === "encoder" ? "knob" : "push") : "key"];
-  if (c.handled_by_device) classes.push("device-owned");
-  if (opts.selected === c.id) classes.push("selected");
-  if (opts.lit === c.id) classes.push("lit");
-  const pickable = !!opts.onPick && !c.handled_by_device;
+  const mine = ordered(
+    unit.mappings.filter((m) => m.control === cell.control.id && m.trigger === cell.trigger),
+    appName,
+  );
   const onPick = opts.onPick;
+  const chips = mine.map((m) => {
+    const where = m.scope === "everywhere" ? "everywhere" : `in ${appName(m.scope.app)}`;
+    const tip = `${cell.label} ${where}: ${actionText(m.action, appName)}`;
+    return el(
+      onPick ? "button" : "span",
+      {
+        type: onPick ? "button" : undefined,
+        class: m.scope === "everywhere" ? "scope-chip everywhere" : "scope-chip app",
+        title: tip,
+        ariaLabel: tip,
+        onClick: onPick
+          ? (e) => {
+              e.stopPropagation();
+              onPick(cell.control, cell.trigger, m.scope);
+            }
+          : undefined,
+      },
+      scopeName(m.scope, appName),
+    );
+  });
   return el(
-    pickable ? "button" : "div",
+    "div",
+    { class: "cell", title: mine.length ? undefined : `${cell.label}: nothing mapped` },
+    el("span", { class: "cell-label" }, cell.label),
+    el("span", { class: "chips" }, ...(chips.length ? chips : [el("span", { class: "none" }, "—")])),
+  );
+}
+
+function rowView(row: Row, unit: PairedUnit, opts: DrawOptions): HTMLElement {
+  const classes = ["control-row"];
+  if (row.onDevice) classes.push("device-owned");
+  if (row.controls.some((c) => c.id === opts.selected)) classes.push("selected");
+  if (row.controls.some((c) => c.id === opts.lit)) classes.push("lit");
+  const first = row.cells[0];
+  const onPick = opts.onPick;
+  const pickable = !!onPick && !!first;
+  return el(
+    "div",
     {
       class: classes.join(" "),
-      type: pickable ? "button" : undefined,
-      title: c.handled_by_device
-        ? "Handled by the device in Volume mode, so Detent doesn't map it"
-        : undefined,
-      onClick: pickable && onPick ? () => onPick(c) : undefined,
+      title: row.onDevice ? "The device handles this in Volume mode, so Detent doesn't map it" : undefined,
+      onClick: pickable && onPick ? () => onPick(first.control, first.trigger, "everywhere") : undefined,
     },
-    el("span", { class: "control-name" }, c.label),
-    ...summary(c, unit.mappings, appName),
-    appBadge(c, unit.mappings, appName),
+    el("span", { class: "row-name" }, row.name),
+    row.onDevice
+      ? el("span", { class: "on-device" }, row.onDevice)
+      : el("div", { class: "cells" }, ...row.cells.map((c) => cellView(c, unit, opts))),
   );
 }
 
-/** The drawing, or a note when the unit hasn't connected this session. */
+/**
+ * The unit as a list (D-085): one row per control, grouped by type, each
+ * trigger a cell of scope chips (Everywhere, then each app) whose hover text
+ * says what fires. Works for any count and mix of controls HELLO reports.
+ */
 export function drawUnit(unit: PairedUnit, opts: DrawOptions = {}): HTMLElement {
   if (unit.controls.length === 0) {
     return el(
@@ -95,13 +178,23 @@ export function drawUnit(unit: PairedUnit, opts: DrawOptions = {}): HTMLElement 
         : `Connect ${unit.name} to see its controls.`,
     );
   }
-  const keys = unit.controls.filter((c) => !onKnob(c));
-  const knob = unit.controls.filter(onKnob);
   return el(
     "div",
-    { class: "device" },
-    el("div", { class: "keys" }, ...keys.map((c) => control(c, unit, opts))),
-    knob.length ? el("div", { class: "knob-group" }, ...knob.map((c) => control(c, unit, opts))) : null,
+    { class: "control-list" },
+    ...rowsOf(unit).map((g) =>
+      el(
+        "section",
+        // A group of one or two rows keeps its height; longer ones scroll.
+        { class: g.rows.length <= 2 ? "control-group fixed" : "control-group" },
+        el("h3", { class: "group-title" }, g.title),
+        // Each group scrolls on its own, so a long one never hides the rest.
+        el(
+          "div",
+          { class: "group-rows", attrs: { "data-scroll": `group:${g.title}` } },
+          ...g.rows.map((r) => rowView(r, unit, opts)),
+        ),
+      ),
+    ),
   );
 }
 

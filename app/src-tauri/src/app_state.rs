@@ -90,6 +90,31 @@ pub struct ResultView {
     pub took_ms: f64,
 }
 
+/// What the volume overlay shows (D-083).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Hud {
+    /// The new level, 0 to 100.
+    Level(u8),
+    Muted(bool),
+}
+
+/// The overlay for a volume action that ran; `None` for a dry run, a
+/// failure, or any other record.
+pub fn hud_of(record: &Record) -> Option<Hud> {
+    use crate::actions::Done;
+    match record {
+        Record::Ran {
+            outcome: Ok(Done::Volume { to, .. }),
+            ..
+        } => Some(Hud::Level((to.clamp(0.0, 1.0) * 100.0).round() as u8)),
+        Record::Ran {
+            outcome: Ok(Done::Muted(m)),
+            ..
+        } => Some(Hud::Muted(*m)),
+        _ => None,
+    }
+}
+
 /// The Test screen's view of a [`Record::Ran`]; `None` for other records.
 pub fn result_view(record: &Record) -> Option<ResultView> {
     use crate::actions::Done;

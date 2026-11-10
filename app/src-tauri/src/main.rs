@@ -2,6 +2,7 @@
 //! threads (`detent_lib::engine`); see `docs/roadmap.md`.
 
 mod commands;
+mod hud;
 mod launch;
 mod tray;
 

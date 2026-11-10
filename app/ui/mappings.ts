@@ -11,7 +11,7 @@ import { type AppName, actionText, idName, namesFrom, shortcutText, triggerText 
 import { MAX_COMBOS, comboOf } from "./keys";
 import { accessibilityBanner } from "./banners";
 import { drawUnit, pickUnit, unitPicker } from "./drawing";
-import { button, el, keepingFocus } from "./dom";
+import { button, el, keepingFocus, keepingScroll } from "./dom";
 import type { Screen } from "./devices";
 
 type Kind = "none" | Action["type"];
@@ -460,7 +460,7 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
 
     return el(
       "aside",
-      { class: "panel" },
+      { class: "panel", attrs: { "data-scroll": "panel" } },
       el("h2", { class: "panel-title" }, c.label),
       el(
         "div",
@@ -538,18 +538,22 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
       selected = null;
       draft = null;
     }
-    const pick = (c: ControlView) => {
-      if (selected !== c.id) {
+    /** A row opens its first trigger, Everywhere; a chip opens its own mapping. */
+    const pick = (c: ControlView, t?: Trigger, scope?: Scope) => {
+      const nextTrigger = t ?? (c.type === "encoder" ? "clockwise" : "press");
+      const nextWhere = scope ?? "everywhere";
+      if (selected !== c.id || trigger !== nextTrigger || where !== nextWhere) {
         recordFresh = true;
         selected = c.id;
-        trigger = c.type === "encoder" ? "clockwise" : "press";
-        where = "everywhere";
+        trigger = nextTrigger;
+        where = nextWhere;
         draft = null;
         note = null;
       }
       rerender();
     };
-    keepingFocus(root, () =>
+    keepingScroll(root, () =>
+      keepingFocus(root, () =>
       root.replaceChildren(
         ...[
           el(
@@ -575,6 +579,7 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
           ),
         ].filter((p): p is HTMLElement => p !== null),
       ),
+    ),
     );
   }
 

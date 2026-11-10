@@ -82,6 +82,9 @@ async function start(app: HTMLElement) {
     } else {
       screens[tab].show(state);
     }
+    // Mappings and Test fill the window and scroll inside (their list, panel
+    // and feed); Devices and the wizard scroll as a page.
+    root.classList.toggle("fill", !wizard.active() && tab !== "devices");
     renderNav();
   }
 

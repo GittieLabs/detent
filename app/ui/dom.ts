@@ -87,3 +87,20 @@ export function keepingFocus(root: HTMLElement, render: () => void): void {
     }
   }
 }
+
+/**
+ * Re-renders `root` with `render` and keeps the scroll position of every
+ * element marked `data-scroll` (matched by that value), so a list scrolled
+ * down doesn't jump back to the top when the state changes.
+ */
+export function keepingScroll(root: HTMLElement, render: () => void): void {
+  const saved = new Map<string, number>();
+  for (const e of root.querySelectorAll<HTMLElement>("[data-scroll]")) {
+    saved.set(e.dataset.scroll ?? "", e.scrollTop);
+  }
+  render();
+  for (const e of root.querySelectorAll<HTMLElement>("[data-scroll]")) {
+    const top = saved.get(e.dataset.scroll ?? "");
+    if (top !== undefined) e.scrollTop = top;
+  }
+}

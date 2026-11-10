@@ -5,5 +5,11 @@ export default defineConfig({
   root: "ui",
   clearScreen: false,
   server: { port: 1420, strictPort: true },
-  build: { outDir: "../dist", emptyOutDir: true, target: "safari15" },
+  build: {
+    outDir: "../dist",
+    emptyOutDir: true,
+    target: "safari15",
+    // The settings window and the volume overlay (D-083).
+    rollupOptions: { input: { main: "ui/index.html", hud: "ui/hud.html" } },
+  },
 });

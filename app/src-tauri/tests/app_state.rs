@@ -833,3 +833,55 @@ fn the_accessibility_banner_shows_only_when_a_shortcut_needs_it() {
     let json = serde_json::to_value(&s).unwrap();
     assert_eq!(json["accessibility"]["banner"], false);
 }
+
+// Volume overlay (D-083): what it shows for a result.
+
+#[test]
+fn the_volume_overlay_shows_after_a_volume_action_that_ran() {
+    use detent_lib::actions::Done;
+    use detent_lib::app_state::{hud_of, Hud};
+    use std::time::Duration;
+    let ran = |action, outcome| Record::Ran {
+        id: id(PAIRED),
+        action,
+        outcome,
+        waited: Duration::ZERO,
+        took: Duration::ZERO,
+    };
+    let up = Action::VolumeUp { step: 0.0625 };
+    assert_eq!(
+        hud_of(&ran(
+            up.clone(),
+            Ok(Done::Volume {
+                from: 0.31,
+                to: 0.375
+            })
+        )),
+        Some(Hud::Level(38))
+    );
+    assert_eq!(
+        hud_of(&ran(Action::MuteToggle, Ok(Done::Muted(true)))),
+        Some(Hud::Muted(true))
+    );
+    // Nothing for a dry run, a failure, or another action.
+    assert_eq!(hud_of(&ran(up.clone(), Ok(Done::Recorded))), None);
+    assert_eq!(
+        hud_of(&ran(
+            up,
+            Err(detent_lib::actions::ActionError::Keys(
+                detent_lib::keys::Refusal::NoEvent
+            ))
+        )),
+        None
+    );
+    assert_eq!(
+        hud_of(&ran(
+            Action::OpenApp {
+                bundle_id: "com.apple.mail".into()
+            },
+            Ok(Done::Opened("com.apple.mail".into()))
+        )),
+        None
+    );
+    assert_eq!(hud_of(&Record::DryRun { on: true }), None);
+}

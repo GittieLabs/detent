@@ -8,7 +8,7 @@ import * as api from "./api";
 import { type AppName, actionText, idName, namesFrom, triggerText } from "./describe";
 import { accessibilityBanner } from "./banners";
 import { drawUnit, pickUnit, unitPicker } from "./drawing";
-import { el } from "./dom";
+import { el, keepingScroll } from "./dom";
 
 export interface TestScreen {
   show(state: AppState): void;
@@ -110,7 +110,7 @@ export function testScreen(root: HTMLElement, chosen: { serial: string | null })
         });
       },
     });
-    root.replaceChildren(
+    keepingScroll(root, () => root.replaceChildren(
       ...[
         el(
           "header",
@@ -142,16 +142,28 @@ export function testScreen(root: HTMLElement, chosen: { serial: string | null })
           rerender();
         }),
         note ? el("div", { class: "banner" }, note) : null,
-        drawUnit(unit, {
-          appName,
-          lit: lit && lit.serial === unit.serial ? lit.control : null,
-        }),
-        el("h2", {}, "Presses"),
-        entries.length
-          ? el("ul", { class: "list feed" }, ...entries.map((e) => entryRow(state, e)))
-          : el("p", { class: "empty" }, "Press a button on the device."),
+        el(
+          "div",
+          { class: "test-body" },
+          drawUnit(unit, {
+            appName,
+            lit: lit && lit.serial === unit.serial ? lit.control : null,
+          }),
+          el(
+            "section",
+            { class: "presses" },
+            el("h2", {}, "Presses"),
+            entries.length
+              ? el(
+                  "ul",
+                  { class: "list feed", attrs: { "data-scroll": "feed" } },
+                  ...entries.map((e) => entryRow(state, e)),
+                )
+              : el("p", { class: "empty" }, "Press a button on the device."),
+          ),
+        ),
       ].filter((p): p is HTMLElement => p !== null),
-    );
+    ));
   }
 
   return {

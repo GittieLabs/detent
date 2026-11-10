@@ -622,3 +622,317 @@ button.control:hover {
 .row.editing {
   background: var(--banner);
 }
+
+/* Tiles as a glance (D-084) */
+
+.control.key {
+  min-height: 0;
+  height: 88px;
+  overflow: hidden;
+}
+
+.trigger-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.trigger-row .control-does {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.control-does.inherited {
+  opacity: 1;
+  color: var(--off);
+}
+
+.trigger-row .dot {
+  width: 8px;
+  height: 8px;
+}
+
+.dot.ring {
+  background: transparent;
+  border: 1.5px solid var(--off);
+}
+
+.chip {
+  flex: none;
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--banner);
+  border: 1px solid var(--banner-line);
+  color: var(--text);
+}
+
+.preview-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.bar-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* The control list (D-085) */
+
+.control-list {
+  flex: 1 1 420px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.group-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+
+.control-group {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 0 0;
+  overflow: hidden;
+}
+
+.control-group .group-title {
+  padding: 0 16px;
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  cursor: pointer;
+  /* Straight edges: a divider can't curve away at the corners. */
+  border-radius: 0;
+}
+
+.control-row + .control-row {
+  border-top: 1px solid var(--line);
+}
+
+.control-row:hover {
+  background: var(--bg);
+}
+
+.control-row.selected {
+  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--bg);
+}
+
+.control-row.lit {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.control-row.device-owned {
+  cursor: default;
+  color: var(--muted);
+}
+
+.control-row.device-owned:hover {
+  background: transparent;
+}
+
+.row-name {
+  width: 96px;
+  flex: none;
+  font-weight: 600;
+}
+
+.on-device {
+  font-style: italic;
+}
+
+.cells {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 6px 16px;
+}
+
+.cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cell-label {
+  flex: none;
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 36px;
+}
+
+.control-row.lit .cell-label {
+  color: var(--accent-text);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.scope-chip {
+  font: inherit;
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.scope-chip.everywhere {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.scope-chip.app {
+  background: var(--banner);
+  border-color: var(--banner-line);
+  color: var(--text);
+}
+
+.none {
+  color: var(--muted);
+}
+
+/* The window as a fixed frame: tabs and headers stay put; lists, the panel
+   and the feed scroll inside (Mappings and Test). */
+
+html,
+body {
+  height: 100%;
+}
+
+main#app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  max-width: none;
+  overflow: hidden;
+}
+
+main#app > .tabs {
+  flex: none;
+}
+
+.screen {
+  flex: 1;
+  min-height: 0;
+  max-width: 1100px;
+  overflow-y: auto;
+}
+
+.screen.fill {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.screen.fill > * {
+  flex: none;
+}
+
+.screen.fill > .editor,
+.screen.fill > .test-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.screen.fill .editor {
+  flex-wrap: nowrap;
+  align-items: stretch;
+}
+
+.screen.fill .control-list {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 0 1 auto;
+}
+
+.screen.fill .control-group {
+  /* Room for the title and about two rows before a group starts to scroll. */
+  min-height: 120px;
+}
+
+.group-rows {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.screen.fill .panel {
+  align-self: flex-start;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+.screen.fill .test-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.screen.fill .test-body > .control-list {
+  flex: 1 1 0;
+}
+
+.presses {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 0;
+}
+
+.presses h2 {
+  flex: none;
+  margin-top: 4px;
+}
+
+.presses .feed {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.control-group.fixed {
+  flex: none;
+}
+
+.screen.fill .control-group.fixed {
+  min-height: 0;
+}
+
+.screen.fill .test-body > .control-list {
+  flex: 2 1 0;
+}

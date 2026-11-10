@@ -129,6 +129,7 @@ fn publish(app: &AppHandle, tray: &tray::Tray, state: &AppState, dry_run: bool) 
 /// Logs every record, folds it into the app state, and publishes changes.
 struct AppSink {
     log: Option<Arc<FileLog>>,
+    overlay: crate::hud::Overlay,
     state: Arc<Mutex<AppState>>,
     app: AppHandle,
     tray: tray::Tray,
@@ -147,6 +148,9 @@ impl Sink for AppSink {
         }
         if let Some(view) = detent_lib::app_state::result_view(record) {
             let _ = self.app.emit(RESULT_EVENT, view);
+        }
+        if let Some(hud) = detent_lib::app_state::hud_of(record) {
+            self.overlay.show(hud);
         }
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         if state.apply(record) {
@@ -250,6 +254,7 @@ pub fn start(launch: &Launch, app: AppHandle, tray: tray::Tray) -> Shared {
         Ok(bus) => {
             let sink = Arc::new(AppSink {
                 log: log.clone(),
+                overlay: crate::hud::Overlay::new(app.clone()),
                 state: state.clone(),
                 app: app.clone(),
                 tray: tray.clone(),

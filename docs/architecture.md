@@ -80,7 +80,7 @@ The engine modules are a library (`detent_lib`, `src/lib.rs`) that `main.rs`, th
 4b. **`app_state`** What the UI shows (`AppState`: paired, candidate, unknown, and ignored units, the problem line), folded from engine records, plus the config edits behind the settings window's commands (D-070). Pure and tested; `src/commands.rs` in the app is a thin Tauri layer over it, allow listed for the settings window only (D-071).
 4c. **`apps`** The app picker's list: running apps plus bundles in the usual app folders, merged by bundle ID (D-080). Pure apart from `list()`; running apps come from `macos`.
 5. **`store`** Versioned JSON at `~/Library/Application Support/Detent/config.json`. Schema migrations from v1 onward. No database.
-6. **`windows`** The settings window and dashboard windows. A dashboard window loads its action's URL full screen (borderless maximized if native full screen fights Spaces) on the chosen display.
+6. **`windows`** The settings window, the volume overlay (`hud.rs`: borderless, transparent, click through, not focusable, no IPC capabilities; shown about a second after a volume action, D-083), and dashboard windows. A dashboard window loads its action's URL full screen (borderless maximized if native full screen fights Spaces) on the chosen display.
 7. **`macos`** The only module allowed `unsafe`. Accessibility check (`AXIsProcessTrusted`), CGEvent keystroke posting, NSWorkspace frontmost app and app launch, CoreAudio volume, SMAppService login item.
 
 ## Background behavior
@@ -114,7 +114,7 @@ The app checks permissions at startup and shows missing ones as a single banner 
 3. Name it. Prefilled from the model name.
 4. Done. Offer the model's starter template with one checkbox.
 
-**Mappings.** A drawing of the device built from its HELLO control list. Click a control to edit it in a side panel: action from the fixed list, one or two fields, scope (Everywhere or an app picked from running and recent apps). App scoped overrides show a badge. Pass through controls are greyed. Below the drawing, a **Device menu** list edits the OLED's app owned items: label plus one action, drag to reorder, firmware owned items shown greyed so the user sees the whole menu.
+**Mappings.** The device's controls from its HELLO, one row each, grouped by type, with a cell per trigger holding a chip per scope (Everywhere, each app) whose hover text says what fires (D-085). Click a row or chip to edit it in a side panel: action from the fixed list, one or two fields, scope (Everywhere or an app picked from running and recent apps). App scoped overrides show a badge. Pass through controls are greyed. Below the drawing, a **Device menu** list edits the OLED's app owned items: label plus one action, drag to reorder, firmware owned items shown greyed so the user sees the whole menu.
 
 **Test.** The same drawing, live. Pressing a control highlights it and shows the mapping that would fire for the current frontmost app. **Dry run** is on by default and executes nothing; turn it off to execute for real.
 

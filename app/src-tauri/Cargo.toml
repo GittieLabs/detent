@@ -16,7 +16,7 @@ path = "src/lib.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api"] }
 detent-protocol = { path = "../../protocol" }
 hidapi = "2.6.7"  # same version as ctl-probe
 serde = { version = "1", features = ["derive"] }
