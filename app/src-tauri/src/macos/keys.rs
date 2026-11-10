@@ -1,28 +1,16 @@
-//! Keystrokes for Send shortcut (D-007, D-082), Secure Input, and the
-//! system volume keys (for macOS's volume HUD). Posting needs the
-//! Accessibility grant; nothing here prompts.
+//! Keystrokes for Send shortcut (D-007, D-082) and Secure Input. Posting
+//! needs the Accessibility grant; nothing here prompts. (System volume keys
+//! were tried for the HUD and macOS 27 ignores them, D-083.)
 
 use std::ffi::c_void;
 use std::fmt;
 
-use objc2::encode::{Encoding, RefEncode};
-use objc2::msg_send;
-use objc2::rc::autoreleasepool;
-use objc2::runtime::{AnyClass, AnyObject};
-use objc2_foundation::NSPoint;
-
 use crate::keys::Combo;
 
-/// An opaque `CGEventRef`, so objc2 can check `-[NSEvent CGEvent]`'s type.
+/// An opaque `CGEventRef`.
 #[repr(C)]
 pub struct CGEvent {
     _private: [u8; 0],
-}
-
-// SAFETY: matches the Objective-C encoding of `CGEventRef`, a pointer to the
-// opaque struct `__CGEvent`.
-unsafe impl RefEncode for CGEvent {
-    const ENCODING_REF: Encoding = Encoding::Pointer(&Encoding::Struct("__CGEvent", &[]));
 }
 
 #[link(name = "CoreGraphics", kind = "framework")]
@@ -137,63 +125,6 @@ pub fn post_combos(combos: &[Combo]) -> Result<(), KeyPostError> {
             flags &= !flag;
             post_key(*code, false, flags)?;
         }
-    }
-    Ok(())
-}
-
-/// A system media key.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VolumeKey {
-    Up,
-    Down,
-    Mute,
-}
-
-/// Presses a system volume key, as the keyboard's would: the volume moves one
-/// step and macOS shows its HUD. Needs the Accessibility grant.
-pub fn post_volume_key(key: VolumeKey) -> Result<(), KeyPostError> {
-    if !super::accessibility_trusted() {
-        return Err(KeyPostError::NotTrusted);
-    }
-    // NX_KEYTYPE_SOUND_UP, NX_KEYTYPE_SOUND_DOWN, NX_KEYTYPE_MUTE.
-    let code: isize = match key {
-        VolumeKey::Up => 0,
-        VolumeKey::Down => 1,
-        VolumeKey::Mute => 7,
-    };
-    for down in [true, false] {
-        let state: isize = if down { 0xA } else { 0xB };
-        autoreleasepool(|_| {
-            let class = AnyClass::get(c"NSEvent").ok_or(KeyPostError::NoEvent)?;
-            // SAFETY: the documented NSEvent factory for system defined
-            // (media key) events, with argument types matching its
-            // signature; objc2 checks the encodings in debug builds. The
-            // returned event is autoreleased and outlives its CGEvent's use
-            // inside this pool; the CGEvent belongs to it and isn't released.
-            unsafe {
-                let event: *mut AnyObject = msg_send![
-                    class,
-                    otherEventWithType: 14usize, // NSEventTypeSystemDefined
-                    location: NSPoint::new(0.0, 0.0),
-                    modifierFlags: (state << 8) as usize,
-                    timestamp: 0.0f64,
-                    windowNumber: 0isize,
-                    context: std::ptr::null_mut::<AnyObject>(),
-                    subtype: 8i16, // NX_SUBTYPE_AUX_CONTROL_BUTTONS
-                    data1: (code << 16) | (state << 8),
-                    data2: -1isize
-                ];
-                if event.is_null() {
-                    return Err(KeyPostError::NoEvent);
-                }
-                let cg: *mut CGEvent = msg_send![event, CGEvent];
-                if cg.is_null() {
-                    return Err(KeyPostError::NoEvent);
-                }
-                CGEventPost(HID_TAP, cg);
-            }
-            Ok(())
-        })?;
     }
     Ok(())
 }
