@@ -6,6 +6,7 @@
 
 import * as api from "./api";
 import type { AppState, Candidate } from "./api";
+import { type AppName, idName, mappingText, namesFrom } from "./describe";
 import { button, el, keepingFocus } from "./dom";
 
 type Step = "find" | "name" | "done";
@@ -46,6 +47,8 @@ export function pairingWizard(root: HTMLElement, onClose: () => void): Wizard {
   let error: string | null = null;
   let busy = false; // a command is running; its own answer settles the step
   let fresh = false; // the name panel just opened: focus and select the name
+  let useTemplate = true; // the starter template box (D-077), ticked by default
+  let appName: AppName = idName;
 
   const reset = () => {
     step = null;
@@ -55,6 +58,18 @@ export function pairingWizard(root: HTMLElement, onClose: () => void): Wizard {
     error = null;
     busy = false;
     fresh = false;
+    useTemplate = true;
+  };
+
+  /** App names for the template list; bundle IDs until they arrive. */
+  const loadAppNames = () => {
+    api
+      .listApps()
+      .then((apps) => {
+        appName = namesFrom(apps);
+        render();
+      })
+      .catch(() => {});
   };
 
   const close = async () => {
@@ -209,10 +224,50 @@ export function pairingWizard(root: HTMLElement, onClose: () => void): Wizard {
           .join(" · ")
       : "Connecting…";
     const model = unit?.model ?? null;
-    // PLACEHOLDER (open question in roadmap.md): which mappings a model's
-    // starter template adds is Keith's call. Until then every template is
-    // empty, so the box shows but can't be ticked.
-    const template = el("input", { type: "checkbox", disabled: true, ariaLabel: "Add starter mappings" });
+    const template = unit?.template ?? [];
+    const finish = async () => {
+      if (useTemplate && template.length) {
+        busy = true;
+        try {
+          await api.applyTemplate(done.serial);
+        } catch (e) {
+          busy = false;
+          error = api.message(e);
+          render();
+          return;
+        }
+      }
+      await close();
+    };
+    const box = template.length
+      ? el(
+          "label",
+          { class: "check" },
+          el("input", {
+            type: "checkbox",
+            checked: useTemplate,
+            ariaLabel: "Add starter mappings",
+            onClick: (e) => {
+              useTemplate = (e.target as HTMLInputElement).checked;
+            },
+          }),
+          el(
+            "span",
+            {},
+            `Start with the ${title(model)} mappings`,
+            el(
+              "ul",
+              { class: "template" },
+              ...template.map((m) => el("li", {}, mappingText(m, appName))),
+            ),
+            el("span", { class: "hint-inline" }, "You can change them on Mappings."),
+          ),
+        )
+      : el(
+          "p",
+          { class: "hint" },
+          `${title(model)} has no starter mappings. Add your own on Mappings.`,
+        );
     return [
       header("Done", 3),
       el(
@@ -229,19 +284,14 @@ export function pairingWizard(root: HTMLElement, onClose: () => void): Wizard {
           el("div", { class: "sub" }, status),
         ),
       ),
+      error ? el("div", { class: "banner" }, error) : null,
+      box,
       el(
-        "label",
-        { class: "check disabled" },
-        template,
-        el(
-          "span",
-          {},
-          `Add the starter mappings for ${title(model)}`,
-          el("span", { class: "hint-inline" }, "Nothing yet: this model has no starter mappings."),
-        ),
+        "footer",
+        { class: "actions" },
+        button("Finish", () => void finish(), { class: "primary", disabled: busy }),
       ),
-      el("footer", { class: "actions" }, button("Finish", () => void close(), { class: "primary" })),
-    ];
+    ].filter((p): p is HTMLElement => p !== null);
   }
 
   function render() {
@@ -265,6 +315,7 @@ export function pairingWizard(root: HTMLElement, onClose: () => void): Wizard {
   return {
     async open() {
       reset();
+      loadAppNames();
       const state = await api.startPairing();
       step = "find";
       current = state;
@@ -272,6 +323,7 @@ export function pairingWizard(root: HTMLElement, onClose: () => void): Wizard {
     },
     adopt(state: AppState) {
       reset();
+      loadAppNames();
       step = "find";
       current = state;
       advance(state);

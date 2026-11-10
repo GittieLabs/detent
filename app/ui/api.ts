@@ -36,6 +36,7 @@ export interface PairedUnit {
   encoders: number;
   controls: ControlView[]; // empty until its HELLO this session
   mappings: Mapping[];
+  template: Mapping[]; // what its starter template would still add (D-077)
 }
 
 export interface Candidate {
@@ -123,6 +124,8 @@ export const unignore = (serial: string) => invoke<AppState>("unignore", { seria
 export const setPaused = (on: boolean) => invoke<AppState>("set_paused", { on });
 export const setDryRun = (on: boolean) => invoke<void>("set_dry_run", { on });
 export const setMapping = (mapping: Mapping) => invoke<AppState>("set_mapping", { mapping });
+export const applyTemplate = (serial: string) =>
+  invoke<AppState>("apply_template", { serial });
 export const removeMapping = (serial: string, control: number, trigger: Trigger, scope: Scope) =>
   invoke<AppState>("remove_mapping", { serial, control, trigger, scope });
 export const listApps = () => invoke<AppEntry[]>("list_apps");

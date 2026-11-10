@@ -17,6 +17,7 @@ fn main() {
         "set_dry_run",
         "set_mapping",
         "remove_mapping",
+        "apply_template",
     ];
     tauri_build::try_build(
         tauri_build::Attributes::new()

@@ -98,6 +98,12 @@ pub fn remove_mapping(
     })
 }
 
+/// Adds the unit's starter template (D-077), keeping its own mappings.
+#[tauri::command]
+pub fn apply_template(shared: State<'_, Shared>, serial: String) -> Answer {
+    edit(&shared, |c| app_state::apply_template(c, &serial))
+}
+
 /// Turns dry run on or off (the Test screen, D-079). The state follows when
 /// the engine confirms it, within about 20 ms.
 pub fn set_dry_run_now(shared: &Shared, on: bool) {
@@ -184,4 +190,5 @@ pub const ALL: &[&str] = &[
     "set_dry_run",
     "set_mapping",
     "remove_mapping",
+    "apply_template",
 ];

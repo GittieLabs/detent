@@ -20,6 +20,7 @@
     "allow-list-apps",
     "allow-set-dry-run",
     "allow-set-mapping",
-    "allow-remove-mapping"
+    "allow-remove-mapping",
+    "allow-apply-template"
   ]
 }

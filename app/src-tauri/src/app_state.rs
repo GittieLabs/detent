@@ -121,6 +121,8 @@ pub struct PairedUnit {
     pub controls: Vec<ControlView>,
     /// Its mappings, from the config.
     pub mappings: Vec<Mapping>,
+    /// What its model's starter template would still add (D-077).
+    pub template: Vec<Mapping>,
 }
 
 /// An unpaired unit the wizard has open read only (D-066).
@@ -248,6 +250,7 @@ impl AppState {
                         .filter(|m| same(&m.device, &d.serial))
                         .cloned()
                         .collect(),
+                    template: template_left(config, d),
                 }
             })
             .collect();
@@ -498,6 +501,40 @@ pub fn set_mapping(
         Some(m) => *m = mapping,
         None => c.mappings.push(mapping),
     }
+    Ok(c)
+}
+
+/// The template mappings for `unit` that it doesn't have yet: none of its
+/// own mappings shares their control, trigger and scope.
+fn template_left(config: &Config, unit: &DeviceEntry) -> Vec<Mapping> {
+    models::starter_template(unit.pid)
+        .into_iter()
+        .map(|m| Mapping {
+            device: unit.serial.clone(),
+            ..m
+        })
+        .filter(|t| {
+            !config.mappings.iter().any(|m| {
+                same(&m.device, &unit.serial)
+                    && m.control == t.control
+                    && m.trigger == t.trigger
+                    && m.scope == t.scope
+            })
+        })
+        .collect()
+}
+
+/// Adds the unit's starter template (D-077), never replacing a mapping it
+/// already has. Applying it twice adds nothing.
+pub fn apply_template(config: &Config, serial: &str) -> Result<Config, EditError> {
+    let unit = config
+        .devices
+        .iter()
+        .find(|d| same(&d.serial, serial))
+        .ok_or_else(|| EditError::NotPaired(serial.to_owned()))?;
+    let left = template_left(config, unit);
+    let mut c = config.clone();
+    c.mappings.extend(left);
     Ok(c)
 }
 

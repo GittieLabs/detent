@@ -648,3 +648,100 @@ fn mappings_and_controls_cross_to_the_window_as_the_ui_expects() {
         serde_json::json!({ "id": 1, "type": "button", "label": "Button 1", "handled_by_device": false })
     );
 }
+
+// Starter template (D-077).
+
+fn just_paired(serial: &str) -> Config {
+    app_state::pair(
+        &store::parse(r#"{ "version": 1 }"#).unwrap(),
+        VID,
+        PID,
+        serial,
+        "New",
+    )
+    .unwrap()
+}
+
+#[test]
+fn the_detent_dev_template_is_keiths_setup() {
+    let t = detent_lib::models::starter_template(PID);
+    let summary: Vec<_> = t
+        .iter()
+        .map(|m| (m.control, m.trigger, m.scope.clone(), m.action.clone()))
+        .collect();
+    assert_eq!(
+        summary[..4],
+        [
+            (
+                1,
+                Trigger::Press,
+                Scope::Everywhere,
+                Action::OpenApp {
+                    bundle_id: "com.apple.mail".into()
+                }
+            ),
+            (
+                1,
+                Trigger::Press,
+                Scope::App("com.apple.Safari".into()),
+                Action::MuteToggle
+            ),
+            (
+                2,
+                Trigger::Press,
+                Scope::Everywhere,
+                Action::VolumeUp { step: 0.0625 }
+            ),
+            (3, Trigger::Press, Scope::Everywhere, Action::MuteToggle),
+        ]
+    );
+    assert!(
+        matches!(&summary[4], (4, Trigger::Press, Scope::Everywhere, Action::AppleScript { source, .. })
+            if source.contains("reopen") && source.contains("activate")),
+        "{:?}",
+        summary[4]
+    );
+    assert_eq!(t.len(), 5);
+    assert!(detent_lib::models::starter_template(0x1234).is_empty());
+}
+
+#[test]
+fn applying_the_template_maps_the_new_unit_once() {
+    let c = app_state::apply_template(&just_paired(OTHER), OTHER).unwrap();
+    assert_eq!(c.mappings.len(), 5);
+    assert!(c.mappings.iter().all(|m| m.device == OTHER));
+    assert!(store::to_json(&c).is_ok(), "the template passes the loader");
+    let again = app_state::apply_template(&c, OTHER).unwrap();
+    assert_eq!(again.mappings, c.mappings, "nothing duplicated");
+}
+
+#[test]
+fn the_template_never_replaces_a_mapping_the_unit_has() {
+    let mut c = just_paired(OTHER);
+    let mine = Mapping {
+        device: OTHER.into(),
+        control: 2,
+        trigger: Trigger::Press,
+        scope: Scope::Everywhere,
+        action: Action::MuteToggle,
+    };
+    c.mappings.push(mine.clone());
+    let c = app_state::apply_template(&c, OTHER).unwrap();
+    assert_eq!(c.mappings.len(), 5, "4 added, button 2 kept");
+    assert!(c.mappings.contains(&mine));
+    assert_eq!(
+        app_state::apply_template(&c, "000000000000"),
+        Err(EditError::NotPaired("000000000000".into()))
+    );
+}
+
+#[test]
+fn a_paired_unit_shows_the_template_it_would_get() {
+    let s = AppState::new(&just_paired(OTHER));
+    let t = &s.paired[0].template;
+    assert_eq!(t.len(), 5);
+    assert!(t.iter().all(|m| m.device == OTHER));
+    // Once applied there's nothing left to add.
+    let s = AppState::new(&app_state::apply_template(&just_paired(OTHER), OTHER).unwrap());
+    assert!(s.paired[0].template.is_empty());
+}
