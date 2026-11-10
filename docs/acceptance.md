@@ -131,3 +131,13 @@ Results:
   - Step 7: `PASS`, Keith. Closing the window mid wizard left the board unpaired; reopening showed Devices, and the wizard found the board again.
 - Early checks of task 7, 2026-11-10, signed build of the tray work on top of `2db975b`, run on a copy of Keith's config, board `E072A1FC4EDC` on release firmware (not the acceptance pass):
   - Step 5: `PASS`, Keith. The device line showed 🟢 connected. Pause stopped button 2 changing the volume, and turning it off restored it. Pause stayed on across a quit and relaunch (the copy's config read `"paused": true`). Unpairing showed ⚪ and "New device found: Pair…", which opened the wizard, and the board paired again. Unplug and replug updated the line with no relaunch.
+- Acceptance pass, 2026-11-10, signed `Detent.app` from `just build-dev` at `ef3b7ce` (Mac Developer identity, `com.gittielabs.detent`), board `E072A1FC4EDC` on release firmware, Keith's config moved aside to `config.json.bak` so Detent started empty. Keith did each step; Claude read Detent's log.
+  - First attempt at `57a1c15`: the LED never blinked. The firmware keeps "paired" until it's unmounted or acked unpaired, and Detent only ever acked `paired = 1`, so the board stayed solid after an unpair and after the previous Detent quit. Fixed in `ef3b7ce` (D-076): `HELLO_ACK 0` on unpair and on quit. Keith confirmed Quit then made the LED blink; the run restarted from empty (the first attempt's config is kept as `config.json.run1`).
+  - Step 1: `PASS`, Keith.
+  - Step 6: `PASS`, Keith.
+  - Step 7: `PASS`, Keith. The LED kept blinking after closing mid wizard.
+  - Step 2 (exit criterion): `PASS`, Keith. Paired in under 2 minutes with no docs, keeping the suggested name `Detent Dev`. LED solid, OLED `USB: paired`, Devices showed it connected with its firmware. Unpairing then made the LED blink (D-076), and it paired again.
+  - The five mappings from `config.json.bak` were then copied into the new config by Claude (M3 has no mapping editor) for steps 5, 4 and 3.
+  - Step 5: `PASS`, Keith. Presses logged `(paused, not run)` while paused; Pause stayed on across a quit and relaunch; with it off, button 2 stepped the volume 25 -> 31 -> ... -> 63%. Unplug logged a disconnect at once and replug reconnected with no relaunch.
+  - Step 4: `PASS` as written, Keith: after Apple menu Sleep and a wake, button 2 stepped the volume 19 -> 38% with no relaunch. But `pmset` shows DarkWake again (08:21:21 to 08:22:04, TCP keep alive on AC), so the CPU kept running and the board stayed connected: the wake reopen path (D-068) is still unexercised on hardware.
+
