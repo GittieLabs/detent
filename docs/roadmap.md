@@ -82,7 +82,7 @@ Tasks:
 
 Exit criteria:
 
-- [ ] Router and codec unit tests pass; integration tests pass against MockTransport.
+- [x] Router and codec unit tests pass; integration tests pass against MockTransport. Passed 2026-11-09 in CI (`3bc5a3b`): router, codec, transport, devices, and engine pipeline tests.
 - [ ] A real button opens Mail (signed build, `acceptance.md` M2).
 
 ## M3 App shell and pairing
