@@ -653,6 +653,7 @@ dependencies = [
 name = "detent"
 version = "0.0.0"
 dependencies = [
+ "detent-protocol",
  "objc2",
  "objc2-app-kit",
  "objc2-audio-toolbox",
