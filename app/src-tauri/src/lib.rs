@@ -2,6 +2,7 @@
 //! testable without starting Tauri (D-052). `main.rs` is the Tauri app.
 
 pub mod actions;
+pub mod app_state;
 pub mod devices;
 pub mod engine;
 #[cfg(target_os = "macos")]

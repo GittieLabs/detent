@@ -42,6 +42,14 @@ fn id(serial: &str) -> DeviceId {
     }
 }
 
+/// A paired unit connected; MockBus and the real board both say `Detent Dev`.
+fn conn(serial: &str) -> DeviceEvent {
+    DeviceEvent::Connected {
+        id: id(serial),
+        product: Some("Detent Dev".into()),
+    }
+}
+
 fn hello() -> Hello {
     Hello {
         firmware: FirmwareVersion {
@@ -123,7 +131,7 @@ impl Rig {
 fn an_allowlisted_unit_opens_requests_hello_and_is_acked() {
     let mut r = Rig::new(&[PAIRED], &[]);
     let hid = r.bus.attach(VID, PID, Some(PAIRED));
-    assert_eq!(r.at(0.0), vec![DeviceEvent::Connected(id(PAIRED))]);
+    assert_eq!(r.at(0.0), vec![conn(PAIRED)]);
     assert_eq!(sent(&hid), vec![AppMessage::RequestHello]);
 
     hid.push_device(0, &DeviceMessage::Hello(hello()));
@@ -277,7 +285,7 @@ fn a_unit_dropped_for_silence_is_reopened_by_the_next_scan() {
     let hid = r.bus.attach(VID, PID, Some(PAIRED));
     r.at(0.0);
     r.at(6.0); // dropped
-    assert_eq!(r.at(7.0), vec![DeviceEvent::Connected(id(PAIRED))]);
+    assert_eq!(r.at(7.0), vec![conn(PAIRED)]);
     assert_eq!(
         sent(&hid),
         vec![AppMessage::RequestHello, AppMessage::RequestHello]
@@ -304,7 +312,7 @@ fn unplug_disconnects_and_replug_reconnects() {
     assert_eq!(r.at(1.5), vec![], "nothing attached, nothing to open");
 
     let hid2 = r.bus.attach(VID, PID, Some(PAIRED));
-    assert_eq!(r.at(2.5), vec![DeviceEvent::Connected(id(PAIRED))]);
+    assert_eq!(r.at(2.5), vec![conn(PAIRED)]);
     assert_eq!(sent(&hid2), vec![AppMessage::RequestHello]);
     hid2.push_device(0, &press(1));
     assert_eq!(
@@ -337,7 +345,7 @@ fn the_list_is_polled_once_a_second() {
     r.at(0.0);
     let hid = r.bus.attach(VID, PID, Some(PAIRED));
     assert_eq!(r.at(0.5), vec![], "not scanned yet");
-    assert_eq!(r.at(1.0), vec![DeviceEvent::Connected(id(PAIRED))]);
+    assert_eq!(r.at(1.0), vec![conn(PAIRED)]);
     assert_eq!(sent(&hid), vec![AppMessage::RequestHello]);
 }
 
@@ -404,7 +412,7 @@ fn other_vendors_and_serialless_entries_are_not_news() {
 fn serials_match_case_insensitively() {
     let mut r = Rig::new(&[&PAIRED.to_ascii_lowercase()], &[]);
     r.bus.attach(VID, PID, Some(PAIRED));
-    assert_eq!(r.at(0.0), vec![DeviceEvent::Connected(id(PAIRED))]);
+    assert_eq!(r.at(0.0), vec![conn(PAIRED)]);
 }
 
 #[test]
@@ -448,7 +456,7 @@ fn a_failed_open_is_reported_once_and_retried() {
     );
     assert_eq!(r.at(1.0), vec![], "reported once");
     r.bus.fail_opens(false);
-    assert_eq!(r.at(2.0), vec![DeviceEvent::Connected(id(PAIRED))]);
+    assert_eq!(r.at(2.0), vec![conn(PAIRED)]);
 }
 
 #[test]
@@ -496,7 +504,7 @@ fn the_board_pairs_and_stays_up_on_heartbeats() {
             log.push(e);
         }
     }
-    assert_eq!(log.first(), Some(&DeviceEvent::Connected(id(&serial))));
+    assert_eq!(log.first(), Some(&conn(&serial)));
     assert!(
         log.iter().any(|e| matches!(e, DeviceEvent::Hello { .. })),
         "no HELLO"
@@ -536,7 +544,7 @@ fn after_sleep_every_unit_is_closed_and_reopened_at_once() {
         .collect();
     let back: Vec<_> = events
         .iter()
-        .filter(|e| matches!(e, DeviceEvent::Connected(_)))
+        .filter(|e| matches!(e, DeviceEvent::Connected { .. }))
         .collect();
     assert_eq!((lost.len(), back.len()), (2, 2), "{events:?}");
     assert_eq!(r.bus.opens(), 4, "both reopened in the same step");
@@ -554,7 +562,7 @@ fn waking_with_nothing_open_just_scans() {
     r.at(0.0);
     r.bus.attach(VID, PID, Some(PAIRED));
     r.devices.woke();
-    assert_eq!(r.at(0.2), vec![DeviceEvent::Connected(id(PAIRED))]);
+    assert_eq!(r.at(0.2), vec![conn(PAIRED)]);
 }
 
 // Live reload (M3): the allowlist and ignore list change without a relaunch.
@@ -573,7 +581,7 @@ fn a_newly_paired_unit_opens_at_once() {
     r.bus.attach(VID, PID, Some(PAIRED));
     r.at(0.0); // reported as Unknown
     r.devices.set_lists(&[entry(PAIRED)], &[]);
-    assert_eq!(r.at(0.1), vec![DeviceEvent::Connected(id(PAIRED))]);
+    assert_eq!(r.at(0.1), vec![conn(PAIRED)]);
 }
 
 #[test]
@@ -634,7 +642,10 @@ fn units_still_allowed_are_left_alone() {
 // Pairing identification (M3, D-066): read only, never acked, never routed.
 
 fn found(serial: &str) -> DeviceEvent {
-    DeviceEvent::CandidateFound(id(serial))
+    DeviceEvent::CandidateFound {
+        id: id(serial),
+        product: Some("Detent Dev".into()),
+    }
 }
 
 #[test]
@@ -775,11 +786,7 @@ fn pairing_a_candidate_reopens_it_as_paired() {
     r.at(0.0);
     r.devices.set_lists(&[entry(OTHER)], &[]);
     let events = r.at(0.1);
-    assert_eq!(
-        events,
-        vec![DeviceEvent::Connected(id(OTHER))],
-        "{events:?}"
-    );
+    assert_eq!(events, vec![conn(OTHER)], "{events:?}");
     hid.push_device(0, &DeviceMessage::Hello(hello()));
     r.at(0.2);
     assert!(sent(&hid).contains(&AppMessage::HelloAck { paired: true }));
@@ -821,10 +828,7 @@ fn the_board_is_found_as_a_candidate_when_unpaired() {
             log.push(e);
         }
     }
-    assert!(
-        log.contains(&DeviceEvent::CandidateFound(id(&serial))),
-        "{log:?}"
-    );
+    assert!(log.contains(&found(&serial)), "{log:?}");
     assert!(
         log.iter()
             .any(|e| matches!(e, DeviceEvent::CandidateHello { id: i, .. } if *i == id(&serial))),
@@ -836,7 +840,24 @@ fn the_board_is_found_as_a_candidate_when_unpaired() {
     );
     assert!(
         !log.iter()
-            .any(|e| matches!(e, DeviceEvent::Input { .. } | DeviceEvent::Connected(_))),
+            .any(|e| matches!(e, DeviceEvent::Input { .. } | DeviceEvent::Connected { .. })),
         "nothing paired or routed"
     );
+}
+
+#[test]
+fn an_unknown_unit_leaving_is_reported() {
+    let mut r = Rig::new(&[], &[]);
+    r.bus.attach(VID, PID, Some(OTHER));
+    r.at(0.0);
+    r.bus.detach(OTHER);
+    assert_eq!(
+        r.at(1.0),
+        vec![DeviceEvent::UnknownGone {
+            vid: VID,
+            pid: PID,
+            serial: Some(OTHER.into())
+        }]
+    );
+    assert_eq!(r.at(2.0), vec![], "reported once");
 }

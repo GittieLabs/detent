@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-unignore"
+description = "Enables the unignore command without any pre-configured scope."
+commands.allow = ["unignore"]
+
+[[permission]]
+identifier = "deny-unignore"
+description = "Denies the unignore command without any pre-configured scope."
+commands.deny = ["unignore"]

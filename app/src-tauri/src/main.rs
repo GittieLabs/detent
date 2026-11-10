@@ -1,6 +1,7 @@
 //! Detent: macOS menu bar app. The tray, plus the engine on background
 //! threads (`detent_lib::engine`); see `docs/roadmap.md`.
 
+mod commands;
 mod launch;
 mod tray;
 
@@ -20,11 +21,20 @@ fn main() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             let device_line = tray::build(app.handle(), launch.dry_run)?;
             // Kept for the app's lifetime; the process exit ends its threads.
-            if let Some(engine) = launch::start(&launch, device_line) {
-                app.manage(engine);
-            }
+            app.manage(launch::start(&launch, app.handle().clone(), device_line));
             Ok(())
         })
+        .invoke_handler(tauri::generate_handler![
+            commands::get_state,
+            commands::start_pairing,
+            commands::end_pairing,
+            commands::pair,
+            commands::rename,
+            commands::mappings_of,
+            commands::unpair,
+            commands::ignore,
+            commands::unignore,
+        ])
         .build(tauri::generate_context!())
         .expect("failed to build the Detent app");
 
@@ -83,6 +93,33 @@ mod tests {
     fn info_plist_hides_the_dock_icon() {
         let compact: String = PLIST.split_whitespace().collect();
         assert!(compact.contains("<key>LSUIElement</key><true/>"));
+    }
+
+    #[test]
+    fn capability_allows_exactly_the_app_commands() {
+        let cap: Value = serde_json::from_str(CAPABILITY).expect("capability parses");
+        let mut allowed: Vec<String> = cap["permissions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|p| p.as_str())
+            .filter(|p| p.starts_with("allow-"))
+            .map(str::to_owned)
+            .collect();
+        let mut want: Vec<String> = crate::commands::ALL
+            .iter()
+            .map(|c| format!("allow-{}", c.replace('_', "-")))
+            .collect();
+        allowed.sort();
+        want.sort();
+        assert_eq!(allowed, want);
+        let build = include_str!("../build.rs");
+        for c in crate::commands::ALL {
+            assert!(
+                build.contains(&format!("\"{c}\"")),
+                "{c} missing from build.rs"
+            );
+        }
     }
 
     #[test]

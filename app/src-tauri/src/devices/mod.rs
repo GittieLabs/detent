@@ -8,7 +8,7 @@
 //! the ignore list wins over the allowlist; other Detent units are reported
 //! once per attach and never read (D-062).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
 use std::fmt;
 use std::thread;
@@ -55,8 +55,12 @@ pub enum Lost {
 /// What happened, for the engine and its log.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DeviceEvent {
-    /// A paired unit was opened and asked for its HELLO.
-    Connected(DeviceId),
+    /// A paired unit was opened and asked for its HELLO. `product` is its
+    /// USB product string (`Detent <model name>`), if it reports one.
+    Connected {
+        id: DeviceId,
+        product: Option<String>,
+    },
     /// The unit described itself and was told it's paired.
     Hello {
         id: DeviceId,
@@ -89,9 +93,18 @@ pub enum DeviceEvent {
         pid: u16,
         serial: Option<String>,
     },
+    /// The unknown unit reported earlier is no longer attached.
+    UnknownGone {
+        vid: u16,
+        pid: u16,
+        serial: Option<String>,
+    },
     /// Identifying (D-066): an unpaired unit was opened read only and asked
     /// for its HELLO. It's never acked and its input never reaches the router.
-    CandidateFound(DeviceId),
+    CandidateFound {
+        id: DeviceId,
+        product: Option<String>,
+    },
     /// A candidate described itself.
     CandidateHello {
         id: DeviceId,
@@ -159,8 +172,8 @@ pub struct Devices<B> {
     opts: Options,
     next_scan: Option<Instant>,
     units: Vec<Unit>,
-    /// Paths of unknown units already reported, while they stay attached.
-    unknown_seen: HashSet<CString>,
+    /// Unknown units already reported, by path, while they stay attached.
+    unknown_seen: HashMap<CString, (u16, u16, Option<String>)>,
     /// Paired units whose open failure was already reported.
     open_failed: HashSet<DeviceId>,
     /// Set by [`Devices::woke`]; handled at the start of the next step.
@@ -180,7 +193,7 @@ impl<B: Bus> Devices<B> {
             opts,
             next_scan: None,
             units: Vec::new(),
-            unknown_seen: HashSet::new(),
+            unknown_seen: HashMap::new(),
             open_failed: HashSet::new(),
             woke: false,
             relisted: false,
@@ -318,7 +331,17 @@ impl<B: Bus> Devices<B> {
         self.drop_where(events, |u| {
             (!present.contains(&u.path)).then_some(Lost::Detached)
         });
-        self.unknown_seen.retain(|p| present.contains(p));
+        self.unknown_seen.retain(|path, (vid, pid, serial)| {
+            let still = present.contains(path);
+            if !still {
+                events.push(DeviceEvent::UnknownGone {
+                    vid: *vid,
+                    pid: *pid,
+                    serial: serial.clone(),
+                });
+            }
+            still
+        });
         let present_ids: HashSet<DeviceId> = channels
             .iter()
             .filter_map(|c| {
@@ -338,7 +361,12 @@ impl<B: Bus> Devices<B> {
             }
             if serial.is_empty() || !self.is_paired(c, serial) {
                 let ours = c.vid == ids::VID && c.pid == ids::PID;
-                if ours && self.unknown_seen.insert(c.path.clone()) {
+                if ours
+                    && self
+                        .unknown_seen
+                        .insert(c.path.clone(), (c.vid, c.pid, c.serial.clone()))
+                        .is_none()
+                {
                     events.push(DeviceEvent::Unknown {
                         vid: c.vid,
                         pid: c.pid,
@@ -357,6 +385,8 @@ impl<B: Bus> Devices<B> {
                 }
                 continue;
             }
+            // Paired now: no longer news (reported again if it's unpaired).
+            self.unknown_seen.remove(&c.path);
             let id = DeviceId {
                 vid: c.vid,
                 pid: c.pid,
@@ -394,7 +424,10 @@ impl<B: Bus> Devices<B> {
         if unit.send(&AppMessage::RequestHello).is_err() {
             return;
         }
-        events.push(DeviceEvent::CandidateFound(id));
+        events.push(DeviceEvent::CandidateFound {
+            id,
+            product: c.product.clone(),
+        });
         self.units.push(unit);
     }
 
@@ -424,7 +457,10 @@ impl<B: Bus> Devices<B> {
             events.push(DeviceEvent::OpenFailed { id, error: e });
             return;
         }
-        events.push(DeviceEvent::Connected(id));
+        events.push(DeviceEvent::Connected {
+            id,
+            product: c.product.clone(),
+        });
         self.units.push(unit);
     }
 

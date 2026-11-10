@@ -123,7 +123,7 @@ impl Rig {
             release,
             engine: Some(engine),
         };
-        rig.expect(|r| matches!(r, Record::Device(DeviceEvent::Connected(_))));
+        rig.expect(|r| matches!(r, Record::Device(DeviceEvent::Connected { .. })));
         rig
     }
 
@@ -278,7 +278,7 @@ fn unplug_and_replug_are_logged_and_presses_work_again() {
     r.bus.detach(SERIAL);
     r.expect(|x| matches!(x, Record::Device(DeviceEvent::Disconnected { .. })));
     r.hid = r.bus.attach(VID, PID, Some(SERIAL));
-    r.expect(|x| matches!(x, Record::Device(DeviceEvent::Connected(_))));
+    r.expect(|x| matches!(x, Record::Device(DeviceEvent::Connected { .. })));
     r.hid.push_device(0, &press(1));
     assert_eq!(r.call().0, mail());
 }
@@ -373,7 +373,7 @@ fn a_candidate_press_is_reported_but_runs_nothing() {
     let r = Rig::start();
     let other = r.bus.attach(VID, PID, Some("AABBCCDDEEFF"));
     r.engine.as_ref().unwrap().identify(true);
-    r.expect(|x| matches!(x, Record::Device(DeviceEvent::CandidateFound(_))));
+    r.expect(|x| matches!(x, Record::Device(DeviceEvent::CandidateFound { .. })));
     other.push_device(0, &press(1));
     r.expect(|x| matches!(x, Record::Device(DeviceEvent::CandidatePressed(_))));
     r.no_call();

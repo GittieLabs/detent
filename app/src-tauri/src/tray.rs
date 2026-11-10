@@ -39,9 +39,8 @@ pub enum DeviceStatus<'a> {
     Starting,
     /// Running; names of the connected units.
     Running(&'a [String]),
-    /// The config is missing or invalid (details in the log).
-    ConfigProblem,
-    UsbUnavailable,
+    /// The config didn't load or USB is unavailable (details in the log).
+    Problem,
 }
 
 /// Open at login as the tray shows it, `None` off macOS.
@@ -104,8 +103,7 @@ pub fn device_label(status: &DeviceStatus, dry_run: bool) -> String {
         DeviceStatus::Running([]) => "No device connected".to_owned(),
         DeviceStatus::Running([one]) => format!("Connected: {one}"),
         DeviceStatus::Running(many) => format!("Connected: {} devices", many.len()),
-        DeviceStatus::ConfigProblem => "Config problem: see the log".to_owned(),
-        DeviceStatus::UsbUnavailable => "USB unavailable: see the log".to_owned(),
+        DeviceStatus::Problem => "Problem: see the log".to_owned(),
     };
     if dry_run {
         format!("{base} (dry run)")
@@ -223,18 +221,14 @@ mod tests {
             "Connected: 2 devices"
         );
         assert_eq!(
-            device_label(&DeviceStatus::ConfigProblem, false),
-            "Config problem: see the log"
+            device_label(&DeviceStatus::Problem, false),
+            "Problem: see the log"
         );
         assert_eq!(
             device_label(&DeviceStatus::Running(&one), true),
             "Connected: Desk controller (dry run)"
         );
         assert_eq!(device_label(&DeviceStatus::Starting, false), "Starting");
-        assert_eq!(
-            device_label(&DeviceStatus::UsbUnavailable, false),
-            "USB unavailable: see the log"
-        );
     }
 
     #[test]

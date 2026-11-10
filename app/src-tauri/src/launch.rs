@@ -7,17 +7,17 @@
 //! instead of `~/Library/Application Support/Detent/config.json`. Unknown
 //! arguments are ignored: macOS and Tauri may pass their own.
 
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use detent_lib::actions::{Executor, RecordingExecutor};
-use detent_lib::devices::{DeviceEvent, Options};
+use detent_lib::app_state::AppState;
+use detent_lib::devices::Options;
 use detent_lib::engine::{default_log_path, Engine, EngineHandle, FileLog, Record, Sink};
-use detent_lib::store::{self, Config};
+use detent_lib::store::{self, Config, ConfigError};
 use detent_lib::transport::Hid;
 use tauri::menu::MenuItem;
-use tauri::Wry;
+use tauri::{AppHandle, Emitter, Wry};
 
 use crate::tray;
 
@@ -40,61 +40,71 @@ pub fn parse_args(args: &[String]) -> Launch {
     launch
 }
 
-/// Logs every record and keeps the tray's device line current.
+/// The event the settings window listens to; its payload is the whole
+/// [`AppState`].
+pub const STATE_EVENT: &str = "state";
+
+/// Everything the app shares between the engine's sink, the tray, and the
+/// commands. Managed by Tauri.
+pub struct Shared {
+    /// Where the config lives, `None` without a home directory.
+    pub path: Option<PathBuf>,
+    /// The config as last loaded or saved.
+    pub config: Mutex<Config>,
+    /// False when the file on disk didn't load: saving would overwrite what
+    /// the user wrote, so commands refuse until it's fixed (D-070).
+    pub writable: bool,
+    pub state: Arc<Mutex<AppState>>,
+    pub engine: Option<EngineHandle>,
+    pub app: AppHandle,
+    pub status: MenuItem<Wry>,
+    pub dry_run: bool,
+}
+
+impl Shared {
+    /// Pushes the state to the settings window and the tray.
+    pub fn publish(&self, state: &AppState) {
+        publish(&self.app, &self.status, state, self.dry_run);
+    }
+}
+
+fn publish(app: &AppHandle, status: &MenuItem<Wry>, state: &AppState, dry_run: bool) {
+    let _ = app.emit(STATE_EVENT, state);
+    let connected: Vec<String> = state
+        .paired
+        .iter()
+        .filter(|u| u.connected)
+        .map(|u| u.name.clone())
+        .collect();
+    let line = if state.problem.is_some() {
+        tray::DeviceStatus::Problem
+    } else {
+        tray::DeviceStatus::Running(&connected)
+    };
+    if let Err(e) = status.set_text(tray::device_label(&line, dry_run)) {
+        eprintln!("detent: could not update the tray: {e}");
+    }
+}
+
+/// Logs every record, folds it into the app state, and publishes changes.
 struct AppSink {
     log: Option<FileLog>,
-    names: HashMap<String, String>,
-    connected: Mutex<Vec<String>>,
+    state: Arc<Mutex<AppState>>,
+    app: AppHandle,
     status: MenuItem<Wry>,
     dry_run: bool,
 }
 
-impl AppSink {
-    fn line(&self, line: &str) {
-        eprintln!("detent: {line}");
-        if let Some(log) = &self.log {
-            log.line(line);
-        }
-    }
-
-    fn show(&self, connected: &[String]) {
-        let text = tray::device_label(&tray::DeviceStatus::Running(connected), self.dry_run);
-        if let Err(e) = self.status.set_text(text) {
-            eprintln!("detent: could not update the tray: {e}");
-        }
-    }
-}
-
 impl Sink for AppSink {
     fn record(&self, record: &Record) {
-        self.line(&record.to_string());
-        let changed = match record {
-            Record::Device(DeviceEvent::Connected(id)) => {
-                let name = self
-                    .names
-                    .get(&id.serial)
-                    .cloned()
-                    .unwrap_or(id.serial.clone());
-                let mut c = self.connected.lock().unwrap_or_else(|e| e.into_inner());
-                c.push(name);
-                Some(c.clone())
-            }
-            Record::Device(DeviceEvent::Disconnected { id, .. }) => {
-                let name = self
-                    .names
-                    .get(&id.serial)
-                    .cloned()
-                    .unwrap_or(id.serial.clone());
-                let mut c = self.connected.lock().unwrap_or_else(|e| e.into_inner());
-                if let Some(i) = c.iter().position(|n| *n == name) {
-                    c.remove(i);
-                }
-                Some(c.clone())
-            }
-            _ => None,
-        };
-        if let Some(c) = changed {
-            self.show(&c);
+        let line = record.to_string();
+        eprintln!("detent: {line}");
+        if let Some(log) = &self.log {
+            log.line(&line);
+        }
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.apply(record) {
+            publish(&self.app, &self.status, &state, self.dry_run);
         }
     }
 }
@@ -115,9 +125,21 @@ fn executor(dry_run: bool) -> Arc<dyn Executor> {
     Arc::new(RecordingExecutor::default())
 }
 
-/// Loads the config and starts the engine. Problems are logged and shown in
-/// the tray's device line; the app keeps running either way.
-pub fn start(launch: &Launch, status: MenuItem<Wry>) -> Option<EngineHandle> {
+/// An empty v1 config: what a first launch starts from.
+pub fn empty_config() -> Config {
+    Config {
+        version: 1,
+        devices: Vec::new(),
+        ignored: Vec::new(),
+        mappings: Vec::new(),
+    }
+}
+
+/// Loads the config and starts the engine. A missing file is a first launch:
+/// Detent starts empty and the first save creates it. A file that doesn't
+/// load is left alone, shown as a problem, and never overwritten (D-070).
+/// The app keeps running either way.
+pub fn start(launch: &Launch, app: AppHandle, status: MenuItem<Wry>) -> Shared {
     let log = default_log_path().and_then(|p| match FileLog::open(&p) {
         Ok(log) => Some(log),
         Err(e) => {
@@ -131,12 +153,6 @@ pub fn start(launch: &Launch, status: MenuItem<Wry>) -> Option<EngineHandle> {
             log.line(line);
         }
     };
-    let fail = |problem: tray::DeviceStatus, line: String| {
-        say(&line);
-        let _ = status.set_text(tray::device_label(&problem, launch.dry_run));
-        None
-    };
-
     say(&format!(
         "starting{}",
         if launch.dry_run {
@@ -145,57 +161,87 @@ pub fn start(launch: &Launch, status: MenuItem<Wry>) -> Option<EngineHandle> {
             ""
         }
     ));
-    let Some(path) = launch.config.clone().or_else(store::default_path) else {
-        return fail(
-            tray::DeviceStatus::ConfigProblem,
-            "no home directory for the config".into(),
-        );
+
+    let path = launch.config.clone().or_else(store::default_path);
+    let (config, writable, problem) = match &path {
+        None => (
+            empty_config(),
+            false,
+            Some("no home directory for the config".to_owned()),
+        ),
+        Some(p) => match store::load(p) {
+            Ok(c) => {
+                say(&format!(
+                    "config {}: {} device(s), {} mapping(s)",
+                    p.display(),
+                    c.devices.len(),
+                    c.mappings.len()
+                ));
+                (c, true, None)
+            }
+            Err(ConfigError::Missing(_)) => {
+                say(&format!("no config at {} yet: starting empty", p.display()));
+                (empty_config(), true, None)
+            }
+            Err(e) => (
+                empty_config(),
+                false,
+                Some(format!("config not loaded: {e}")),
+            ),
+        },
     };
-    let config: Config = match store::load(&path) {
-        Ok(c) => c,
-        Err(e) => {
-            return fail(
-                tray::DeviceStatus::ConfigProblem,
-                format!("config not loaded: {e}"),
+    if let Some(p) = &problem {
+        say(p);
+    }
+    let mut initial = AppState::new(&config);
+    initial.problem = problem;
+    let state = Arc::new(Mutex::new(initial));
+
+    let engine = match Hid::new() {
+        Ok(bus) => {
+            let sink = Arc::new(AppSink {
+                log,
+                state: state.clone(),
+                app: app.clone(),
+                status: status.clone(),
+                dry_run: launch.dry_run,
+            });
+            Some(
+                Engine::new(
+                    bus,
+                    &config,
+                    executor(launch.dry_run),
+                    Arc::new(frontmost),
+                    sink,
+                    Options::default(),
+                )
+                .spawn(),
             )
         }
-    };
-    say(&format!(
-        "config {}: {} device(s), {} mapping(s)",
-        path.display(),
-        config.devices.len(),
-        config.mappings.len()
-    ));
-    let bus = match Hid::new() {
-        Ok(b) => b,
         Err(e) => {
-            return fail(
-                tray::DeviceStatus::UsbUnavailable,
-                format!("USB HID unavailable: {e}"),
-            )
+            say(&format!("USB HID unavailable: {e}"));
+            let mut s = state.lock().unwrap_or_else(|e| e.into_inner());
+            s.problem = Some(format!("USB HID unavailable: {e}"));
+            None
         }
     };
-    let sink = Arc::new(AppSink {
-        log,
-        names: config
-            .devices
-            .iter()
-            .map(|d| (d.serial.clone(), d.name.clone()))
-            .collect(),
-        connected: Mutex::new(Vec::new()),
+    let shared = Shared {
+        path,
+        config: Mutex::new(config),
+        writable,
+        state,
+        engine,
+        app,
         status,
         dry_run: launch.dry_run,
-    });
-    sink.show(&[]);
-    let engine = Engine::new(
-        bus,
-        &config,
-        executor(launch.dry_run),
-        Arc::new(frontmost),
-        sink,
-        Options::default(),
-    );
-    Some(engine.spawn())
+    };
+    let snapshot = shared
+        .state
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    shared.publish(&snapshot);
+    shared
 }
 
 #[cfg(test)]

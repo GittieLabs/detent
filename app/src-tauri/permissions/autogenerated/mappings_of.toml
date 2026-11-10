@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-mappings-of"
+description = "Enables the mappings_of command without any pre-configured scope."
+commands.allow = ["mappings_of"]
+
+[[permission]]
+identifier = "deny-mappings-of"
+description = "Denies the mappings_of command without any pre-configured scope."
+commands.deny = ["mappings_of"]
