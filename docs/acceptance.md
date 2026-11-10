@@ -156,4 +156,6 @@ Needs a signed build (`just build-dev`) with at least one paired board on releas
 5. Edits stick. Change one mapping, remove another, and relaunch Detent: Mappings shows the same set, and an app scoped mapping (from the config or the template) still shows its badge until removed.
 
 Results:
+- Early check of task 4, 2026-11-10, signed build at `26100e2` on Keith's config:
+  - Step 4: `PASS`, Keith. The second board (`E072A1FC849C`) paired through the wizard as `Detent Dev 2` (suggested name, D-073) with the template box ticked. Detent logged `config reloaded: 2 device(s), 5 mapping(s)` at pairing, then `2 device(s), 10 mapping(s)` on Finish. Its button 2 stepped the volume 38 -> 44 -> 50% (dispatch 0.4 and 3.4 ms).
 
