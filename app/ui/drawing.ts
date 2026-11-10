@@ -4,7 +4,7 @@
 // (`app_state::ControlView`, D-081).
 
 import type { AppState, ControlView, Mapping, PairedUnit, Scope, Trigger } from "./api";
-import { type AppName, actionText, idName } from "./describe";
+import { type AppName, actionText, idName, triggerText } from "./describe";
 import { el } from "./dom";
 
 export interface DrawOptions {
@@ -36,6 +36,15 @@ interface Row {
   onDevice: string | null;
 }
 
+/** One cell per trigger the control can fire (the Rust side lists them). */
+function cellsOf(c: ControlView, name?: string): Cell[] {
+  return c.triggers.map((trigger) => ({
+    label: name && c.triggers.length === 1 ? name : triggerText(trigger),
+    control: c,
+    trigger,
+  }));
+}
+
 /** The encoder's push switch: a button the drawing shows on the knob's row. */
 const isPush = (c: ControlView) => c.type === "button" && c.label === "Encoder push";
 
@@ -50,10 +59,7 @@ function rowsOf(unit: PairedUnit): { title: string; rows: Row[] }[] {
       rows: buttons.map((c) => ({
         name: c.label,
         controls: [c],
-        cells: [
-          { label: "Press", control: c, trigger: "press" },
-          { label: "Long press", control: c, trigger: "long_press" },
-        ],
+        cells: cellsOf(c),
         onDevice: null,
       })),
     });
@@ -68,12 +74,10 @@ function rowsOf(unit: PairedUnit): { title: string; rows: Row[] }[] {
         const onDevice = controls.every((x) => x.handled_by_device)
           ? `Turn: volume${sw ? " · Push: mute" : ""}, on the device`
           : null;
-        const cells: Cell[] = [];
-        if (!c.handled_by_device) {
-          cells.push({ label: "Turn left", control: c, trigger: "counterclockwise" });
-          cells.push({ label: "Turn right", control: c, trigger: "clockwise" });
-        }
-        if (sw && !sw.handled_by_device) cells.push({ label: "Push", control: sw, trigger: "press" });
+        const cells: Cell[] = [
+          ...(c.handled_by_device ? [] : cellsOf(c)),
+          ...(sw && !sw.handled_by_device ? cellsOf(sw, "Push") : []),
+        ];
         return { name: c.label, controls, cells, onDevice };
       }),
     });
@@ -85,7 +89,7 @@ function rowsOf(unit: PairedUnit): { title: string; rows: Row[] }[] {
         {
           name: push.label,
           controls: [push],
-          cells: [{ label: "Press", control: push, trigger: "press" }],
+          cells: cellsOf(push),
           onDevice: push.handled_by_device ? "Handled on the device" : null,
         },
       ],
@@ -133,9 +137,20 @@ function cellView(cell: Cell, unit: PairedUnit, opts: DrawOptions): HTMLElement 
       scopeName(m.scope, appName),
     );
   });
+  // The cell opens its own control and trigger, so an empty one can be
+  // filled (an encoder row holds two controls: the knob and its push).
   return el(
     "div",
-    { class: "cell", title: mine.length ? undefined : `${cell.label}: nothing mapped` },
+    {
+      class: onPick ? "cell pickable" : "cell",
+      title: mine.length ? undefined : `${cell.label}: nothing mapped`,
+      onClick: onPick
+        ? (e) => {
+            e.stopPropagation();
+            onPick(cell.control, cell.trigger, "everywhere");
+          }
+        : undefined,
+    },
     el("span", { class: "cell-label" }, cell.label),
     el("span", { class: "chips" }, ...(chips.length ? chips : [el("span", { class: "none" }, "—")])),
   );

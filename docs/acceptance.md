@@ -207,4 +207,6 @@ Needs a signed build (`just build-dev`), a paired board on release firmware with
 5. Exit criterion: display unplugged. With the dashboard showing on the secondary display, unplug that display. Detent doesn't crash, and the dashboard moves to the main display (or hides) rather than being stranded off screen. Plug it back in: the next press shows it there again.
 
 Results:
+- Early checks of tasks 2 and 3, 2026-11-10, signed builds on Keith's config, `Detent Dev` on the M6 firmware:
+  - Step 3: `PASS`, Keith. Switching the board to Mapped and back logged `device Mode` Menu, Mapped, Menu, Volume with no replug, and Mappings followed. In Mapped mode he mapped Turn left and Turn right to volume down and up by 10% (one action per detent in the log) and Push to mute (`button 6 press -> mute_toggle`); the push's long press still opened the device menu. His first try couldn't reach Push: empty cells weren't clickable, now fixed.
 

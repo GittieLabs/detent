@@ -645,7 +645,10 @@ fn mappings_and_controls_cross_to_the_window_as_the_ui_expects() {
     let json = serde_json::to_value(&s.paired[0].controls[0]).unwrap();
     assert_eq!(
         json,
-        serde_json::json!({ "id": 1, "type": "button", "label": "Button 1", "handled_by_device": false })
+        serde_json::json!({
+            "id": 1, "type": "button", "label": "Button 1", "handled_by_device": false,
+            "triggers": ["press", "long_press"]
+        })
     );
 }
 
@@ -908,4 +911,60 @@ fn the_controls_follow_an_encoder_mode_change() {
         mode: EncoderMode::Menu,
     }));
     assert_eq!(handled(&s), [6, 5], "Menu: the device has them");
+}
+
+// Mapped encoder mappings (M6): each control says which triggers it can fire.
+
+#[test]
+fn each_control_lists_the_triggers_it_can_fire() {
+    let s = seen(EncoderMode::Mapped);
+    let triggers = |id: u8| {
+        s.paired[0]
+            .controls
+            .iter()
+            .find(|c| c.id == id)
+            .unwrap()
+            .triggers
+            .clone()
+    };
+    assert_eq!(triggers(1), [Trigger::Press, Trigger::LongPress]);
+    assert_eq!(triggers(5), [Trigger::Counterclockwise, Trigger::Clockwise]);
+    // The push switch's long press opens the device menu in every mode.
+    assert_eq!(triggers(6), [Trigger::Press]);
+}
+
+#[test]
+fn encoder_mappings_are_taken_in_mapped_mode_only() {
+    let turn = |trigger| Mapping {
+        device: PAIRED.into(),
+        control: 5,
+        trigger,
+        scope: Scope::Everywhere,
+        action: Action::VolumeUp { step: 0.02 },
+    };
+    let mapped = seen(EncoderMode::Mapped);
+    let controls = &mapped.paired[0].controls;
+    let c = app_state::set_mapping(&config(), controls, turn(Trigger::Clockwise)).unwrap();
+    assert!(c.mappings.contains(&turn(Trigger::Clockwise)));
+    assert_eq!(
+        app_state::set_mapping(&config(), controls, turn(Trigger::Press)),
+        Err(EditError::WrongTrigger(5))
+    );
+    let mut push = turn(Trigger::LongPress);
+    push.control = 6;
+    assert_eq!(
+        app_state::set_mapping(&config(), controls, push),
+        Err(EditError::WrongTrigger(6)),
+        "the long press opens the device menu"
+    );
+
+    let volume = seen(EncoderMode::Volume);
+    assert_eq!(
+        app_state::set_mapping(
+            &config(),
+            &volume.paired[0].controls,
+            turn(Trigger::Clockwise)
+        ),
+        Err(EditError::HandledByDevice(5))
+    );
 }

@@ -31,6 +31,9 @@ pub struct ControlView {
     /// The device handles it itself (the encoder and its push switch in
     /// Volume and Menu modes), so it can't be mapped.
     pub handled_by_device: bool,
+    /// The triggers it can fire, in the order the editor offers them. The
+    /// push switch has no long press: that opens the device menu.
+    pub triggers: Vec<Trigger>,
 }
 
 /// A unit's controls from its HELLO, in HELLO order.
@@ -41,18 +44,32 @@ pub fn controls_of(pid: u16, hello: &Hello) -> Vec<ControlView> {
         .controls
         .iter()
         .map(|c| {
-            let (kind, label, encoderish) = match c.kind {
-                ControlKind::Encoder => (ControlType::Encoder, "Encoder".to_owned(), true),
-                ControlKind::Button if Some(c.id) == push => {
-                    (ControlType::Button, "Encoder push".to_owned(), true)
-                }
-                ControlKind::Button => (ControlType::Button, format!("Button {}", c.id), false),
+            let (kind, label, encoderish, triggers) = match c.kind {
+                ControlKind::Encoder => (
+                    ControlType::Encoder,
+                    "Encoder".to_owned(),
+                    true,
+                    vec![Trigger::Counterclockwise, Trigger::Clockwise],
+                ),
+                ControlKind::Button if Some(c.id) == push => (
+                    ControlType::Button,
+                    "Encoder push".to_owned(),
+                    true,
+                    vec![Trigger::Press],
+                ),
+                ControlKind::Button => (
+                    ControlType::Button,
+                    format!("Button {}", c.id),
+                    false,
+                    vec![Trigger::Press, Trigger::LongPress],
+                ),
             };
             ControlView {
                 id: c.id,
                 kind,
                 label,
                 handled_by_device: encoderish && device_mode,
+                triggers,
             }
         })
         .collect()
@@ -604,14 +621,7 @@ pub fn set_mapping(
     if control.handled_by_device {
         return Err(EditError::HandledByDevice(mapping.control));
     }
-    let fits = match control.kind {
-        ControlType::Button => matches!(mapping.trigger, Trigger::Press | Trigger::LongPress),
-        ControlType::Encoder => matches!(
-            mapping.trigger,
-            Trigger::Clockwise | Trigger::Counterclockwise
-        ),
-    };
-    if !fits {
+    if !control.triggers.contains(&mapping.trigger) {
         return Err(EditError::WrongTrigger(mapping.control));
     }
     mapping.scope.check().map_err(EditError::Invalid)?;

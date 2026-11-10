@@ -428,7 +428,7 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
     const d = draft;
     const pendingApp = d.scope !== "everywhere" && d.scope.app === "";
     const saved = pendingApp ? undefined : findMapping(unit, c.id, d.trigger, d.scope);
-    const triggers: Trigger[] = c.type === "encoder" ? ["clockwise", "counterclockwise"] : ["press", "long_press"];
+    const triggers: Trigger[] = c.triggers;
 
     const save = () => {
       if (pendingApp) {
@@ -540,7 +540,7 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
     }
     /** A row opens its first trigger, Everywhere; a chip opens its own mapping. */
     const pick = (c: ControlView, t?: Trigger, scope?: Scope) => {
-      const nextTrigger = t ?? (c.type === "encoder" ? "clockwise" : "press");
+      const nextTrigger = t ?? c.triggers[0] ?? "press";
       const nextWhere = scope ?? "everywhere";
       if (selected !== c.id || trigger !== nextTrigger || where !== nextWhere) {
         recordFresh = true;

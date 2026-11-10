@@ -10,6 +10,7 @@ export interface ControlView {
   type: "button" | "encoder";
   label: string; // "Button 1", "Encoder", "Encoder push"
   handled_by_device: boolean;
+  triggers: Trigger[]; // what it can fire, in the editor's order
 }
 
 /** Everywhere, or only while this bundle ID is frontmost. */
