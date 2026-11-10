@@ -357,6 +357,8 @@ impl<B: Bus> Devices<B> {
         for c in &channels {
             let serial = c.serial.as_deref().unwrap_or("");
             if !serial.is_empty() && self.is_ignored(c, serial) {
+                // Ignored: no longer news (reported again if it's un-ignored).
+                self.unknown_seen.remove(&c.path);
                 continue;
             }
             if serial.is_empty() || !self.is_paired(c, serial) {

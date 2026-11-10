@@ -861,3 +861,20 @@ fn an_unknown_unit_leaving_is_reported() {
     );
     assert_eq!(r.at(2.0), vec![], "reported once");
 }
+
+#[test]
+fn an_unignored_unit_is_news_again() {
+    let mut r = Rig::new(&[], &[]);
+    r.bus.attach(VID, PID, Some(OTHER));
+    let unknown = DeviceEvent::Unknown {
+        vid: VID,
+        pid: PID,
+        serial: Some(OTHER.into()),
+    };
+    assert_eq!(r.at(0.0), vec![unknown.clone()]);
+    r.devices.set_lists(&[], &[ignored(OTHER)]);
+    assert_eq!(r.at(0.1), vec![], "ignoring it is quiet");
+    r.devices.set_lists(&[], &[]);
+    assert_eq!(r.at(0.2), vec![unknown], "un-ignoring it reports it again");
+    assert_eq!(r.bus.opens(), 0);
+}
