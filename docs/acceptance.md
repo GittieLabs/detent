@@ -108,3 +108,18 @@ Results:
 - Step 7: `PASS`, Keith. In Safari, button 1 toggled mute 8 times and never opened Mail; in the Chrome app it opened Mail. Frontmost app tracking works in the real app.
 - Step 8: `PASS`, Keith. Unplug was logged at once as a link error; the tray showed no device. Replug: connected and a HELLO 12 ms later, then button 2 stepped the volume with no relaunch.
 - Engine HIL, run by Claude on 2026-11-09, build `9b595f9`: PASS. Debug firmware flashed (4 of 4 regions verified); the app ran `--dry-run` with the example config; `ctl-probe --inject` replayed presses of buttons 1 to 3 and a press and long press of button 4. The app logged each against the frontmost app (Claude) and resolved it: 1 to `open_app com.apple.mail`, 2 to `volume_up 6%`, 3 to `volume_down 6%`, 4 to the Finder AppleScript, 4 long to `volume_set 25%`; each recorded (dry run), dispatch 0.2 to 0.7 ms. Nothing ran. Three HELLOs were acked (the app's REQUEST_HELLO and the probe's, which the app also sees). Release firmware reflashed (4 of 4 verified); TEST_INJECT produced no BUTTON on it. Not an acceptance step; steps 1 to 8 still need Keith.
+
+## M3
+
+Needs a signed build (`just build-dev`), the board on release firmware, and Detent's config moved aside so it starts empty (`mv ~/Library/Application\ Support/Detent/config.json{,.bak}`). Steps 2 and 3 are the exit criteria.
+
+1. Devices screen. Open Detent from the tray. The Devices screen shows no paired device and a Pair new device button. Close the window: Detent keeps running in the menu bar.
+2. Exit criterion: pair in under 2 minutes. Start a timer, click Pair new device, and follow the wizard with no docs: the board appears as a candidate, pressing one of its buttons picks it, name it, finish. Stop the timer: under 2 minutes. The board's LED goes solid and the OLED shows `USB: paired`; the Devices screen shows it connected with its firmware version.
+3. Exit criterion: reboot. Turn on launch at login in the tray, restart the Mac, and log in without touching Detent. Detent is in the menu bar, the board is connected, and a mapped button works.
+4. Sleep and wake. With the board connected, sleep the Mac (Apple menu, Sleep), wait 30 s, wake it. Within a few seconds of waking the board is connected again and a mapped button works, with no relaunch.
+5. Tray. The tray shows the connection state, and Pause stops presses running anything (the log still shows them) until it's turned off, including across a relaunch. Plug in a second, unpaired unit if one is available: the tray shows "new device found" and it opens the wizard. Unplug and replug: state updates without a relaunch.
+6. Ignore. In the wizard, Ignore a candidate (or an unpaired unit). It moves to the Ignored list and never appears as a candidate again until un-ignored.
+
+Results:
+
+- (none yet)

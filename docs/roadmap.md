@@ -57,7 +57,7 @@ Exit criteria:
 - [x] The encoder in Volume mode moves the macOS volume with `ctl-probe` closed (manual, `acceptance.md`). Keith confirmed 2026-11-07.
 - [x] Codec rejects malformed reports without panicking (proptest in `cargo test`). Both directions, 2048 cases per property, 2026-11-07.
 
-## M2 Headless engine (current)
+## M2 Headless engine (done 2026-11-09)
 
 Goal: the app turns device events into Mac actions with no UI. The devices module opens allowlisted units and tracks heartbeats; the router picks one mapping per event (app scope, then Everywhere); three actions run (Open app, Volume, Run AppleScript; Open dashboard is deferred, D-055), all driven by a hand written JSON config. MockTransport and RecordingExecutor make the whole pipeline testable without hardware.
 
@@ -85,14 +85,31 @@ Exit criteria:
 - [x] Router and codec unit tests pass; integration tests pass against MockTransport. Passed 2026-11-09 in CI (`3bc5a3b`): router, codec, transport, devices, and engine pipeline tests.
 - [x] A real button opens Mail (signed build, `acceptance.md` M2). Keith, 2026-11-09: quit Mail, pressed button 1, Mail opened (step 6).
 
-## M3 App shell and pairing
+## M3 App shell and pairing (current)
 
-Tray app, launch at login, sleep and wake recovery, Devices screen, pairing wizard, ignore list, persistence with schema version.
+Goal: Detent is a real background app. It starts at login, survives sleep and wake, and a new device is paired from the Devices screen through a short wizard, with no hand written config. Tray app, launch at login, sleep and wake recovery, Devices screen, pairing wizard, ignore list, persistence with schema version.
+
+Riskiest unknown: launch at login and wake recovery on a signed build. Whether `tauri-plugin-autostart` really uses SMAppService (as `product.md` assumes) or a LaunchAgent, and whether hidapi handles survive sleep or must be reopened. Both only show up on Keith's Mac, so they go first.
+
+Carried over (hardware Keith doesn't have yet; not an M3 exit criterion):
+
+- [ ] Plug in a second board and confirm a different USB serial (`acceptance.md` M1 step 2). Waits on a second XIAO.
+
+Tasks:
+
+- [ ] Login item and wake recovery: launch at login through SMAppService (check what `tauri-plugin-autostart` uses; call `SMAppService.mainApp` from `macos/` if it doesn't, decisions row either way), a tray toggle for it, and a wake hook (NSWorkspace did wake notification, in `macos/`) that makes `devices` close and reopen every unit at once instead of waiting out the 6 s silence. Tests: devices integration test for the wake reopen (MockBus); unit test for the toggle state; `acceptance.md` M3 steps 3 and 4 (reboot, sleep and wake) on a signed build.
+- [ ] Config writes and live reload: `store::save` serializes the config and writes it atomically (temp file, then rename), keeping field order and the v1 schema; the engine takes a new config without a relaunch, keeping connected units that are still allowed and closing ones that aren't. Tests: round trip (parse, save, parse equal), a failed write leaves the old file intact, engine integration test reloading a config that pairs, unpairs, and ignores units.
+- [ ] Pairing identification (D-066): while the wizard is open, `devices` may open unpaired Detent units (Detent VID and PID only, not ignored) read only, send REQUEST_HELLO but never HELLO_ACK, and report each one's HELLO and first BUTTON, closing them when the wizard ends. Nothing they send reaches the router. Tests: devices integration tests (candidate identified by a press, never routed, closed on wizard end, ignored units still never opened, a paired unit unaffected).
+- [ ] App state and IPC: a Rust `AppState` the engine sink updates (paired units with name, model, firmware, connected; unknown units; ignored units; paused; last error) and Tauri commands for the UI (get state, start and end pairing, pair with a name, rename, unpair, ignore, unignore, pause), each writing the config through `store::save` and reloading the engine; state changes pushed to the UI as one event. The settings window gets IPC; nothing else does (dashboards stay without it, D-009). Tests: unit tests for `AppState` updates from records and for each command's config edit.
+- [ ] Devices screen: `app/ui/` in plain TypeScript (D-065). Paired units with name, model, firmware, and a live connected dot; rename and unpair; the Ignored list with un-ignore; Pair new device. Window closes to hide (already true). Tests: `tsc --noEmit`; the logic stays in Rust and is tested there; `acceptance.md` M3 step 1.
+- [ ] Pairing wizard: the four steps in `product.md` (plug in and list candidates, press a button to pick one, name it prefilled from the model, done with the starter template checkbox) plus Ignore on a candidate. Starter template: PLACEHOLDER until Keith decides (open question). Tests: `tsc --noEmit`; `acceptance.md` M3 step 2 (fresh device pairs in under 2 minutes, timed).
+- [ ] Tray: status dot (connected, none, problem) in the menu, Pause toggle (input is logged but nothing runs; survives relaunch), a "new device found" line that opens the wizard, Open Detent, Quit. Tests: unit tests for the labels and the engine's pause; `acceptance.md` M3 step 5.
+- [ ] M3 acceptance pass on a signed build: `just build-dev`, an empty config, and the steps in `acceptance.md` M3.
 
 Exit criteria:
 
-- A fresh device pairs in under 2 minutes.
-- After reboot the device works with no user action.
+- [ ] A fresh device pairs in under 2 minutes (signed build, `acceptance.md` M3 step 2).
+- [ ] After reboot the device works with no user action (signed build, `acceptance.md` M3 step 3).
 
 ## M4 Mappings and Test
 
@@ -149,6 +166,7 @@ Multiple connected devices, Bluetooth transport, then Windows.
 - [x] Homepage container URL, once it's running. Not needed: Keith dropped the Homepage use on 2026-11-09 (D-055).
 - [x] M2's summary said "Open URL", which isn't in the fixed v1 action list. Keith, 2026-11-09: defer it; Open dashboard should open the app's own dashboard instead (D-055).
 - [ ] What should the app's dashboard show? It's the target of the Open dashboard action (a web page shown in an app window, M6). Until decided, Open dashboard isn't built and `product.md` still describes it as a URL.
+- [ ] Starter template for the pairing wizard's last step: which mappings a fresh `Detent Dev` gets when the box is ticked (for example button 1 Open Mail, 2 and 3 volume, 4 mute, encoder volume). Placeholder in M3: an empty template, with the checkbox shown but explained as "nothing yet".
 - [ ] Pin wiring on the first device: which XIAO pins carry each button, the encoder A, B, and switch, and the OLED's I2C. `firmware/include/board_pins.h` uses a PLACEHOLDER map until then.
 - [ ] Model name for the USB product string `Detent <model name>`. Placeholder `Detent Dev`.
 - [ ] `protocol.md` says changes need a version bump, but v1 is a draft until the end of M1. May the draft change at version 1 (still one atomic commit of doc, crate, and header) until the freeze? Placeholder: yes, version stays 1 until the freeze. Moot since the 2026-11-07 freeze: the placeholder was followed, and every change from now on bumps the version. Keith to confirm and tick.
