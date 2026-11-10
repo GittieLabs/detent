@@ -23,18 +23,24 @@ export function el(tag: string, props: Props = {}, ...children: Child[]): HTMLEl
   if (props.ariaLabel) node.setAttribute("aria-label", props.ariaLabel);
   if (props.type) node.setAttribute("type", props.type);
   if (props.disabled) node.setAttribute("disabled", "");
-  if (props.value !== undefined && node instanceof HTMLInputElement) node.value = props.value;
   if (props.checked && node instanceof HTMLInputElement) node.checked = true;
   if (props.onClick) node.addEventListener("click", props.onClick);
   if (props.onKey) node.addEventListener("keydown", props.onKey);
+  const field =
+    node instanceof HTMLInputElement ||
+    node instanceof HTMLSelectElement ||
+    node instanceof HTMLTextAreaElement
+      ? node
+      : null;
   const onInput = props.onInput;
-  if (onInput && node instanceof HTMLInputElement) {
-    node.addEventListener("input", () => onInput(node.value));
-  }
+  if (onInput && field) field.addEventListener("input", () => onInput(field.value));
   for (const child of children) {
     if (child === null || child === undefined || child === false) continue;
     node.append(typeof child === "string" ? document.createTextNode(child) : child);
   }
+  // After the children, so a select's options exist to be chosen.
+  if (props.value !== undefined && field) field.value = props.value;
+  if (props.value !== undefined && node instanceof HTMLOptionElement) node.value = props.value;
   return node;
 }
 

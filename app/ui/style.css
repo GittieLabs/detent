@@ -272,3 +272,144 @@ button[disabled] {
   padding-left: 18px;
   font-weight: normal;
 }
+
+/* Tabs: Devices, Mappings, Test */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  padding: 3px;
+  background: var(--line);
+  border-radius: 8px;
+  width: max-content;
+}
+
+.tabs[hidden] {
+  display: none;
+}
+
+.tab {
+  border: none;
+  background: transparent;
+  padding: 4px 14px;
+  border-radius: 6px;
+}
+
+.tab.active {
+  background: var(--card);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.15);
+  font-weight: 600;
+}
+
+.unit-picker {
+  font: inherit;
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+}
+
+/* The device drawing */
+
+.device {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.keys {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.knob-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 150px;
+}
+
+.control {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  min-height: 64px;
+  transition: background 120ms, border-color 120ms;
+}
+
+button.control:hover {
+  border-color: var(--accent);
+}
+
+.control.knob {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.control.push {
+  width: 150px;
+  align-items: center;
+  text-align: center;
+  min-height: 0;
+}
+
+.control.device-owned {
+  opacity: 0.55;
+  border-style: dashed;
+  cursor: default;
+}
+
+.control.selected {
+  border: 2px solid var(--accent);
+  padding: 9px 11px;
+}
+
+.control.lit {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+.control-name {
+  font-weight: 600;
+}
+
+.control-does {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.control.lit .control-does {
+  color: var(--accent-text);
+}
+
+.badge {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--banner);
+  border: 1px solid var(--banner-line);
+  color: var(--text);
+}
