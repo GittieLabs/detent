@@ -39,6 +39,13 @@ fn invalid_actions() -> Vec<(Action, &'static str)> {
             },
             "timeout_ms",
         ),
+        (
+            Action::SendShortcut {
+                keys: "cmd+banana".into(),
+            },
+            "keys",
+        ),
+        (Action::SendShortcut { keys: "".into() }, "keys"),
     ]
 }
 
@@ -247,4 +254,45 @@ fn system_executor_runs_applescript() {
         timeout_ms: 5000,
     };
     assert_eq!(SystemExecutor.run(&action), Ok(Done::Script("2".into())));
+}
+
+// Send shortcut (M5).
+
+#[test]
+fn a_shortcut_is_recorded_in_dry_run_and_never_sent() {
+    let rec = RecordingExecutor::default();
+    let a = Action::SendShortcut {
+        keys: "cmd+shift+e".into(),
+    };
+    assert_eq!(rec.run(&a), Ok(Done::Recorded));
+    assert_eq!(rec.calls(), vec![a]);
+}
+
+#[test]
+fn shortcut_results_read_well() {
+    assert_eq!(
+        Done::Sent("cmd+shift+e".into()).to_string(),
+        "sent cmd+shift+e"
+    );
+    assert_eq!(
+        ActionError::Keys(detent_lib::keys::Refusal::SecureInput).to_string(),
+        "Secure Input is on (a password field has focus), so macOS blocks sent keys"
+    );
+}
+
+#[test]
+fn shortcuts_are_refused_before_any_key_without_the_grant_or_with_secure_input() {
+    use detent_lib::keys::{refusal, Refusal};
+    assert_eq!(refusal(false, false), Some(Refusal::NotTrusted));
+    assert_eq!(
+        refusal(false, true),
+        Some(Refusal::NotTrusted),
+        "the grant first"
+    );
+    assert_eq!(refusal(true, true), Some(Refusal::SecureInput));
+    assert_eq!(refusal(true, false), None);
+    assert_eq!(
+        Refusal::NotTrusted.to_string(),
+        "Detent needs Accessibility to send shortcuts"
+    );
 }

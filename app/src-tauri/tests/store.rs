@@ -477,3 +477,33 @@ fn paused_defaults_off_and_is_saved() {
     let text = store::to_json(&example()).unwrap();
     assert!(text.contains("\"paused\": false"), "{text}");
 }
+
+#[test]
+fn send_shortcut_parses_validates_and_saves() {
+    let json = r#"{ "version": 1,
+      "devices": [{ "name": "Desk", "vid": "0x303A", "pid": "0x8FDE", "serial": "E072A1FC4EDC" }],
+      "mappings": [{ "device": "E072A1FC4EDC", "control": 3, "trigger": "press",
+                     "scope": { "app": "com.electron.plasticity" },
+                     "action": { "type": "send_shortcut", "keys": "e" } }] }"#;
+    let c = parse(json).unwrap();
+    assert_eq!(
+        c.mappings[0].action,
+        Action::SendShortcut { keys: "e".into() }
+    );
+    let text = store::to_json(&c).unwrap();
+    assert!(text.contains("\"type\": \"send_shortcut\""), "{text}");
+    assert_eq!(parse(&text).unwrap(), c);
+
+    assert_err(
+        &json.replace(r#""keys": "e""#, r#""keys": "cmd+banana""#),
+        "mappings[0].action.keys",
+    );
+    assert_err(
+        &json.replace(r#""keys": "e""#, r#""keys": """#),
+        "mappings[0].action.keys",
+    );
+    assert_err(
+        &json.replace(r#""keys": "e""#, r#""keys": "e", "extra": 1"#),
+        "extra",
+    );
+}

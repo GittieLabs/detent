@@ -40,6 +40,7 @@ Two mappings with the same device, control, trigger, and scope are an error: Det
 | `volume_up`, `volume_down` | `step` (optional, more than 0 up to 1, default `0.0625`, one key press) | Changes the output volume. |
 | `volume_set` | `level` (0 to 1) | Sets the output volume. |
 | `mute_toggle` | none | Toggles mute. |
+| `send_shortcut` | `keys`: a combo such as `cmd+shift+e`, or up to 4 separated by spaces (`cmd+k cmd+s`). Modifiers `cmd`, `option`, `control`, `shift`; keys are letters, digits, `f1` to `f12`, `space`, `return`, `escape`, `tab`, `delete`, arrows, and punctuation names (`minus`, `comma`...), on US key positions (D-082) | Sends the keys to the frontmost app. Needs Accessibility; refused, sending nothing, while Secure Input is on (a password field has focus). |
 | `applescript` | `source`, `timeout_ms` (optional, 100 to 60000, default 5000) | Runs AppleScript. The first run against an app shows macOS's Automation prompt naming Detent. |
 
 Open dashboard is deferred until the app's dashboard is defined (D-055).

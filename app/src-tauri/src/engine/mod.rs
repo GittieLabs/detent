@@ -85,6 +85,7 @@ pub fn describe(action: &Action) -> String {
         Action::VolumeDown { step } => format!("volume_down {}%", pct(*step)),
         Action::VolumeSet { level } => format!("volume_set {}%", pct(*level)),
         Action::MuteToggle => "mute_toggle".into(),
+        Action::SendShortcut { keys } => format!("send_shortcut {keys}"),
         Action::AppleScript { source, .. } => {
             let first = source.lines().next().unwrap_or("");
             let more = if source.lines().nth(1).is_some() {

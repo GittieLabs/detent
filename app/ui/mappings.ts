@@ -33,6 +33,7 @@ interface Draft {
   levelPct: string;
   source: string;
   timeoutS: string;
+  keys: string; // canonical shortcut, recorded in the shortcut field
 }
 
 const trim = (n: number) => String(Math.round(n * 100) / 100);
@@ -47,6 +48,7 @@ function draftFrom(control: number, trigger: Trigger, m: Mapping | undefined): D
     levelPct: "50",
     source: "",
     timeoutS: "5",
+    keys: "",
   };
   const a = m?.action;
   if (!a) return d;
@@ -54,6 +56,7 @@ function draftFrom(control: number, trigger: Trigger, m: Mapping | undefined): D
   if (a.type === "open_app") d.bundleId = a.bundle_id;
   if (a.type === "volume_up" || a.type === "volume_down") d.stepPct = trim(a.step * 100);
   if (a.type === "volume_set") d.levelPct = trim(a.level * 100);
+  if (a.type === "send_shortcut") d.keys = a.keys;
   if (a.type === "applescript") {
     d.source = a.source;
     d.timeoutS = trim(a.timeout_ms / 1000);
@@ -82,6 +85,8 @@ function actionFrom(d: Draft): { action: Action } | { error: string } | null {
     }
     case "mute_toggle":
       return { action: { type: "mute_toggle" } };
+    case "send_shortcut":
+      return d.keys ? { action: { type: "send_shortcut", keys: d.keys } } : { error: "Record a shortcut." };
     case "applescript": {
       if (d.source.trim() === "") return { error: "Write the script to run." };
       const s = num(d.timeoutS);

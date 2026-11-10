@@ -104,6 +104,10 @@ pub enum Action {
         level: f32,
     },
     MuteToggle,
+    /// A key combo, or a short sequence, to the frontmost app (D-082).
+    SendShortcut {
+        keys: String,
+    },
     #[serde(rename = "applescript")]
     AppleScript {
         source: String,

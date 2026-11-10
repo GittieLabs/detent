@@ -10,6 +10,53 @@ export const idName: AppName = (id) => id;
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 
+const SYMBOLS: Record<string, string> = { cmd: "⌘", option: "⌥", control: "⌃", shift: "⇧" };
+const KEY_TEXT: Record<string, string> = {
+  space: "Space",
+  return: "↩",
+  tab: "⇥",
+  escape: "⎋",
+  delete: "⌫",
+  forwarddelete: "⌦",
+  left: "←",
+  right: "→",
+  up: "↑",
+  down: "↓",
+  pageup: "⇞",
+  pagedown: "⇟",
+  home: "↖",
+  end: "↘",
+  minus: "-",
+  equal: "=",
+  leftbracket: "[",
+  rightbracket: "]",
+  backslash: "\\",
+  semicolon: ";",
+  quote: "'",
+  comma: ",",
+  period: ".",
+  slash: "/",
+  grave: "`",
+};
+
+/** `cmd+shift+e` as the Mac shows it: ⌘⇧E (modifiers in Apple's order). */
+export function shortcutText(keys: string): string {
+  return keys
+    .trim()
+    .split(/\s+/)
+    .map((combo) => {
+      const parts = combo.toLowerCase().split("+");
+      const key = parts.pop() ?? "";
+      const mods = ["control", "option", "shift", "cmd"]
+        .filter((m) => parts.includes(m))
+        .map((m) => SYMBOLS[m])
+        .join("");
+      const shown = KEY_TEXT[key] ?? (key.length === 1 ? key.toUpperCase() : key.toUpperCase());
+      return mods + shown;
+    })
+    .join(" ");
+}
+
 export function actionText(action: Action, appName: AppName = idName): string {
   switch (action.type) {
     case "open_app":
@@ -22,6 +69,8 @@ export function actionText(action: Action, appName: AppName = idName): string {
       return `Volume set to ${pct(action.level)}`;
     case "mute_toggle":
       return "Mute or unmute";
+    case "send_shortcut":
+      return `Send ${shortcutText(action.keys)}`;
     case "applescript":
       return "Run an AppleScript";
   }

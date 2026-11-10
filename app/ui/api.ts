@@ -101,6 +101,7 @@ export type Action =
   | { type: "volume_down"; step: number }
   | { type: "volume_set"; level: number }
   | { type: "mute_toggle" }
+  | { type: "send_shortcut"; keys: string }
   | { type: "applescript"; source: string; timeout_ms: number };
 
 /** One resolved input (`app_state::InputView`). */

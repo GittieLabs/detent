@@ -122,6 +122,10 @@ impl Action {
             Action::VolumeSet { level } if !(0.0..=1.0).contains(level) => {
                 bad("level", "must be from 0 to 1")
             }
+            Action::SendShortcut { keys } if crate::keys::parse(keys).is_err() => bad(
+                "keys",
+                "must be a shortcut such as cmd+shift+e (up to 4 combos, separated by spaces)",
+            ),
             Action::AppleScript { source, .. } if source.trim().is_empty() => {
                 bad("source", "must not be empty")
             }

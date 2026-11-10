@@ -271,3 +271,41 @@ pub fn canonical(combos: &[Combo]) -> String {
         .collect::<Vec<_>>()
         .join(" ")
 }
+
+/// Why a shortcut wasn't sent. Checked before the first key, so a refused
+/// sequence sends nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Refusal {
+    /// Detent doesn't hold the Accessibility grant.
+    NotTrusted,
+    /// A password field (or similar) has Secure Input on.
+    SecureInput,
+    /// macOS couldn't create a key event.
+    NoEvent,
+}
+
+impl fmt::Display for Refusal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NotTrusted => write!(f, "Detent needs Accessibility to send shortcuts"),
+            Self::SecureInput => write!(
+                f,
+                "Secure Input is on (a password field has focus), so macOS blocks sent keys"
+            ),
+            Self::NoEvent => write!(f, "macOS couldn't create the key event"),
+        }
+    }
+}
+
+impl std::error::Error for Refusal {}
+
+/// Whether to refuse, from the grant and Secure Input: the grant first.
+pub fn refusal(trusted: bool, secure_input: bool) -> Option<Refusal> {
+    if !trusted {
+        Some(Refusal::NotTrusted)
+    } else if secure_input {
+        Some(Refusal::SecureInput)
+    } else {
+        None
+    }
+}

@@ -26,6 +26,8 @@ pub enum Done {
     Muted(bool),
     /// The script finished; its result, trimmed.
     Script(String),
+    /// The shortcut went to the frontmost app (canonical form).
+    Sent(String),
     /// Nothing ran: a recording executor (tests, Dry run).
     Recorded,
 }
@@ -40,6 +42,7 @@ impl fmt::Display for Done {
             Self::Muted(false) => write!(f, "unmuted"),
             Self::Script(out) if out.is_empty() => write!(f, "script finished"),
             Self::Script(out) => write!(f, "script returned {out:?}"),
+            Self::Sent(keys) => write!(f, "sent {keys}"),
             Self::Recorded => write!(f, "recorded (dry run)"),
         }
     }
@@ -55,6 +58,8 @@ pub enum ActionError {
     #[cfg(target_os = "macos")]
     Audio(crate::macos::AudioError),
     Script(ScriptError),
+    /// A shortcut was refused before any key went out.
+    Keys(crate::keys::Refusal),
 }
 
 impl fmt::Display for ActionError {
@@ -66,6 +71,7 @@ impl fmt::Display for ActionError {
             #[cfg(target_os = "macos")]
             Self::Audio(e) => e.fmt(f),
             Self::Script(e) => e.fmt(f),
+            Self::Keys(e) => e.fmt(f),
         }
     }
 }
@@ -134,8 +140,23 @@ impl Executor for SystemExecutor {
             }
             Action::MuteToggle => mute_toggle(),
             Action::AppleScript { source, timeout_ms } => run_applescript(source, *timeout_ms),
+            Action::SendShortcut { keys } => send_shortcut(keys),
         }
     }
+}
+
+/// Sends a shortcut to the frontmost app, or refuses before the first key.
+#[cfg(target_os = "macos")]
+fn send_shortcut(keys: &str) -> Outcome {
+    let combos = crate::keys::parse(keys).map_err(|_| {
+        ActionError::Invalid(
+            Action::SendShortcut { keys: keys.into() }
+                .check_args()
+                .expect_err("checked above"),
+        )
+    })?;
+    crate::macos::post_combos(&combos).map_err(ActionError::Keys)?;
+    Ok(Done::Sent(crate::keys::canonical(&combos)))
 }
 
 #[cfg(target_os = "macos")]

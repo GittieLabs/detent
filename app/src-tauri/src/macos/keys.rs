@@ -3,9 +3,8 @@
 //! were tried for the HUD and macOS 27 ignores them, D-083.)
 
 use std::ffi::c_void;
-use std::fmt;
 
-use crate::keys::Combo;
+use crate::keys::{refusal, Combo, Refusal};
 
 /// An opaque `CGEventRef`.
 #[repr(C)]
@@ -54,31 +53,6 @@ fn modifiers(c: &Combo) -> Vec<(u16, u64)> {
     .collect()
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum KeyPostError {
-    /// Detent doesn't hold the Accessibility grant.
-    NotTrusted,
-    /// A password field (or similar) has Secure Input on.
-    SecureInput,
-    /// CoreGraphics couldn't make an event.
-    NoEvent,
-}
-
-impl fmt::Display for KeyPostError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::NotTrusted => write!(f, "Detent needs Accessibility to send keys"),
-            Self::SecureInput => write!(
-                f,
-                "Secure Input is on (a password field has focus), so macOS blocks sent keys"
-            ),
-            Self::NoEvent => write!(f, "macOS couldn't create the key event"),
-        }
-    }
-}
-
-impl std::error::Error for KeyPostError {}
-
 /// Whether Secure Input is on anywhere: macOS then drops synthetic keys.
 pub fn secure_input_on() -> bool {
     // SAFETY: takes no arguments and only reads system state.
@@ -86,13 +60,13 @@ pub fn secure_input_on() -> bool {
 }
 
 /// Posts one key event with `flags` held.
-fn post_key(code: u16, down: bool, flags: u64) -> Result<(), KeyPostError> {
+fn post_key(code: u16, down: bool, flags: u64) -> Result<(), Refusal> {
     // SAFETY: a null source is allowed; the event is checked for null, used,
     // then released exactly once.
     unsafe {
         let event = CGEventCreateKeyboardEvent(std::ptr::null(), code, down);
         if event.is_null() {
-            return Err(KeyPostError::NoEvent);
+            return Err(Refusal::NoEvent);
         }
         CGEventSetFlags(event, flags);
         CGEventPost(HID_TAP, event);
@@ -103,12 +77,9 @@ fn post_key(code: u16, down: bool, flags: u64) -> Result<(), KeyPostError> {
 
 /// Sends combos to the frontmost app, in order. Checks the grant and Secure
 /// Input first, so a refused sequence sends nothing at all.
-pub fn post_combos(combos: &[Combo]) -> Result<(), KeyPostError> {
-    if !super::accessibility_trusted() {
-        return Err(KeyPostError::NotTrusted);
-    }
-    if secure_input_on() {
-        return Err(KeyPostError::SecureInput);
+pub fn post_combos(combos: &[Combo]) -> Result<(), Refusal> {
+    if let Some(no) = refusal(super::accessibility_trusted(), secure_input_on()) {
+        return Err(no);
     }
     for c in combos {
         let mods = modifiers(c);
