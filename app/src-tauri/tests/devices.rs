@@ -556,3 +556,77 @@ fn waking_with_nothing_open_just_scans() {
     r.devices.woke();
     assert_eq!(r.at(0.2), vec![DeviceEvent::Connected(id(PAIRED))]);
 }
+
+// Live reload (M3): the allowlist and ignore list change without a relaunch.
+
+fn ignored(serial: &str) -> UnitRef {
+    UnitRef {
+        vid: VID,
+        pid: PID,
+        serial: serial.into(),
+    }
+}
+
+#[test]
+fn a_newly_paired_unit_opens_at_once() {
+    let mut r = Rig::new(&[], &[]);
+    r.bus.attach(VID, PID, Some(PAIRED));
+    r.at(0.0); // reported as Unknown
+    r.devices.set_lists(&[entry(PAIRED)], &[]);
+    assert_eq!(r.at(0.1), vec![DeviceEvent::Connected(id(PAIRED))]);
+}
+
+#[test]
+fn an_unpaired_unit_is_closed_and_becomes_news() {
+    let mut r = Rig::new(&[PAIRED], &[]);
+    r.bus.attach(VID, PID, Some(PAIRED));
+    r.at(0.0);
+    r.devices.set_lists(&[], &[]);
+    assert_eq!(
+        r.at(0.1),
+        vec![
+            DeviceEvent::Disconnected {
+                id: id(PAIRED),
+                why: Lost::Unpaired
+            },
+            DeviceEvent::Unknown {
+                vid: VID,
+                pid: PID,
+                serial: Some(PAIRED.into())
+            },
+        ]
+    );
+    assert!(r.devices.connected().is_empty());
+}
+
+#[test]
+fn ignoring_an_open_unit_closes_it_quietly() {
+    let mut r = Rig::new(&[PAIRED], &[]);
+    r.bus.attach(VID, PID, Some(PAIRED));
+    r.at(0.0);
+    r.devices.set_lists(&[entry(PAIRED)], &[ignored(PAIRED)]);
+    assert_eq!(
+        r.at(0.1),
+        vec![DeviceEvent::Disconnected {
+            id: id(PAIRED),
+            why: Lost::Unpaired
+        }]
+    );
+    assert_eq!(r.at(1.5), vec![], "ignored: no reopen, no Unknown");
+}
+
+#[test]
+fn units_still_allowed_are_left_alone() {
+    let mut r = Rig::new(&[PAIRED], &[]);
+    let hid = r.bus.attach(VID, PID, Some(PAIRED));
+    r.at(0.0);
+    hid.push_device(0, &DeviceMessage::Hello(hello()));
+    r.at(0.1);
+    // Renamed and a second unit added: the open one keeps its handle.
+    let mut renamed = entry(PAIRED);
+    renamed.name = "Renamed".into();
+    r.devices.set_lists(&[renamed, entry(SECOND)], &[]);
+    assert_eq!(r.at(0.2), vec![]);
+    assert_eq!(r.bus.opens(), 1);
+    assert_eq!(r.devices.hello(&id(PAIRED)), Some(&hello()));
+}

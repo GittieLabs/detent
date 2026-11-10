@@ -1,5 +1,6 @@
 //! Config schema v1: parsing, validation, and error messages that say where.
 
+use detent_lib::store::{self, Config};
 use detent_lib::store::{
     load, parse, Action, ConfigError, Scope, Trigger, DEFAULT_APPLESCRIPT_TIMEOUT_MS,
     DEFAULT_VOLUME_STEP,
@@ -355,4 +356,110 @@ fn load_reports_a_missing_file_and_bad_contents_with_the_path() {
         e.contains("bad.json") && e.contains("unsupported config version 9"),
         "{e}"
     );
+}
+
+// Saving (M3): canonical JSON, written atomically, validated first.
+
+fn temp_dir(name: &str) -> std::path::PathBuf {
+    let d = std::env::temp_dir().join(format!("detent-store-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    d
+}
+
+fn example() -> Config {
+    store::parse(include_str!("../examples/config.example.json")).expect("example parses")
+}
+
+#[test]
+fn saved_text_parses_back_to_the_same_config() {
+    let config = example();
+    let text = store::to_json(&config).expect("valid config serializes");
+    assert_eq!(store::parse(&text).expect("saved text parses"), config);
+}
+
+#[test]
+fn saved_text_is_canonical_and_readable() {
+    let text = store::to_json(&example()).unwrap();
+    assert!(
+        text.starts_with("{\n  \"version\": 1,\n  \"devices\": ["),
+        "{text}"
+    );
+    assert!(
+        text.contains("\"vid\": \"0x303A\""),
+        "USB IDs stay hex: {text}"
+    );
+    assert!(text.contains("\"pid\": \"0x8FDE\""));
+    assert!(text.contains("\"scope\": \"everywhere\""));
+    assert!(text.contains("\"app\": \"com.apple.Safari\""));
+    assert!(text.contains("\"type\": \"mute_toggle\""));
+    // Defaults are written out, so the file says what will happen.
+    assert!(text.contains("\"step\": 0.0625"), "{text}");
+    assert!(text.contains("\"timeout_ms\": 5000"));
+    assert!(text.ends_with("}\n"));
+    // Saving twice gives the same bytes.
+    assert_eq!(store::to_json(&store::parse(&text).unwrap()).unwrap(), text);
+}
+
+#[test]
+fn save_writes_the_file_creating_its_folder() {
+    let dir = temp_dir("create");
+    let path = dir.join("nested/config.json");
+    store::save(&path, &example()).expect("saves");
+    assert_eq!(store::load(&path).unwrap(), example());
+    let leftovers: Vec<_> = std::fs::read_dir(path.parent().unwrap())
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    assert_eq!(
+        leftovers,
+        vec![std::ffi::OsString::from("config.json")],
+        "no temp file left"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn save_replaces_an_existing_file() {
+    let dir = temp_dir("replace");
+    let path = dir.join("config.json");
+    store::save(&path, &example()).unwrap();
+    let mut smaller = example();
+    smaller.mappings.truncate(1);
+    store::save(&path, &smaller).unwrap();
+    assert_eq!(store::load(&path).unwrap(), smaller);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_invalid_config_is_refused_and_the_file_is_untouched() {
+    let dir = temp_dir("invalid");
+    let path = dir.join("config.json");
+    store::save(&path, &example()).unwrap();
+    let before = std::fs::read(&path).unwrap();
+    let mut bad = example();
+    bad.mappings[0].device = "NOT-LISTED".into();
+    match store::save(&path, &bad) {
+        Err(store::ConfigError::Invalid { path, .. }) => assert_eq!(path, "mappings[0].device"),
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_failed_write_leaves_the_old_file_intact() {
+    let dir = temp_dir("fail");
+    let path = dir.join("config.json");
+    store::save(&path, &example()).unwrap();
+    let before = std::fs::read(&path).unwrap();
+    // Block the temp file's name with a directory, so the write fails.
+    std::fs::create_dir_all(dir.join("config.json.tmp")).unwrap();
+    let mut changed = example();
+    changed.mappings.clear();
+    assert!(matches!(
+        store::save(&path, &changed),
+        Err(store::ConfigError::Io { .. })
+    ));
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    let _ = std::fs::remove_dir_all(&dir);
 }

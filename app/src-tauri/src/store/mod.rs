@@ -114,6 +114,51 @@ pub fn load(path: &Path) -> Result<Config, ConfigError> {
     })
 }
 
+/// The config as Detent writes it (D-069): validated first, then pretty
+/// printed in schema order with two space indents, USB IDs in hex, and
+/// every default written out. Saving the result again gives the same bytes.
+pub fn to_json(config: &Config) -> Result<String, ConfigError> {
+    validate::check(config).map_err(|p| ConfigError::Invalid {
+        path: p.path,
+        message: p.message,
+    })?;
+    let mut text = serde_json::to_string_pretty(config).map_err(|e| ConfigError::Invalid {
+        path: String::new(),
+        message: e.to_string(),
+    })?;
+    text.push('\n');
+    Ok(text)
+}
+
+/// Writes `config` to `path` atomically: to `<path>.tmp` in the same folder,
+/// flushed to disk, then renamed over the old file. A failure at any point
+/// leaves the old file as it was. Creates the folder if needed. An invalid
+/// config is refused before anything is written.
+pub fn save(path: &Path, config: &Config) -> Result<(), ConfigError> {
+    use std::io::Write;
+    let text = to_json(config)?;
+    let io = |e: std::io::Error| ConfigError::Io {
+        path: path.to_owned(),
+        message: e.to_string(),
+    };
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(io)?;
+    }
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".tmp");
+    let tmp = PathBuf::from(tmp);
+    let written = (|| {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(text.as_bytes())?;
+        f.sync_all()?;
+        std::fs::rename(&tmp, path)
+    })();
+    if written.is_err() && tmp.is_file() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    written.map_err(io)
+}
+
 /// `~/Library/Application Support/Detent/config.json`, or `None` without a
 /// home directory.
 pub fn default_path() -> Option<PathBuf> {

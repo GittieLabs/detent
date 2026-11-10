@@ -1,6 +1,6 @@
 # Config file reference (schema v1)
 
-Detent reads `~/Library/Application Support/Detent/config.json`. In M2 you write it by hand; start from `config.example.json` next to this file. JSON has no comments, and unknown fields are errors, so the notes live here. Every error names the field it's about, for example `mappings[2].action.level: must be from 0 to 1`.
+Detent reads `~/Library/Application Support/Detent/config.json`. In M2 you write it by hand; start from `config.example.json` next to this file. From M3 the app also writes it (pairing, renaming, ignoring): it checks the whole config first, writes it atomically, and saves it in one canonical form (two space indents, USB IDs in hex, defaults written out), so your own formatting is replaced on the first save (D-069). The running app picks up its own saves without a relaunch; an edit you make by hand still needs a relaunch. JSON has no comments, and unknown fields are errors, so the notes live here. Every error names the field it's about, for example `mappings[2].action.level: must be from 0 to 1`.
 
 ## Top level
 

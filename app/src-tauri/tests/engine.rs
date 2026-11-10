@@ -341,3 +341,29 @@ fn a_sleep_shows_as_the_wall_clock_outrunning_the_monotonic_one() {
     assert!(slept(ms(20), s(60)));
     assert!(slept(ms(20), s(3)));
 }
+
+// Live reload (M3).
+
+#[test]
+fn a_reloaded_mapping_applies_to_the_next_press_without_reconnecting() {
+    let r = Rig::start();
+    let mut config = config();
+    config.mappings[0].action = Action::MuteToggle; // button 1 everywhere
+    r.engine.as_ref().unwrap().reload(config);
+    r.expect(|x| matches!(x, Record::Reloaded { .. }));
+    r.hid.push_device(0, &press(1));
+    assert_eq!(r.call().0, Action::MuteToggle);
+    assert_eq!(r.bus.opens(), 1, "the unit was not reopened");
+}
+
+#[test]
+fn reloading_without_the_unit_disconnects_it() {
+    let r = Rig::start();
+    let mut config = config();
+    config.devices.clear();
+    config.mappings.clear();
+    r.engine.as_ref().unwrap().reload(config);
+    r.expect(|x| matches!(x, Record::Device(DeviceEvent::Disconnected { .. })));
+    r.hid.push_device(0, &press(1));
+    r.no_call();
+}

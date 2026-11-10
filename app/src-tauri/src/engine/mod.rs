@@ -48,6 +48,8 @@ pub enum Record {
         waited: Duration,
         took: Duration,
     },
+    /// A new config was put in place without a relaunch.
+    Reloaded { devices: usize, mappings: usize },
 }
 
 /// A wall clock gain over the monotonic clock this big means the Mac slept.
@@ -124,6 +126,12 @@ impl fmt::Display for Record {
                     Some(a) => write!(f, " -> {}", describe(a)),
                     None => write!(f, " -> no mapping"),
                 }
+            }
+            Record::Reloaded { devices, mappings } => {
+                write!(
+                    f,
+                    "config reloaded: {devices} device(s), {mappings} mapping(s)"
+                )
             }
             Record::Ran {
                 id,
@@ -206,6 +214,17 @@ impl<B: Bus + 'static> Engine<B> {
         }
     }
 
+    /// Puts a new config in place: new mappings apply to the next input, and
+    /// the devices module closes units no longer paired and opens new ones.
+    pub fn reload(&mut self, config: &Config) {
+        self.router = Router::new(config);
+        self.devices.set_lists(&config.devices, &config.ignored);
+        self.sink.record(&Record::Reloaded {
+            devices: config.devices.len(),
+            mappings: config.mappings.len(),
+        });
+    }
+
     /// One turn: read devices, then resolve and queue any input.
     pub fn step(&mut self, now: Instant) {
         let events = self.devices.step(now);
@@ -247,11 +266,16 @@ impl<B: Bus + 'static> Engine<B> {
     pub fn spawn(mut self) -> EngineHandle {
         let stop = Arc::new(AtomicBool::new(false));
         let flag = stop.clone();
+        let (configs, new_configs) = mpsc::channel::<Config>();
         let thread = thread::Builder::new()
             .name("detent-engine".into())
             .spawn(move || {
                 let mut last = (Instant::now(), SystemTime::now());
                 while !flag.load(Ordering::Relaxed) {
+                    // Only the newest of several queued configs matters.
+                    if let Some(config) = new_configs.try_iter().last() {
+                        self.reload(&config);
+                    }
                     let now = (Instant::now(), SystemTime::now());
                     let wall = now.1.duration_since(last.1).unwrap_or_default();
                     if slept(now.0 - last.0, wall) {
@@ -264,7 +288,11 @@ impl<B: Bus + 'static> Engine<B> {
                 // what's queued, then ends.
             })
             .expect("spawn the engine");
-        EngineHandle { stop, thread }
+        EngineHandle {
+            stop,
+            thread,
+            configs,
+        }
     }
 }
 
@@ -272,9 +300,16 @@ impl<B: Bus + 'static> Engine<B> {
 pub struct EngineHandle {
     stop: Arc<AtomicBool>,
     thread: JoinHandle<()>,
+    configs: Sender<Config>,
 }
 
 impl EngineHandle {
+    /// Hands the engine a new config; it takes effect before the next read
+    /// (within about 20 ms). The caller has already saved and validated it.
+    pub fn reload(&self, config: Config) {
+        let _ = self.configs.send(config);
+    }
+
     /// Stops reading devices and returns once the engine thread has ended.
     /// Actions still queued finish on the worker in the background.
     pub fn stop(self) {

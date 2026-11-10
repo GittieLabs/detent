@@ -1,7 +1,7 @@
 //! Config schema v1: the shapes serde reads. Semantic checks live in
 //! `validate.rs`. Field reference: `app/src-tauri/examples/config.md`.
 
-use serde::{de, Deserialize, Deserializer};
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
 /// Step used by `volume_up` and `volume_down` when none is given: one of the
 /// 16 steps the volume keys use.
@@ -9,7 +9,7 @@ pub const DEFAULT_VOLUME_STEP: f32 = 1.0 / 16.0;
 /// How long a `applescript` action may run when no timeout is given.
 pub const DEFAULT_APPLESCRIPT_TIMEOUT_MS: u32 = 5000;
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub version: u32,
@@ -24,29 +24,29 @@ pub struct Config {
 }
 
 /// A paired unit: VID + PID + serial identifies it (D-004).
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct DeviceEntry {
     pub name: String,
-    #[serde(deserialize_with = "usb_id")]
+    #[serde(deserialize_with = "usb_id", serialize_with = "usb_id_out")]
     pub vid: u16,
-    #[serde(deserialize_with = "usb_id")]
+    #[serde(deserialize_with = "usb_id", serialize_with = "usb_id_out")]
     pub pid: u16,
     pub serial: String,
 }
 
 /// A unit by identity alone, for the ignore list.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct UnitRef {
-    #[serde(deserialize_with = "usb_id")]
+    #[serde(deserialize_with = "usb_id", serialize_with = "usb_id_out")]
     pub vid: u16,
-    #[serde(deserialize_with = "usb_id")]
+    #[serde(deserialize_with = "usb_id", serialize_with = "usb_id_out")]
     pub pid: u16,
     pub serial: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Mapping {
     /// The serial of a unit in `devices`.
@@ -59,7 +59,7 @@ pub struct Mapping {
 }
 
 /// What on the control fires the mapping (D-054).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Trigger {
     /// A button going down.
@@ -74,7 +74,7 @@ pub enum Trigger {
 
 /// Where a mapping applies: everywhere, or only when an app is frontmost.
 /// JSON: `"everywhere"` or `{ "app": "com.example.App" }`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Scope {
     Everywhere,
@@ -82,7 +82,7 @@ pub enum Scope {
 }
 
 /// The fixed v1 action list (product.md), minus Open dashboard (D-055).
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Action {
     OpenApp {
@@ -114,6 +114,11 @@ fn default_step() -> f32 {
 
 fn default_timeout() -> u32 {
     DEFAULT_APPLESCRIPT_TIMEOUT_MS
+}
+
+/// Writes a USB ID the way people write them: `"0x303A"`.
+fn usb_id_out<S: Serializer>(id: &u16, s: S) -> Result<S::Ok, S::Error> {
+    s.serialize_str(&format!("0x{id:04X}"))
 }
 
 /// A USB ID: `"0x303A"` (any case) or a plain number.

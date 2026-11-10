@@ -48,6 +48,8 @@ pub enum Lost {
     HeartbeatTimeout,
     /// The Mac slept; handles are reopened rather than trusted (D-068).
     Slept,
+    /// Taken off the allowlist, or put on the ignore list.
+    Unpaired,
 }
 
 /// What happened, for the engine and its log.
@@ -146,6 +148,8 @@ pub struct Devices<B> {
     open_failed: HashSet<DeviceId>,
     /// Set by [`Devices::woke`]; handled at the start of the next step.
     woke: bool,
+    /// Set by [`Devices::set_lists`]; handled at the start of the next step.
+    relisted: bool,
 }
 
 impl<B: Bus> Devices<B> {
@@ -160,6 +164,7 @@ impl<B: Bus> Devices<B> {
             unknown_seen: HashSet::new(),
             open_failed: HashSet::new(),
             woke: false,
+            relisted: false,
         }
     }
 
@@ -180,10 +185,41 @@ impl<B: Bus> Devices<B> {
         self.woke = true;
     }
 
+    /// Replaces the allowlist and ignore list (a config reload). The next
+    /// step closes open units that are no longer paired or are now ignored,
+    /// and rescans at once so newly paired units open; units still allowed
+    /// keep their handles.
+    pub fn set_lists(&mut self, devices: &[DeviceEntry], ignored: &[UnitRef]) {
+        self.allow = devices.to_vec();
+        self.ignore = ignored.to_vec();
+        self.relisted = true;
+    }
+
+    fn still_allowed(&self, id: &DeviceId) -> bool {
+        let matches = |vid, pid, serial: &str| {
+            vid == id.vid && pid == id.pid && same_serial(serial, &id.serial)
+        };
+        self.allow.iter().any(|d| matches(d.vid, d.pid, &d.serial))
+            && !self.ignore.iter().any(|u| matches(u.vid, u.pid, &u.serial))
+    }
+
     /// One turn: scan if due, read, check heartbeats. Blocks at most about
     /// `read_wait` (sleeping that long when nothing is open).
     pub fn step(&mut self, now: Instant) -> Vec<DeviceEvent> {
         let mut events = Vec::new();
+        if std::mem::take(&mut self.relisted) {
+            let gone: HashSet<DeviceId> = self
+                .units
+                .iter()
+                .filter(|u| !self.still_allowed(&u.id))
+                .map(|u| u.id.clone())
+                .collect();
+            self.drop_where(&mut events, |u| {
+                gone.contains(&u.id).then_some(Lost::Unpaired)
+            });
+            self.open_failed.clear();
+            self.next_scan = None;
+        }
         if std::mem::take(&mut self.woke) {
             self.drop_where(&mut events, |_| Some(Lost::Slept));
             self.next_scan = None;
