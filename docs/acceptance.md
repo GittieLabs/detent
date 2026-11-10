@@ -145,3 +145,15 @@ Results:
   - M3 exit criteria both pass on a signed build. Keith's original config stays at `config.json.bak` (named `Desk controller`); the one in use was made by the wizard (`Detent Dev`) plus those mappings.
 - Step 4 rerun, 2026-11-10, same build, lid closed about 3 minutes: `PASS` as written, Keith (button 2 stepped the volume 19 -> 38% after waking, no relaunch). Timeline: the HID link dropped at 08:46:47 as the lid closed (`Link(Disconnected)`), sleep at 08:46:58, wake at 08:50:03, the board reconnected through the normal rescan at 08:50:23, and the press came at 08:50:52. `pmset` logged it as DarkWake on AC power again, so the clock gap path (D-068) still didn't run: macOS dropped the link before sleeping, and recovery came through the replug path. Why the reconnect came 20 s after the wake isn't known (the login screen, or USB taking that long to come back).
 
+## M4
+
+Needs a signed build (`just build-dev`) with at least one paired board on release firmware. Steps 1 and 2 are the exit criteria.
+
+1. Exit criterion: three mappings without reading. Open Detent, go to Mappings, and with no docs make three mappings on the paired board: button 1 opens Calculator, a long press of button 3 sets the volume to 25%, and button 4 runs `display notification "Detent"` as AppleScript. Each works on a press, and the log shows it.
+2. Exit criterion: Dry run. Go to Test. Dry run is on. Press each mapped button: its control lights up and the screen shows the action that would run for the frontmost app, marked as a dry run, but nothing happens (no app opens, the volume doesn't move, no notification) and the log shows each as recorded, not run. Turn Dry run off: a press runs for real. Switch to Devices and back: Dry run is on again; close the window: presses run normally.
+3. Handled by the device. In the drawing the encoder and its push switch show as handled by the device (Volume mode) and can't be edited.
+4. Starter template. Pair the second board with the starter template box ticked. Its mappings appear on Mappings (D-077), and its button 2 steps the volume.
+5. Edits stick. Change one mapping, remove another, and relaunch Detent: Mappings shows the same set, and an app scoped mapping (from the config or the template) still shows its badge until removed.
+
+Results:
+

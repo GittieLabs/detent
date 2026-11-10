@@ -2,7 +2,7 @@
 
 Changes every session. This is the only place progress is tracked.
 
-**Current milestone: M4 Mappings and Test** (not yet planned: run `/plan-milestone`)
+**Current milestone: M4 Mappings and Test**
 
 Milestones are ordered by risk: macOS signing and permissions, then the USB protocol, are proven before any UI exists. The engine runs headless before it gets a window. The next milestone starts only when every exit criterion of the current one passes on a signed build.
 
@@ -111,18 +111,25 @@ Exit criteria:
 - [x] A fresh device pairs in under 2 minutes (signed build, `acceptance.md` M3 step 2).
 - [x] After reboot the device works with no user action (signed build, `acceptance.md` M3 step 3).
 
-## M4 Mappings and Test
+## M4 Mappings and Test (current)
 
-Device drawing from HELLO, mapping editor, Device menu editor (MENU messages), Test screen with Dry run.
+Device drawing from HELLO, mapping editor, Test screen with Dry run. The Device menu editor moves to M6, where the firmware learns MENU (D-078). Scope stays Everywhere in the editor: creating app scoped mappings is M5, and encoder mappings arrive with Mapped mode in M6.
 
-Noted during M3 (plan these in):
+Tasks, riskiest first:
 
-- [ ] Starter template (D-077): replace the wizard's placeholder checkbox. The `Detent Dev` template is built into the app per model; ticking the box on Done adds its mappings for the new unit's serial, never replacing mappings it already has. Tests: `app_state` unit tests (applied for the new serial, skipped when unticked, nothing duplicated); `tsc --noEmit`; an acceptance step pairing the second board with the box ticked.
+- [ ] Apps list for the app picker: `app/src-tauri/src/macos/apps.rs` lists running apps (NSWorkspace, regular apps only) and installed apps (`/Applications`, `/Applications/Utilities`, `/System/Applications` and its `Utilities`, `~/Applications`, read from each bundle's `Info.plist`), merged by bundle ID, with display names; a `list_apps` command. Decide and log the sources ("running and recent" in `architecture.md` has no clean recent apps API). Tests: pure unit tests for `Info.plist` reading and merging on fixtures; a macOS test that Finder and Safari are listed; commands test.
+- [ ] Dry run at runtime and live input: the engine takes a dry run switch (`EngineHandle::set_dry_run`) that sends actions to a `RecordingExecutor` instead of the system one; `Record::Resolved` says whether it was a dry run; the app forwards each resolution to the settings window as an `input` event. Dry run is on only while Test is showing (D-079); the `--dry-run` flag still forces it on. Tests: engine tests (dry run: resolved, recorded, the system executor never called; off again: runs), a unit test for the `input` payload, the commands test.
+- [ ] Mappings in app state: each paired unit's controls from its HELLO (the encoder and its push switch marked handled by the device in Volume and Menu modes), its mappings from the config, and edits `set_mapping` (adds, or replaces the one with the same control, trigger and scope) and `remove_mapping`, checked by the config loader's rules; Tauri commands for both. Tests: `app_state` unit tests (add, replace, remove, an Everywhere edit leaves app scoped mappings alone, bad arguments refused with the loader's message, a control the unit doesn't have refused); the commands test.
+- [ ] Starter template (D-077): replace the wizard's placeholder checkbox. The `Detent Dev` template is built into the app per model; ticking the box on Done adds its mappings for the new unit's serial, never replacing mappings it already has. Tests: `app_state` unit tests (applied for the new serial, skipped when unticked, nothing duplicated); `tsc --noEmit`; `acceptance.md` M4 step 4.
+- [ ] Window shell and device drawing: a tab bar for Devices, Mappings and Test (three screens, product.md); `app/ui/drawing.ts` draws a unit from its HELLO (buttons labelled by control, the encoder as a knob), greys controls handled by the device, badges controls with an app scoped mapping, and asks to connect a unit not yet seen this session. A unit picker shows only with more than one paired unit. Tests: `tsc --noEmit`; the control list and its flags are tested in `app_state`.
+- [ ] Mapping editor: click a button in the drawing to edit it in a side panel: trigger (Press, Long press), an action from the list built so far (Open app with the app picker, Volume up and down with a step, Volume set with a level, Mute, Run AppleScript with its script and timeout), Save and Remove. App scoped mappings show read only with Remove. Tests: `tsc --noEmit`; `acceptance.md` M4 steps 1, 3, 5 (step 1 is the exit criterion).
+- [ ] Test screen: the drawing, live. A press highlights its control and shows the mapping that fired for the frontmost app, or "no mapping"; Dry run is on by default, turning it off runs actions for real, and leaving the screen turns it off. Tests: `tsc --noEmit`; `acceptance.md` M4 step 2 (exit criterion).
+- [ ] M4 acceptance pass on a signed build: `just build-dev` and the steps in `acceptance.md` M4.
 
 Exit criteria:
 
-- Keith creates three mappings without reading anything.
-- Dry run never executes an action.
+- [ ] Keith creates three mappings without reading anything (signed build, `acceptance.md` M4 step 1).
+- [ ] Dry run never executes an action (tests, and `acceptance.md` M4 step 2 on a signed build).
 
 ## M5 App scope and shortcuts
 
@@ -135,7 +142,7 @@ Exit criteria:
 
 ## M6 Dashboard and encoder menu
 
-The Open dashboard action: the app's own dashboard page (content to be decided, D-055) full screen in an app window on a chosen display, app owned OLED menu items via MENU and MENU_SELECT, Mapped encoder mode, STATUS messages.
+The Open dashboard action: the app's own dashboard page (content to be decided, D-055) full screen in an app window on a chosen display, app owned OLED menu items via MENU and MENU_SELECT with their Device menu editor on the Mappings screen (moved from M4, D-078), Mapped encoder mode, STATUS messages.
 
 Exit criteria:
 
