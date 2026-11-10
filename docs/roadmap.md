@@ -2,7 +2,7 @@
 
 Changes every session. This is the only place progress is tracked.
 
-**Current milestone: M4 Mappings and Test**
+**Current milestone: M5 App scope and shortcuts** (not yet planned: run `/plan-milestone`)
 
 Milestones are ordered by risk: macOS signing and permissions, then the USB protocol, are proven before any UI exists. The engine runs headless before it gets a window. The next milestone starts only when every exit criterion of the current one passes on a signed build.
 
@@ -111,7 +111,7 @@ Exit criteria:
 - [x] A fresh device pairs in under 2 minutes (signed build, `acceptance.md` M3 step 2).
 - [x] After reboot the device works with no user action (signed build, `acceptance.md` M3 step 3).
 
-## M4 Mappings and Test (current)
+## M4 Mappings and Test (done 2026-11-10)
 
 Device drawing from HELLO, mapping editor, Test screen with Dry run. The Device menu editor moves to M6, where the firmware learns MENU (D-078). Scope stays Everywhere in the editor: creating app scoped mappings is M5, and encoder mappings arrive with Mapped mode in M6.
 
@@ -124,7 +124,7 @@ Tasks, riskiest first:
 - [x] Window shell and device drawing: a tab bar for Devices, Mappings and Test (three screens, product.md); `app/ui/drawing.ts` draws a unit from its HELLO (buttons labelled by control, the encoder as a knob), greys controls handled by the device, badges controls with an app scoped mapping, and asks to connect a unit not yet seen this session. A unit picker shows only with more than one paired unit. Tests: `tsc --noEmit`; the control list and its flags are tested in `app_state`. Done 2026-11-10: `ui/main.ts` tab bar (hidden while the wizard runs), `ui/drawing.ts` (`drawUnit`, `pickUnit`, `unitPicker`), `ui/mappings.ts` and `ui/testscreen.ts` shells sharing the chosen unit; `el()` handles selects. Keith checked it on a signed build with both boards paired.
 - [x] Mapping editor: click a button in the drawing to edit it in a side panel: trigger (Press, Long press), an action from the list built so far (Open app with the app picker, Volume up and down with a step, Volume set with a level, Mute, Run AppleScript with its script and timeout), Save and Remove. App scoped mappings show read only with Remove. Tests: `tsc --noEmit`; `acceptance.md` M4 steps 1, 3, 5 (step 1 is the exit criterion). Done 2026-11-10: `ui/mappings.ts` side panel (trigger, action, fields with checks in percent and seconds, Save, Remove, per-app list read only with Remove); window 900 by 600; refused edits are also logged (`Shared::say`). Keith's first try saved nothing and left no trace, hence the logging. Wording changed after his try ("Turn volume up by…", "Set volume to…").
 - [x] Test screen: the drawing, live. A press highlights its control and shows the mapping that fired for the frontmost app, or "no mapping"; Dry run is on by default, turning it off runs actions for real, and leaving the screen turns it off. Tests: `tsc --noEmit`; `acceptance.md` M4 step 2 (exit criterion). Also show each action's result (for example "was 13%, now 38%"): a CoreAudio volume change shows no macOS HUD, so Keith couldn't see it happen. Done 2026-11-10: `ui/testscreen.ts` (lit control, the last 8 presses with the app in front, the action and its result), `app_state::result_view` and the `result` event ("was 13%, now 38%", "not run (dry run)", "failed: …"), Dry run on entering Test and off on leaving (`ui/main.ts`), and the engine records a dry run change only when it changes. Keith passed step 2 early on a signed build.
-- [ ] M4 acceptance pass on a signed build: `just build-dev` and the steps in `acceptance.md` M4.
+- [x] M4 acceptance pass on a signed build: `just build-dev` and the steps in `acceptance.md` M4. Done 2026-11-10 at `a37a4f2`: steps 3 and 5 in the pass, steps 1, 2 and 4 early on near final builds.
 
 Exit criteria:
 
@@ -196,6 +196,7 @@ Multiple connected devices, Bluetooth transport, then Windows.
 
 Newest first. One or two lines per session: what landed, what's next.
 
+- 2026-11-10 (later): M4 done. Landed the app list (D-080), runtime Dry run and live input (D-079), mappings in app state with per model knowledge (D-081), the starter template (D-077), the tabbed window and device drawing, the mapping editor, and the Test screen with results. Also: the second board flashed and checked (M1 step 2), Node fixed, sleep retested (D-068 still unexercised, M7). Keith passed every M4 step on signed builds; step 1 with notes (AppleScript text given, volume wording fixed, press and long press labelled). Next: plan M5, which now includes visible volume feedback.
 - 2026-11-10: M3 done. Landed the Devices screen, the pairing wizard, the tray (status dot, Pause saved in the config, "New device found"), and releasing units on unpair and quit (D-076); Keith passed acceptance steps 1 to 7 on a signed build from an empty config, including the timed pairing and a reboot. Next: plan M4. Waiting on Keith: the starter template open question, a full (non DarkWake) sleep to exercise D-068, and the second board serial check.
 - 2026-11-09: M2 done. Landed the router, actions (system and recording executors), transport (UsbHid, MockTransport), devices (pairing, heartbeat, replug), and the engine with its log and tray line; Keith passed acceptance steps 1 to 8 on a signed build, including a real button opening Mail. Fixed on the way: the frontmost check tool's stale reading and step 5's Finder script. Next: plan M3. Waiting on Keith: the second board serial check (needs a second XIAO).
 - 2026-11-07 (end): M1 done. Landed buttons and encoder input, encoder modes with Consumer Control volume and mute, the OLED status screen and menu, debug input tracing, and the v1 protocol freeze guarded by `frozen.rs`; all four exit criteria passed on Keith's hardware and the board is on release `b7c213b`. Next: `/plan-milestone` for M2 (headless engine). Waiting on Keith: tactile buttons for M1 step 5 and a second XIAO for step 2's serial check, both carried into M2; confirm the moot draft-version open question.

@@ -163,4 +163,9 @@ Results:
 - Early check of task 7, 2026-11-10, signed build of the Test screen on Keith's config, board `Detent Dev 2`:
   - Step 2 (exit criterion): `PASS`, Keith; every part confirmed in the log by Claude. Opening Test logged `dry run on`. Button 1 (Plasticity), button 2 (volume up), a long press of button 3 (volume up 25%) and button 4 (Finder script) were each resolved and logged `recorded (dry run)`, and none ran. Unticking Dry run logged `dry run off`, and button 2 then ran for real (38 -> 44%). Returning to Test turned it on again each time and leaving turned it off; after closing the window, button 2 ran for real (69 -> 75%). Repeated `dry run off` lines (asking for the state it was already in) are no longer logged.
   - Step 3: the drawing on Test and Mappings shows the encoder and its push switch dashed and unclickable as handled by the device; Keith saw this in the task 5 check ("Looks right"), not yet recorded as a pass.
+- Acceptance pass, 2026-11-10, signed `Detent.app` from `just build-dev` at `a37a4f2` (Mac Developer identity), both boards on release firmware, Keith's config (backed up first). Steps 1, 2 and 4 passed early on builds from `26100e2` to `a37a4f2` (above); this pass covered the rest. Keith did each step; Claude read the log and config.
+  - Step 3: `PASS`, Keith: on Mappings the encoder and its push switch show dashed and can't be edited.
+  - Step 5: `PASS`, Keith. Button 2 on `Detent Dev 2` changed to volume up by 10% was saved (`config reloaded`) and was there after a quit and relaunch (`volume_up` step 0.1 in the loaded config); button 4 was removed after the relaunch and stays removed in the saved config. With `Detent Dev` plugged in, its Safari mapping on button 1 showed its badge.
+  - Dry run re-check: entering Test logged `dry run on` and button 2 was `recorded (dry run)`. Leaving Test wasn't repeated in this pass (it passed in step 2).
+  - M4 exit criteria both pass on a signed build.
 
