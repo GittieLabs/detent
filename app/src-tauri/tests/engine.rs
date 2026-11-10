@@ -367,3 +367,15 @@ fn reloading_without_the_unit_disconnects_it() {
     r.hid.push_device(0, &press(1));
     r.no_call();
 }
+
+#[test]
+fn a_candidate_press_is_reported_but_runs_nothing() {
+    let r = Rig::start();
+    let other = r.bus.attach(VID, PID, Some("AABBCCDDEEFF"));
+    r.engine.as_ref().unwrap().identify(true);
+    r.expect(|x| matches!(x, Record::Device(DeviceEvent::CandidateFound(_))));
+    other.push_device(0, &press(1));
+    r.expect(|x| matches!(x, Record::Device(DeviceEvent::CandidatePressed(_))));
+    r.no_call();
+    r.engine.as_ref().unwrap().identify(false);
+}

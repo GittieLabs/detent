@@ -266,15 +266,18 @@ impl<B: Bus + 'static> Engine<B> {
     pub fn spawn(mut self) -> EngineHandle {
         let stop = Arc::new(AtomicBool::new(false));
         let flag = stop.clone();
-        let (configs, new_configs) = mpsc::channel::<Config>();
+        let (commands, incoming) = mpsc::channel::<Command>();
         let thread = thread::Builder::new()
             .name("detent-engine".into())
             .spawn(move || {
                 let mut last = (Instant::now(), SystemTime::now());
                 while !flag.load(Ordering::Relaxed) {
-                    // Only the newest of several queued configs matters.
-                    if let Some(config) = new_configs.try_iter().last() {
-                        self.reload(&config);
+                    for command in incoming.try_iter() {
+                        match command {
+                            Command::Reload(config) => self.reload(&config),
+                            Command::Identify(true) => self.devices.start_identify(),
+                            Command::Identify(false) => self.devices.end_identify(),
+                        }
                     }
                     let now = (Instant::now(), SystemTime::now());
                     let wall = now.1.duration_since(last.1).unwrap_or_default();
@@ -291,23 +294,36 @@ impl<B: Bus + 'static> Engine<B> {
         EngineHandle {
             stop,
             thread,
-            configs,
+            commands,
         }
     }
 }
 
 /// A running engine.
+/// What the app asks of a running engine, applied in order before its next
+/// read (within about 20 ms).
+enum Command {
+    Reload(Config),
+    Identify(bool),
+}
+
 pub struct EngineHandle {
     stop: Arc<AtomicBool>,
     thread: JoinHandle<()>,
-    configs: Sender<Config>,
+    commands: Sender<Command>,
 }
 
 impl EngineHandle {
-    /// Hands the engine a new config; it takes effect before the next read
-    /// (within about 20 ms). The caller has already saved and validated it.
+    /// Hands the engine a new config. The caller has already saved and
+    /// validated it.
     pub fn reload(&self, config: Config) {
-        let _ = self.configs.send(config);
+        let _ = self.commands.send(Command::Reload(config));
+    }
+
+    /// Starts or ends pairing identification (D-066): while on, unpaired
+    /// units are opened read only and report `Candidate*` events.
+    pub fn identify(&self, on: bool) {
+        let _ = self.commands.send(Command::Identify(on));
     }
 
     /// Stops reading devices and returns once the engine thread has ended.

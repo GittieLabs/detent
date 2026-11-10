@@ -630,3 +630,213 @@ fn units_still_allowed_are_left_alone() {
     assert_eq!(r.bus.opens(), 1);
     assert_eq!(r.devices.hello(&id(PAIRED)), Some(&hello()));
 }
+
+// Pairing identification (M3, D-066): read only, never acked, never routed.
+
+fn found(serial: &str) -> DeviceEvent {
+    DeviceEvent::CandidateFound(id(serial))
+}
+
+#[test]
+fn identifying_opens_unpaired_units_read_only() {
+    let mut r = Rig::new(&[], &[]);
+    let hid = r.bus.attach(VID, PID, Some(OTHER));
+    r.devices.start_identify();
+    let events = r.at(0.0);
+    assert!(events.contains(&found(OTHER)), "{events:?}");
+    assert_eq!(
+        sent(&hid),
+        vec![AppMessage::RequestHello],
+        "asked, never acked"
+    );
+    assert!(
+        r.devices.connected().is_empty(),
+        "a candidate isn't connected"
+    );
+
+    hid.push_device(0, &DeviceMessage::Hello(hello()));
+    assert_eq!(
+        r.at(0.1),
+        vec![DeviceEvent::CandidateHello {
+            id: id(OTHER),
+            hello: hello()
+        }]
+    );
+    assert_eq!(
+        sent(&hid),
+        vec![AppMessage::RequestHello],
+        "still no HELLO_ACK"
+    );
+}
+
+#[test]
+fn a_press_picks_a_candidate_and_is_never_routed() {
+    let mut r = Rig::new(&[], &[]);
+    let hid = r.bus.attach(VID, PID, Some(OTHER));
+    r.devices.start_identify();
+    r.at(0.0);
+    hid.push_device(0, &press(3));
+    hid.push_device(
+        1,
+        &DeviceMessage::Button {
+            control: 3,
+            action: ButtonAction::Up,
+        },
+    );
+    hid.push_device(
+        2,
+        &DeviceMessage::Encoder {
+            control: 5,
+            delta: 1,
+        },
+    );
+    assert_eq!(
+        r.at(0.1),
+        vec![DeviceEvent::CandidatePressed(id(OTHER))],
+        "one pick for the press; release and turn are dropped, nothing is Input"
+    );
+}
+
+#[test]
+fn leaving_setup_on_the_oled_also_picks_a_candidate() {
+    // The device sends HELLO again after Setup; the first one only describes it.
+    let mut r = Rig::new(&[], &[]);
+    let hid = r.bus.attach(VID, PID, Some(OTHER));
+    r.devices.start_identify();
+    r.at(0.0);
+    hid.push_device(0, &DeviceMessage::Hello(hello()));
+    hid.push_device(1, &DeviceMessage::Hello(hello()));
+    let events = r.at(0.1);
+    assert_eq!(
+        events.last(),
+        Some(&DeviceEvent::CandidatePressed(id(OTHER))),
+        "{events:?}"
+    );
+}
+
+#[test]
+fn ending_identification_closes_candidates() {
+    let mut r = Rig::new(&[], &[]);
+    let hid = r.bus.attach(VID, PID, Some(OTHER));
+    r.devices.start_identify();
+    r.at(0.0);
+    r.devices.end_identify();
+    hid.push_device(0, &press(1));
+    assert_eq!(r.at(0.1), vec![], "closed: its press is never read");
+    assert_eq!(r.at(1.5), vec![], "and not reopened by later scans");
+    assert_eq!(r.bus.opens(), 1);
+}
+
+#[test]
+fn an_unplugged_candidate_is_gone() {
+    let mut r = Rig::new(&[], &[]);
+    r.bus.attach(VID, PID, Some(OTHER));
+    r.devices.start_identify();
+    r.at(0.0);
+    r.bus.detach(OTHER);
+    assert_eq!(r.at(0.1), vec![DeviceEvent::CandidateGone(id(OTHER))]);
+}
+
+#[test]
+fn identifying_never_opens_ignored_or_foreign_units() {
+    let mut r = Rig::new(&[], &[OTHER]);
+    r.bus.attach(VID, PID, Some(OTHER));
+    r.bus.attach(0x046D, 0xC52B, Some("X"));
+    r.bus.attach(VID, PID, None);
+    r.devices.start_identify();
+    r.at(0.0);
+    r.at(1.0);
+    assert_eq!(r.bus.opens(), 0);
+}
+
+#[test]
+fn a_paired_unit_works_normally_while_identifying() {
+    let mut r = Rig::new(&[PAIRED], &[]);
+    let paired = r.bus.attach(VID, PID, Some(PAIRED));
+    r.bus.attach(VID, PID, Some(OTHER));
+    r.devices.start_identify();
+    r.at(0.0);
+    paired.push_device(0, &DeviceMessage::Hello(hello()));
+    paired.push_device(1, &press(1));
+    let events = r.at(0.1);
+    assert!(events.contains(&DeviceEvent::Input {
+        id: id(PAIRED),
+        message: press(1)
+    }));
+    assert!(sent(&paired).contains(&AppMessage::HelloAck { paired: true }));
+    assert_eq!(r.devices.connected(), vec![&id(PAIRED)]);
+}
+
+#[test]
+fn pairing_a_candidate_reopens_it_as_paired() {
+    let mut r = Rig::new(&[], &[]);
+    let hid = r.bus.attach(VID, PID, Some(OTHER));
+    r.devices.start_identify();
+    r.at(0.0);
+    r.devices.set_lists(&[entry(OTHER)], &[]);
+    let events = r.at(0.1);
+    assert_eq!(
+        events,
+        vec![DeviceEvent::Connected(id(OTHER))],
+        "{events:?}"
+    );
+    hid.push_device(0, &DeviceMessage::Hello(hello()));
+    r.at(0.2);
+    assert!(sent(&hid).contains(&AppMessage::HelloAck { paired: true }));
+    assert_eq!(r.devices.connected(), vec![&id(OTHER)]);
+}
+
+#[test]
+fn units_are_not_opened_as_candidates_unless_identifying() {
+    let mut r = Rig::new(&[], &[]);
+    r.bus.attach(VID, PID, Some(OTHER));
+    r.at(0.0);
+    r.at(1.0);
+    assert_eq!(r.bus.opens(), 0);
+}
+
+/// HIL: identification against the real board, treated as unpaired: it is
+/// opened read only and describes itself. Needs the board plugged in, any
+/// firmware: `just hil-app`.
+#[cfg(target_os = "macos")]
+#[test]
+#[ignore = "needs the board: just hil-app"]
+fn the_board_is_found_as_a_candidate_when_unpaired() {
+    use detent_lib::transport::{Bus, Hid};
+    let mut hid = Hid::new().expect("hidapi starts");
+    let serial = hid
+        .scan()
+        .expect("enumerates")
+        .into_iter()
+        .find(|c| c.vid == VID && c.pid == PID)
+        .and_then(|c| c.serial)
+        .expect("a Detent board with a serial is attached");
+    let mut devices = Devices::new(hid, &[], &[], Options::default());
+    devices.start_identify();
+    let start = Instant::now();
+    let mut log = Vec::new();
+    while start.elapsed() < Duration::from_secs(2) {
+        for e in devices.step(Instant::now()) {
+            println!("{:>6.3}s  {e:?}", start.elapsed().as_secs_f64());
+            log.push(e);
+        }
+    }
+    assert!(
+        log.contains(&DeviceEvent::CandidateFound(id(&serial))),
+        "{log:?}"
+    );
+    assert!(
+        log.iter()
+            .any(|e| matches!(e, DeviceEvent::CandidateHello { id: i, .. } if *i == id(&serial))),
+        "no HELLO from the candidate"
+    );
+    assert!(
+        devices.connected().is_empty(),
+        "a candidate is never connected"
+    );
+    assert!(
+        !log.iter()
+            .any(|e| matches!(e, DeviceEvent::Input { .. } | DeviceEvent::Connected(_))),
+        "nothing paired or routed"
+    );
+}

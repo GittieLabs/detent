@@ -15,7 +15,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use detent_protocol::codec::{
-    decode_device, encode_app, AppMessage, DecodeError, DeviceMessage, Hello,
+    decode_device, encode_app, AppMessage, ButtonAction, DecodeError, DeviceMessage, Hello,
 };
 use detent_protocol::ids;
 
@@ -82,13 +82,26 @@ pub enum DeviceEvent {
         id: DeviceId,
         error: TransportError,
     },
-    /// A Detent unit that's neither paired nor ignored was attached. Never
-    /// opened. Reported once per attach.
+    /// A Detent unit that's neither paired nor ignored was attached. Not
+    /// opened, except read only while identifying. Reported once per attach.
     Unknown {
         vid: u16,
         pid: u16,
         serial: Option<String>,
     },
+    /// Identifying (D-066): an unpaired unit was opened read only and asked
+    /// for its HELLO. It's never acked and its input never reaches the router.
+    CandidateFound(DeviceId),
+    /// A candidate described itself.
+    CandidateHello {
+        id: DeviceId,
+        hello: Hello,
+    },
+    /// The user pressed a button on this candidate, or left Setup on its
+    /// OLED (a HELLO after the first): this is the unit they mean.
+    CandidatePressed(DeviceId),
+    /// A candidate was unplugged or went silent.
+    CandidateGone(DeviceId),
 }
 
 /// Timings. The defaults are the product's.
@@ -119,6 +132,10 @@ struct Unit {
     last_heard: Instant,
     hello: Option<Hello>,
     seq_out: u8,
+    /// Opened read only while identifying, not paired (D-066).
+    candidate: bool,
+    /// HELLOs received, for spotting a candidate leaving Setup.
+    hellos: u32,
 }
 
 impl Unit {
@@ -150,6 +167,8 @@ pub struct Devices<B> {
     woke: bool,
     /// Set by [`Devices::set_lists`]; handled at the start of the next step.
     relisted: bool,
+    /// The pairing wizard is open: unpaired units are opened read only.
+    identifying: bool,
 }
 
 impl<B: Bus> Devices<B> {
@@ -165,17 +184,40 @@ impl<B: Bus> Devices<B> {
             open_failed: HashSet::new(),
             woke: false,
             relisted: false,
+            identifying: false,
         }
     }
 
-    /// Units open now, in the order they were opened.
+    /// Paired units open now, in the order they were opened.
     pub fn connected(&self) -> Vec<&DeviceId> {
-        self.units.iter().map(|u| &u.id).collect()
+        self.units
+            .iter()
+            .filter(|u| !u.candidate)
+            .map(|u| &u.id)
+            .collect()
     }
 
-    /// A connected unit's latest HELLO.
+    /// A connected paired unit's latest HELLO.
     pub fn hello(&self, id: &DeviceId) -> Option<&Hello> {
-        self.units.iter().find(|u| &u.id == id)?.hello.as_ref()
+        self.units
+            .iter()
+            .find(|u| &u.id == id && !u.candidate)?
+            .hello
+            .as_ref()
+    }
+
+    /// The pairing wizard opened: from the next step, unpaired Detent units
+    /// (Detent's VID and PID, with a serial, not ignored) are opened read
+    /// only so a press can identify one (D-066).
+    pub fn start_identify(&mut self) {
+        self.identifying = true;
+        self.next_scan = None;
+    }
+
+    /// The wizard closed: candidates are closed now, with no events.
+    pub fn end_identify(&mut self) {
+        self.identifying = false;
+        self.units.retain(|u| !u.candidate);
     }
 
     /// The Mac just woke from sleep. The next step closes every unit and
@@ -211,11 +253,23 @@ impl<B: Bus> Devices<B> {
             let gone: HashSet<DeviceId> = self
                 .units
                 .iter()
-                .filter(|u| !self.still_allowed(&u.id))
+                .filter(|u| !u.candidate && !self.still_allowed(&u.id))
                 .map(|u| u.id.clone())
                 .collect();
             self.drop_where(&mut events, |u| {
                 gone.contains(&u.id).then_some(Lost::Unpaired)
+            });
+            // A candidate just paired or ignored closes quietly; a paired one
+            // is reopened, with HELLO_ACK, by the scan below.
+            let ignore = self.ignore.clone();
+            let allow = self.allow.clone();
+            self.units.retain(|u| {
+                let listed = |vid, pid, serial: &str| {
+                    vid == u.id.vid && pid == u.id.pid && same_serial(serial, &u.id.serial)
+                };
+                !u.candidate
+                    || !(allow.iter().any(|d| listed(d.vid, d.pid, &d.serial))
+                        || ignore.iter().any(|i| listed(i.vid, i.pid, &i.serial)))
             });
             self.open_failed.clear();
             self.next_scan = None;
@@ -291,6 +345,16 @@ impl<B: Bus> Devices<B> {
                         serial: c.serial.clone(),
                     });
                 }
+                if ours && self.identifying && !serial.is_empty() {
+                    let id = DeviceId {
+                        vid: c.vid,
+                        pid: c.pid,
+                        serial: serial.to_owned(),
+                    };
+                    if !self.units.iter().any(|u| u.id == id) {
+                        self.open_candidate(c, id, now, events);
+                    }
+                }
                 continue;
             }
             let id = DeviceId {
@@ -303,6 +367,35 @@ impl<B: Bus> Devices<B> {
             }
             self.open(c, id, now, events);
         }
+    }
+
+    /// Opens an unpaired unit read only. A failure is silent: the wizard just
+    /// doesn't list it, and the next scan tries again.
+    fn open_candidate(
+        &mut self,
+        c: &Channel,
+        id: DeviceId,
+        now: Instant,
+        events: &mut Vec<DeviceEvent>,
+    ) {
+        let Ok(transport) = self.bus.open_channel(c) else {
+            return;
+        };
+        let mut unit = Unit {
+            id: id.clone(),
+            path: c.path.clone(),
+            transport,
+            last_heard: now,
+            hello: None,
+            seq_out: 0,
+            candidate: true,
+            hellos: 0,
+        };
+        if unit.send(&AppMessage::RequestHello).is_err() {
+            return;
+        }
+        events.push(DeviceEvent::CandidateFound(id));
+        self.units.push(unit);
     }
 
     fn open(&mut self, c: &Channel, id: DeviceId, now: Instant, events: &mut Vec<DeviceEvent>) {
@@ -323,6 +416,8 @@ impl<B: Bus> Devices<B> {
             last_heard: now,
             hello: None,
             seq_out: 0,
+            candidate: false,
+            hellos: 0,
         };
         // The mount HELLO went out before we had the channel open; ask again.
         if let Err(e) = unit.send(&AppMessage::RequestHello) {
@@ -359,7 +454,7 @@ impl<B: Bus> Devices<B> {
         }
         for (i, why) in lost.into_iter().rev() {
             let unit = self.units.remove(i);
-            events.push(DeviceEvent::Disconnected { id: unit.id, why });
+            events.push(lost_event(unit, why));
         }
     }
 
@@ -368,11 +463,41 @@ impl<B: Bus> Devices<B> {
         let mut kept = Vec::with_capacity(self.units.len());
         for unit in self.units.drain(..) {
             match why(&unit) {
-                Some(why) => events.push(DeviceEvent::Disconnected { id: unit.id, why }),
+                Some(why) => events.push(lost_event(unit, why)),
                 None => kept.push(unit),
             }
         }
         self.units = kept;
+    }
+}
+
+/// The event for a unit closing: a paired unit disconnected, a candidate gone.
+fn lost_event(unit: Unit, why: Lost) -> DeviceEvent {
+    if unit.candidate {
+        DeviceEvent::CandidateGone(unit.id)
+    } else {
+        DeviceEvent::Disconnected { id: unit.id, why }
+    }
+}
+
+/// A candidate's report: describes it or picks it, never acked or routed.
+fn handle_candidate(unit: &mut Unit, msg: DeviceMessage, events: &mut Vec<DeviceEvent>) {
+    match msg {
+        DeviceMessage::Hello(hello) => {
+            unit.hellos += 1;
+            events.push(DeviceEvent::CandidateHello {
+                id: unit.id.clone(),
+                hello,
+            });
+            if unit.hellos > 1 {
+                events.push(DeviceEvent::CandidatePressed(unit.id.clone()));
+            }
+        }
+        DeviceMessage::Button {
+            action: ButtonAction::Down,
+            ..
+        } => events.push(DeviceEvent::CandidatePressed(unit.id.clone())),
+        _ => {}
     }
 }
 
@@ -395,6 +520,10 @@ fn handle(
         }
     };
     unit.last_heard = now;
+    if unit.candidate {
+        handle_candidate(unit, frame.msg, events);
+        return Ok(());
+    }
     match frame.msg {
         DeviceMessage::Hello(hello) => {
             unit.send(&AppMessage::HelloAck { paired: true })
