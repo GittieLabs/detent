@@ -248,7 +248,11 @@ Results:
 
 ## M9
 
-Steps 1 to 7 need the notarized release build (`just build-release`) unless they say otherwise. Steps 1 and 2 are the exit criterion "notarized build installs and runs on a clean user account"; the full acceptance pass is the other.
+Steps 1 to 7 need the notarized release build unless they say otherwise. Making it, once per build:
+
+- `APPLE_SIGNING_IDENTITY=<Developer ID Application identity, or its SHA-1 hash> just build-release` (local only). Your keychain has two Developer ID Application certificates with the same name, so pass the hash of the one that expires last (`security find-identity -v -p codesigning`, first column).
+- Once ever: `xcrun notarytool store-credentials <profile>` (Apple ID, team, app specific password; kept in the keychain).
+- `APPLE_NOTARY_PROFILE=<profile> just notarize-release` uploads `target/release/dist/Detent-0.1.0.dmg` to Apple, waits, staples and checks it. Steps 1 and 2 are the exit criterion "notarized build installs and runs on a clean user account"; the full acceptance pass is the other.
 
 1. Hardened runtime. Install the notarized DMG over nothing (drag to Applications), open it: no Gatekeeper warning. Pair a board; a Send shortcut, a Run AppleScript (Automation prompt, then it runs), an Open app, a volume action and Open dashboard each work. Open at login survives a log out and back in.
 2. Clean account. Make a new macOS user, log in, install the same DMG, and repeat step 1 from an empty config, including the Accessibility banner and Fix.

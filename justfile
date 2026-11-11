@@ -20,6 +20,14 @@ test:
 build-dev:
     scripts/build-dev.sh
 
+# Release build signed with Developer ID, as a DMG (local only; D-099)
+build-release:
+    scripts/build-release.sh
+
+# Notarize and staple the release DMG (uploads it to Apple; needs APPLE_NOTARY_PROFILE)
+notarize-release:
+    scripts/build-release.sh --notarize
+
 # Hardware in the loop test: flashes debug then release firmware (board on USB)
 hil:
     scripts/hil.sh
@@ -40,7 +48,7 @@ probe *ARGS:
 gen-header:
     scripts/gen-header.sh
 
-# Build the firmware for every board (XIAO, DevKitC, Pico; release and debug)
+# Build the firmware for every board (XIAO, Feather, Pico; release and debug)
 fw:
     pio run -d firmware -e xiao_esp32s3 -e xiao_esp32s3_debug -e feather_esp32s3 -e feather_esp32s3_debug -e pico -e pico_spike
 

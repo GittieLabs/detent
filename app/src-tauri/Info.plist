@@ -5,5 +5,8 @@
 	<!-- Menu bar app: no Dock icon, no app menu. Tauri merges this into the bundle. -->
 	<key>LSUIElement</key>
 	<true/>
+	<!-- Shown in macOS's Automation prompt the first time a Run AppleScript action targets an app. -->
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Detent runs the AppleScript actions you map to your device's buttons.</string>
 </dict>
 </plist>
