@@ -2,6 +2,12 @@
 //! timeout (D-053). The source goes in on stdin, so no length or quoting
 //! limits apply. The child gets its own process group, and a timeout kills the
 //! whole group, so a `do shell script` it started doesn't outlive it.
+//!
+//! The first time a script tells an app, macOS asks the user to allow it
+//! (Automation) and the script waits on the answer. That wait doesn't count
+//! (M9, D-106): before running, each target app's consent is checked
+//! without prompting, and if it might still be asked, the run gets
+//! [`PROMPT_GRACE`] on top of its timeout.
 
 use std::io::{Read, Write};
 use std::os::unix::process::CommandExt;
@@ -112,4 +118,114 @@ pub fn run(source: &str, timeout: Duration) -> Result<String, ScriptError> {
             message: err.trim().to_owned(),
         })
     }
+}
+
+/// Extra time a run gets while macOS may show the Automation prompt.
+pub const PROMPT_GRACE: Duration = Duration::from_secs(120);
+
+/// An app a script sends Apple Events to.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Target {
+    /// `application "Mail"` or `app "Mail"`.
+    Name(String),
+    /// `application id "com.apple.mail"`.
+    BundleId(String),
+}
+
+/// Whether Detent may send Apple Events to an app, as macOS says without
+/// prompting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Consent {
+    Granted,
+    Denied,
+    /// The user hasn't been asked yet: this run will prompt.
+    NotAsked,
+    /// Can't tell (the app isn't running or isn't found).
+    Unknown,
+}
+
+/// The apps `source` tells, in order of first mention, each once. A plain
+/// scan for `application`/`app`, an optional `id`, then a quoted string:
+/// enough for the scripts people map to a button.
+pub fn targets(source: &str) -> Vec<Target> {
+    let lower = source.to_ascii_lowercase();
+    let bytes = lower.as_bytes();
+    let word_at = |i: usize, w: &str| {
+        lower[i..].starts_with(w)
+            && (i == 0 || !bytes[i - 1].is_ascii_alphanumeric())
+            && bytes
+                .get(i + w.len())
+                .is_some_and(|b| b.is_ascii_whitespace())
+    };
+    let skip_space = |mut i: usize| {
+        while bytes.get(i).is_some_and(|b| b.is_ascii_whitespace()) {
+            i += 1;
+        }
+        i
+    };
+    let mut found: Vec<Target> = Vec::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        let len = if word_at(i, "application") {
+            "application".len()
+        } else if word_at(i, "app") {
+            "app".len()
+        } else {
+            i += 1;
+            continue;
+        };
+        let mut j = skip_space(i + len);
+        let by_id = word_at(j, "id");
+        if by_id {
+            j = skip_space(j + 2);
+        }
+        if bytes.get(j) == Some(&b'"') {
+            if let Some(end) = source[j + 1..].find('"') {
+                let text = source[j + 1..j + 1 + end].to_owned();
+                let t = if by_id {
+                    Target::BundleId(text)
+                } else {
+                    Target::Name(text)
+                };
+                if !text_is_empty(&t) && !found.contains(&t) {
+                    found.push(t);
+                }
+                i = j + 1 + end + 1;
+                continue;
+            }
+        }
+        i += len;
+    }
+    found
+}
+
+fn text_is_empty(t: &Target) -> bool {
+    match t {
+        Target::Name(s) | Target::BundleId(s) => s.is_empty(),
+    }
+}
+
+/// The timeout for a run whose targets have these consents: `base`, plus
+/// [`PROMPT_GRACE`] if any of them might still prompt.
+pub fn timeout_for(base: Duration, consents: &[Consent]) -> Duration {
+    if consents
+        .iter()
+        .any(|c| matches!(c, Consent::NotAsked | Consent::Unknown))
+    {
+        base + PROMPT_GRACE
+    } else {
+        base
+    }
+}
+
+/// Runs `source` with `run` (normally [`run`]), its timeout stretched by
+/// [`timeout_for`] from each target's `consent`.
+pub fn run_with_consent(
+    source: &str,
+    base: Duration,
+    consent: impl Fn(&Target) -> Consent,
+    run: impl Fn(&str, Duration) -> Result<String, ScriptError>,
+) -> Result<String, ScriptError> {
+    let consents: Vec<Consent> = targets(source).iter().map(consent).collect();
+    run(source, timeout_for(base, &consents))
 }

@@ -208,10 +208,109 @@ fn mute_toggle() -> Outcome {
     Ok(Done::Muted(now))
 }
 
+/// Bundle IDs whose Automation consent is settled for this session: macOS
+/// said granted or denied, or a script telling them finished. They're not
+/// checked again, so only a first run pays for the check (D-106).
+#[cfg(target_os = "macos")]
+static SETTLED: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+/// An app's bundle ID from the name a script tells it by, as Finder shows
+/// it: running apps first, then the usual folders and CoreServices (Finder,
+/// System Events).
+/// Names already looked up this session, so a press doesn't rescan the app
+/// folders.
+#[cfg(target_os = "macos")]
+static NAMES: std::sync::Mutex<Vec<(String, String)>> = std::sync::Mutex::new(Vec::new());
+
+#[cfg(target_os = "macos")]
+fn bundle_id_of(target: &applescript::Target) -> Option<String> {
+    use applescript::Target;
+    let name = match target {
+        Target::BundleId(id) => return Some(id.clone()),
+        Target::Name(name) => name,
+    };
+    let cached = NAMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .iter()
+        .find(|(n, _)| n.eq_ignore_ascii_case(name))
+        .map(|(_, id)| id.clone());
+    if cached.is_some() {
+        return cached;
+    }
+    let found = lookup_name(name);
+    if let Some(id) = &found {
+        NAMES
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push((name.clone(), id.clone()));
+    }
+    found
+}
+
+#[cfg(target_os = "macos")]
+fn lookup_name(name: &str) -> Option<String> {
+    if let Some((id, _)) = crate::macos::running_apps()
+        .into_iter()
+        .find(|(_, n)| n.eq_ignore_ascii_case(name))
+    {
+        return Some(id);
+    }
+    let mut folders = crate::apps::app_folders();
+    folders.push("/System/Library/CoreServices".into());
+    crate::apps::installed_in(&folders)
+        .into_iter()
+        .find(|a| a.name.eq_ignore_ascii_case(name))
+        .map(|a| a.bundle_id)
+}
+
 #[cfg(target_os = "macos")]
 fn run_applescript(source: &str, timeout_ms: u32) -> Outcome {
+    use applescript::Consent;
+    let settled = |id: &str| {
+        SETTLED
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .any(|s| s == id)
+    };
+    let settle = |id: String| {
+        let mut s = SETTLED.lock().unwrap_or_else(|e| e.into_inner());
+        if !s.contains(&id) {
+            s.push(id);
+        }
+    };
+    let ids: Vec<(applescript::Target, Option<String>)> = applescript::targets(source)
+        .into_iter()
+        .map(|t| {
+            let id = bundle_id_of(&t);
+            (t, id)
+        })
+        .collect();
+    let id_of = |t: &applescript::Target| {
+        ids.iter()
+            .find(|(x, _)| x == t)
+            .and_then(|(_, id)| id.clone())
+    };
     let timeout = std::time::Duration::from_millis(timeout_ms.into());
-    applescript::run(source, timeout)
-        .map(Done::Script)
-        .map_err(ActionError::Script)
+    let out = applescript::run_with_consent(
+        source,
+        timeout,
+        |target| match id_of(target) {
+            None => Consent::Unknown,
+            Some(id) if settled(&id) => Consent::Granted,
+            Some(id) => {
+                let c = crate::macos::automation_consent(&id);
+                if matches!(c, Consent::Granted | Consent::Denied) {
+                    settle(id);
+                }
+                c
+            }
+        },
+        applescript::run,
+    );
+    if out.is_ok() {
+        ids.into_iter().filter_map(|(_, id)| id).for_each(settle);
+    }
+    out.map(Done::Script).map_err(ActionError::Script)
 }

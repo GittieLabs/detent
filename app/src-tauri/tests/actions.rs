@@ -304,3 +304,131 @@ fn a_dashboard_window_failure_says_so() {
         "the dashboard window failed: no answer from the main thread"
     );
 }
+
+mod first_run {
+    //! The Automation prompt's time doesn't count against a script's
+    //! timeout (M9, D-106).
+    use std::time::Duration;
+
+    use detent_lib::actions::applescript::{
+        run_with_consent, targets, timeout_for, Consent, Target, PROMPT_GRACE,
+    };
+    use detent_lib::actions::ScriptError;
+
+    #[test]
+    fn targets_are_the_apps_a_script_tells() {
+        let src = "tell application \"Mail\" to activate\n\
+                   tell app \"Safari\"\n  return 1\nend tell\n\
+                   tell application id \"com.electron.plasticity\" to activate\n\
+                   TELL APPLICATION \"Mail\" to quit\n\
+                   return \"application\"";
+        assert_eq!(
+            targets(src),
+            vec![
+                Target::Name("Mail".into()),
+                Target::Name("Safari".into()),
+                Target::BundleId("com.electron.plasticity".into()),
+            ]
+        );
+        assert!(targets("do shell script \"ls\"").is_empty());
+    }
+
+    #[test]
+    fn the_prompt_gets_extra_time_only_when_it_might_show() {
+        let base = Duration::from_secs(5);
+        assert_eq!(timeout_for(base, &[]), base);
+        assert_eq!(
+            timeout_for(base, &[Consent::Granted, Consent::Denied]),
+            base
+        );
+        assert_eq!(
+            timeout_for(base, &[Consent::Granted, Consent::NotAsked]),
+            base + PROMPT_GRACE
+        );
+        assert_eq!(timeout_for(base, &[Consent::Unknown]), base + PROMPT_GRACE);
+    }
+
+    /// Stands in for osascript while macOS shows the Automation prompt:
+    /// it takes `prompt` before the script can run, and times out like the
+    /// real runner when that's longer than it was given.
+    fn prompting(prompt: Duration) -> impl Fn(&str, Duration) -> Result<String, ScriptError> {
+        move |_src, timeout| {
+            if prompt > timeout {
+                Err(ScriptError::TimedOut {
+                    timeout_ms: timeout.as_millis(),
+                })
+            } else {
+                Ok("done".into())
+            }
+        }
+    }
+
+    #[test]
+    fn a_slow_allow_on_the_first_run_does_not_time_the_script_out() {
+        let base = Duration::from_millis(100);
+        let slow_allow = Duration::from_secs(10);
+        let out = run_with_consent(
+            "tell application \"Mail\" to activate",
+            base,
+            |_| Consent::NotAsked,
+            prompting(slow_allow),
+        );
+        assert_eq!(out, Ok("done".into()));
+    }
+
+    #[test]
+    fn once_allowed_a_hung_script_still_times_out_on_time() {
+        let base = Duration::from_millis(100);
+        let out = run_with_consent(
+            "tell application \"Mail\" to activate",
+            base,
+            |_| Consent::Granted,
+            prompting(Duration::from_secs(10)),
+        );
+        assert_eq!(out, Err(ScriptError::TimedOut { timeout_ms: 100 }));
+    }
+
+    #[test]
+    fn a_script_that_tells_no_app_keeps_its_timeout() {
+        let seen = std::cell::Cell::new(Duration::ZERO);
+        let _ = run_with_consent(
+            "return 1",
+            Duration::from_millis(250),
+            |_| Consent::NotAsked,
+            |_, t| {
+                seen.set(t);
+                Ok(String::new())
+            },
+        );
+        assert_eq!(seen.get(), Duration::from_millis(250));
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod automation_consent {
+    //! The real check: never prompts, answers quickly.
+    use std::time::{Duration, Instant};
+
+    use detent_lib::actions::applescript::Consent;
+    use detent_lib::macos::automation_consent;
+
+    #[test]
+    fn an_app_that_is_not_running_is_unknown() {
+        assert_eq!(
+            automation_consent("com.example.no-such-app"),
+            Consent::Unknown
+        );
+    }
+
+    #[test]
+    fn a_running_app_answers_without_a_prompt() {
+        let t = Instant::now();
+        let c = automation_consent("com.apple.finder");
+        eprintln!("Finder: {c:?}");
+        assert!(
+            t.elapsed() < Duration::from_secs(2),
+            "took {:?}",
+            t.elapsed()
+        );
+    }
+}

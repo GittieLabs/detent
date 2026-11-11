@@ -99,7 +99,7 @@ Menu bar app with no Dock icon (`LSUIElement`). Closing the settings window hide
 | Permission | Needed for | When asked |
 | --- | --- | --- |
 | Accessibility | Send shortcut | First time a Send shortcut mapping is saved |
-| Automation (per target app) | Run AppleScript | macOS prompts on first run against that app |
+| Automation (per target app) | Run AppleScript | macOS prompts on first run against that app; that run's timeout is stretched while it might prompt (D-106) |
 | Input Monitoring | Not needed | Vendor HID isn't a keyboard device |
 
 The app checks permissions at startup and shows missing ones as a single banner with a Fix button, never a modal on launch.
