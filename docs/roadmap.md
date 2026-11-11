@@ -2,7 +2,7 @@
 
 Changes every session. This is the only place progress is tracked.
 
-**Current milestone: M7 More boards**
+**Current milestone: M9 Hardening and v0.1** (pulled forward while M7 waits on soldered headers, D-098; M7 stays open)
 
 Milestones are ordered by risk: macOS signing and permissions, then the USB protocol, are proven before any UI exists. The engine runs headless before it gets a window. The next milestone starts only when every exit criterion of the current one passes on a signed build.
 
@@ -179,7 +179,7 @@ Exit criteria:
 - [x] One button shows the app's dashboard full screen on the secondary display (signed build, `acceptance.md` M6 step 4). Passed 2026-11-10; the page is a configurable URL (D-088).
 - [x] Unplugging that display doesn't crash or strand the window (signed build, `acceptance.md` M6 step 5). Passed 2026-11-10.
 
-## M7 More boards (current)
+## M7 More boards (open, waiting on headers)
 
 Keith, 2026-11-10 (D-091): run Detent on an ESP32-S3 DevKitC class board (more GPIO, same chip and flashing; Keith's is a clone, details read from the chip) and on the Raspberry Pi Pico (RP2040), before v0.1. The portable logic in `firmware/lib/` stays shared; each board gets its own pin map, PlatformIO env, and USB glue where the chip differs. The app accepts each board's USB IDs and keeps per model knowledge in `models` (D-081). Every flash needs Keith's OK. Pin wiring for both new boards is Keith's (open question); until he gives it, each pin map is a PLACEHOLDER like the XIAO's was. Keith, 2026-11-11 (D-097): his DevKitC turned out to be an original ESP32 with no native USB, so it can't be a Detent; the Adafruit ESP32-S3 Feather (4 MB flash, 2 MB PSRAM) takes its place.
 
@@ -208,25 +208,30 @@ Exit criteria:
 
 - A Teensy 4.x pairs and runs mappings on a signed build, with the other boards unchanged.
 
-## M9 Hardening and v0.1
+## M9 Hardening and v0.1 (current)
 
 Was M7: earlier roadmap notes, acceptance results and decision rows that say "M7" for hardening mean this milestone.
 
-Debug mode and log export, crash recovery, config migration tests, notarized release build.
+Debug mode and log export, crash recovery, config migration tests, notarized release build. Pulled forward on 2026-11-11 while M7 waits on Keith's soldering (D-098): the tasks run now, and the exit criteria are checked once M7 and M8 are done, so v0.1 still ships on every board (D-091).
 
-Noted during M6:
+Tasks, riskiest first:
 
-- [ ] Documentation site on GitHub Pages: what Detent is, installing, pairing a device, and configuring mappings, the device menu and the config file. Then make it Open dashboard's default URL in place of the repo (D-088).
+- [ ] Notarized release build (D-010, D-099): `scripts/build-release.sh` and `just build-release`: the release profile, version 0.1.0 from the workspace, signed with the Developer ID Application identity from `APPLE_SIGNING_IDENTITY` with the hardened runtime and an entitlements file in `app/src-tauri/` (Apple Events for Run AppleScript, and whatever else the hardened runtime turns out to block), `NSAppleEventsUsageDescription` in `Info.plist`, then a DMG submitted with `xcrun notarytool` under the keychain profile named by `APPLE_NOTARY_PROFILE`, stapled, and checked. Nothing secret in the repo or the script. Submitting uploads the build to Apple, so each submission needs Keith's OK. Tests: the script's own checks (`codesign --verify --strict --deep`, `spctl -a -t exec -vv`, `xcrun stapler validate`); `acceptance.md` M9 steps 1 and 2 (every permissioned action works under the hardened runtime; a clean account).
+- [ ] Crash recovery: a panic hook writes the panic and a backtrace to the engine log; a panic in the engine or action worker thread restarts that thread with backoff instead of leaving a tray app that silently does nothing, and the tray line says so; a config that fails to load is offered a "Start fresh" that moves it aside (`config.json.bad-<time>`) rather than overwriting it. A decisions row on restarting threads in place versus quitting for a relaunch. Tests: unit tests with a panicking fake transport and executor (thread comes back, the log has the panic, backoff caps); `store` tests for moving a bad config aside; `acceptance.md` M9 step 3.
+- [ ] Config migrations (D-008): a `store::migrate` step from every earlier schema version to `SCHEMA_VERSION`, the old file kept as `config.json.v<N>.bak` before the first migrated save, and frozen fixtures of every config shape written so far (the examples and M2 to M7 configs, including Keith's current one with names and URLs replaced) that must keep loading, like `protocol/tests/frozen.rs`. Schema stays 1 unless a change needs a bump. Tests: the frozen fixtures; a synthetic v0 to v1 migration in tests; a future version still refused and never overwritten.
+- [ ] Debug in Test (architecture.md, UX): a Debug toggle (and `--debug`) showing a scrolling, bounded event log (time, seq, decoded message, raw bytes, the mapping that resolved and the action result), the last HELLO per unit, and the permissions panel. Engine events reach the UI through `app_state`, capped so a stuck encoder can't grow memory. Tests: `app_state` and engine unit tests (ring buffer bound, raw bytes kept, result attached to its event); `pnpm -C app tsc --noEmit`; `acceptance.md` M9 step 4.
+- [ ] Export logs and log rotation (D-100): the engine log keeps one previous file (`detent.log.1`) instead of starting over at 1 MB; Export logs in Debug writes `Detent logs <date>.zip` to the Desktop and reveals it: both log files, the config with AppleScript text, shell commands, URLs and names redacted, the app and macOS versions, and each unit's last HELLO. Tests: unit tests for rotation, the zip's contents and the redaction; `acceptance.md` M9 step 5.
+- [ ] AppleScript first run (noted in M2): time spent on macOS's Automation prompt doesn't count against the script's timeout, or the first run against an app retries once after a timeout. Tests: `actions` unit tests with a fake runner that blocks like the prompt; `acceptance.md` M9 step 6 (reset with `tccutil reset AppleEvents com.gittielabs.detent`, slow Allow).
+- [ ] Sleep and wake on hardware (noted in M2): log a line when the D-068 clock gap fires, with the gap and the reconnect time after wake; Keith runs a sleep that keeps the link (on battery, Power Nap off). Tests: engine unit test for the log line; `acceptance.md` M9 step 7.
+- [ ] Documentation site (noted in M6, D-088): a `site/` folder built with mdBook and published to GitHub Pages by a workflow (what Detent is, installing, pairing, mappings, the device menu, the config file, supported boards), then Open dashboard's default URL points at it. Keith turns on Pages for the repo. Tests: `mdbook build` and a link check in CI; a `store` test for the new default; `acceptance.md` M9 step 8.
+- [ ] M9 acceptance pass: the notarized DMG installed on a clean account, every M9 step, then the full acceptance pass (M0 to M7 scenarios) with zero blockers, after M7 and M8 close.
 
-Noted during M2 (do here, not before):
-
-- [ ] Sleep and wake on hardware: in three tests (2026-11-09 and 2026-11-10) macOS DarkWaked on AC power and dropped the HID link before sleeping, so the rescan path recovered the board and the clock gap reopen (D-068) never ran. Exercise D-068 with a sleep that keeps the link (on battery, Power Nap off), log the clock gap when it fires, and time the reconnect after wake (20 s in the last test). Found 2026-11-10.
-- [ ] An AppleScript's first run waits on macOS's Automation prompt, and that wait counts against its timeout (5 s by default): in M2 step 5 the first press took 4.6 s. A slow click on Allow stops the script (the grant still sticks). Don't count prompt time, or retry once after a timeout on the first run against an app. Found 2026-11-09.
+The items noted during M2 and M6 are now tasks above.
 
 Exit criteria:
 
-- Full manual acceptance pass with zero blockers.
-- Notarized build installs and runs on a clean user account.
+- [ ] Full manual acceptance pass with zero blockers.
+- [ ] Notarized build installs and runs on a clean user account.
 
 ## After v0.1
 
@@ -240,6 +245,8 @@ Recorded for a later update (Keith, 2026-11-10; not in v1):
 
 ## Open questions (Keith's call)
 
+- [ ] Where v0.1 is published and how it's tagged: placeholder, a `v0.1.0` tag and the notarized DMG on GitHub Releases, uploaded by Keith. The release task only builds and notarizes.
+- [ ] Notarization credentials: Keith runs `xcrun notarytool store-credentials` once and sets `APPLE_NOTARY_PROFILE` to the profile's name (D-099). Needed before the release task's first submission.
 - [ ] Pin wiring for the Feather and the Pico: which GPIO carries each button, the encoder's A, B and switch, and the OLED's I2C. PLACEHOLDER maps until then.
 - [ ] Product names for the new boards (`Detent <model name>`): placeholders `Detent Feather` and `Detent Pico`, and whether each board is its own model (its own PID) or a variant of one. After D-094 this only affects the name and starter template shown, not how the controls work.
 - [ ] Listing more boards' USB IDs means editing the Identity section of `protocol.md`. CLAUDE.md says any `protocol.md` edit bumps `PROTOCOL_VERSION`, but `protocol.md` itself says identity isn't wire format. Bump to v2 (firmware and app together), or treat identity as exempt with a decisions row? Placeholder: list them in a new `docs/boards.md` and leave `protocol.md` untouched until Keith decides.
@@ -265,6 +272,7 @@ Recorded for a later update (Keith, 2026-11-10; not in v1):
 
 Newest first. One or two lines per session: what landed, what's next.
 
+- 2026-11-11 (later): M7's Feather passed step 1 before headers; the rest of M7 waits on soldering. M9 planned and pulled forward (D-098). Next: the notarized release build, after Keith stores notary credentials (open question).
 - 2026-11-10 (night): M6 done. Landed the firmware's app menu items and status line, mode changes from heartbeats, Mapped encoder mappings (triggers per control), device menu items in the config and engine (D-086) with their editor, action results on the OLED (D-087), and Open dashboard (D-088 to D-090: a configurable URL, full screen or windowed, closed by a second press, a hover Close pill, or unplugging the device). Fixed on the way: PlatformIO's core version, an unreachable Push cell, a reorder that overwrote a menu item, and a mode switch that failed its first press. Keith passed every M6 step on signed builds. Next: plan M7 (hardening, the docs site, a UI test runner if wanted, notarized release).
 - 2026-11-10 (evening): M5 done. Landed key names and keystroke posting (D-082), Send shortcut with Secure Input and grant refusals, the Accessibility banner with Fix, the shortcut recorder, app scope in the editor, Mappings as a grouped list with scope chips (D-085, after D-084's tiles), a fixed frame window, and Detent's own volume overlay (D-083: macOS 27 ignores posted volume keys). Keith passed every M5 step on signed builds. Next: plan M6. Waiting on Keith: the dashboard content open question (D-055) before M6's dashboard work.
 - 2026-11-10 (later): M4 done. Landed the app list (D-080), runtime Dry run and live input (D-079), mappings in app state with per model knowledge (D-081), the starter template (D-077), the tabbed window and device drawing, the mapping editor, and the Test screen with results. Also: the second board flashed and checked (M1 step 2), Node fixed, sleep retested (D-068 still unexercised, M7). Keith passed every M4 step on signed builds; step 1 with notes (AppleScript text given, volume wording fixed, press and long press labelled). Next: plan M5, which now includes visible volume feedback.

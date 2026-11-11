@@ -246,3 +246,17 @@ Results:
   - `scripts/hil.sh` passed on it (debug and release; board left on release 0.2.0).
   - The second XIAO (`E072A1FC849C`) flashed to release 0.2.0 with Keith's OK; it reconnected with HELLO naming button 6 as encoder 5's push.
 
+## M9
+
+Steps 1 to 7 need the notarized release build (`just build-release`) unless they say otherwise. Steps 1 and 2 are the exit criterion "notarized build installs and runs on a clean user account"; the full acceptance pass is the other.
+
+1. Hardened runtime. Install the notarized DMG over nothing (drag to Applications), open it: no Gatekeeper warning. Pair a board; a Send shortcut, a Run AppleScript (Automation prompt, then it runs), an Open app, a volume action and Open dashboard each work. Open at login survives a log out and back in.
+2. Clean account. Make a new macOS user, log in, install the same DMG, and repeat step 1 from an empty config, including the Accessibility banner and Fix.
+3. Crash recovery. On a build with the debug crash trigger (the task names it), crash the engine thread: the tray line says it restarted, the board keeps working, and the log has the panic. Break the config by hand and relaunch: Detent offers Start fresh and moves the broken file aside.
+4. Debug. Turn on Debug in Test: presses and turns appear with time, decoded fields, raw bytes, the mapping and its result; the last HELLO and the permissions panel show. Spin the encoder hard for 10 s: the window stays responsive.
+5. Export logs. Export logs makes a zip on the Desktop and shows it in Finder; it holds both logs, versions and HELLOs, and the config inside has no script text, shell commands, URLs or names.
+6. AppleScript first run. `tccutil reset AppleEvents com.gittielabs.detent`, then press a Run AppleScript mapping and wait 10 s before clicking Allow: the script runs once allowed, without a timeout failure.
+7. Sleep and wake (any signed build). On battery with Power Nap off, sleep the Mac with the board plugged in for at least a minute, then wake it: the log shows the clock gap line and the board works again within a few seconds.
+8. Docs site. The GitHub Pages site loads, its pages match the app, and a new Open dashboard mapping defaults to it.
+
+Results:
