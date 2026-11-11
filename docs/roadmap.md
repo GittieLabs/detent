@@ -2,7 +2,7 @@
 
 Changes every session. This is the only place progress is tracked.
 
-**Current milestone: M7 More boards** (not yet planned: run `/plan-milestone`)
+**Current milestone: M7 More boards**
 
 Milestones are ordered by risk: macOS signing and permissions, then the USB protocol, are proven before any UI exists. The engine runs headless before it gets a window. The next milestone starts only when every exit criterion of the current one passes on a signed build.
 
@@ -179,14 +179,23 @@ Exit criteria:
 - [x] One button shows the app's dashboard full screen on the secondary display (signed build, `acceptance.md` M6 step 4). Passed 2026-11-10; the page is a configurable URL (D-088).
 - [x] Unplugging that display doesn't crash or strand the window (signed build, `acceptance.md` M6 step 5). Passed 2026-11-10.
 
-## M7 More boards
+## M7 More boards (current)
 
-Keith, 2026-11-10 (D-091): run Detent on an ESP32-S3 DevKitC class board (more GPIO, same chip and flashing; Keith's is a clone, details read from the chip) and on the Raspberry Pi Pico (RP2040), before v0.1. The portable logic in `firmware/lib/` stays shared; each board gets its own pin map, PlatformIO env, and USB glue where the chip differs (the Pico: TinyUSB on the Arduino-Pico core, its serial from the flash chip's unique ID). The app accepts each board's USB IDs and keeps per model knowledge in `models` (D-081).
+Keith, 2026-11-10 (D-091): run Detent on an ESP32-S3 DevKitC class board (more GPIO, same chip and flashing; Keith's is a clone, details read from the chip) and on the Raspberry Pi Pico (RP2040), before v0.1. The portable logic in `firmware/lib/` stays shared; each board gets its own pin map, PlatformIO env, and USB glue where the chip differs. The app accepts each board's USB IDs and keeps per model knowledge in `models` (D-081). Every flash needs Keith's OK. Pin wiring for both new boards is Keith's (open question); until he gives it, each pin map is a PLACEHOLDER like the XIAO's was.
+
+Tasks, riskiest first:
+
+- [ ] Pico USB spike: a minimal Pico firmware (PlatformIO, Arduino-Pico core with Adafruit TinyUSB) that enumerates as the same composite device the XIAO is (vendor HID report ID 6 with 63 byte reports, Consumer Control report ID 4, CDC), with a PLACEHOLDER VID/PID, the serial from the flash chip's unique ID, and HELLO and HEARTBEAT from `lib/link_layer`. Log the core and USB stack choice. Tests: the env builds in CI; HIL with `ctl-probe` (HELLO and heartbeats read, the volume key moves the Mac's volume); `ioreg` shows the IDs and serial.
+- [ ] Board layer in the firmware: one header per board in `firmware/include/boards/` (pins, LED kind and polarity, OLED pins, product name, USB IDs) chosen by a build flag; the chip specific parts split behind small interfaces (`src/usb_device` per chip, the encoder interrupt's critical section, the serial source, the status LED driver); envs `xiao_esp32s3`, `devkitc_s3` and `pico`, with debug variants where the chip allows. No behavior change on the XIAO. Tests: native tests unchanged; all envs build in CI; `scripts/hil.sh` passes on the XIAO again.
+- [ ] Known models in the app and tools: `protocol/src/ids.rs` becomes a table of models (VID, PID, product name, encoder push control), used by `devices` (what counts as a Detent unit), `models` (D-081, the starter template), and `ctl-probe`. The identity section of `protocol.md` lists each model (see the open question on whether that edit bumps the protocol version). Tests: unit tests for model lookup; `devices` tests with a second model's IDs (found, paired, unknown, ignored); `ctl-probe list` shows each.
+- [ ] DevKitC board: the `devkitc_s3` env and pin map (PLACEHOLDER pins until Keith wires it), its addressable RGB status LED driven like the XIAO's (off, blinking, solid), and the chip details (flash size, PSRAM) read from the board and recorded. Tests: builds in CI; HIL with `ctl-probe`; `acceptance.md` M7 step 1.
+- [ ] Pico board: the full firmware on the Pico (buttons, encoder with its modes, OLED and menu, status line, device menu items, LED), flashed by the 1200 baud touch into its bootloader. Tests: native tests unchanged (shared logic); builds in CI; HIL with `ctl-probe` including TEST_INJECT on the debug build; `acceptance.md` M7 step 2.
+- [ ] M7 acceptance pass on a signed build: `just build-dev`, each board on its release firmware, and the steps in `acceptance.md` M7.
 
 Exit criteria:
 
-- A DevKitC board and a Pico each pair through the wizard, report their controls in HELLO, and run mappings, the device menu and the status line, on a signed build.
-- The XIAO keeps working unchanged.
+- [ ] A DevKitC board and a Pico each pair through the wizard, report their controls in HELLO, and run mappings, the device menu and the status line, on a signed build (`acceptance.md` M7 steps 1 and 2).
+- [ ] The XIAO keeps working unchanged (`acceptance.md` M7 step 3).
 
 ## M8 Teensy 4.x
 
@@ -227,6 +236,10 @@ Recorded for a later update (Keith, 2026-11-10; not in v1):
 - [ ] Chords: a mapping triggered by a control while another button is held (Button 1 held + encoder turn to zoom, Button 2 held + turn to rotate in Plasticity; button + button too). App side only: in Mapped mode the device already reports every down, up and turn. A button used as a chord modifier fires its own press on release, and only if no chord happened (tap vs hold); other buttons keep firing on down. Needs a decisions row relaxing product.md's "no layers" rule for chords. Knob chords need Mapped mode unless the firmware learns to forward turns while a button is held. Check what Plasticity binds for pan, zoom and orbit first: if they're mouse only, a scroll or drag action type would be needed (its own decisions row).
 
 ## Open questions (Keith's call)
+
+- [ ] Pin wiring for the DevKitC and the Pico: which GPIO carries each button, the encoder's A, B and switch, and the OLED's I2C. PLACEHOLDER maps until then.
+- [ ] Product names for the new boards (`Detent <model name>`): placeholders `Detent DevKitC` and `Detent Pico`, and whether each board is its own model (its own PID) or a variant of one.
+- [ ] Listing more boards' USB IDs means editing the Identity section of `protocol.md`. CLAUDE.md says any `protocol.md` edit bumps `PROTOCOL_VERSION`, but `protocol.md` itself says identity isn't wire format. Bump to v2 (firmware and app together), or treat identity as exempt with a decisions row? Placeholder: list them in a new `docs/boards.md` and leave `protocol.md` untouched until Keith decides.
 
 - [ ] USB IDs for the Raspberry Pi Pico build: Espressif's PIDs (D-014) cover Espressif chips only. Raspberry Pi assigns free PIDs under its VID (`0x2E8A`); Keith files the request. Until then the Pico uses a PLACEHOLDER pair, marked in `protocol/src/ids.rs` and the firmware.
 

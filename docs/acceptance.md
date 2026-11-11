@@ -223,3 +223,13 @@ Results:
   - Step 5 (exit criterion): `PASS` earlier (Studio Display unplugged, the dashboard moved to the main screen). Unplugging Detent Dev hid the dashboard (Close when no device is connected).
   - M6 exit criteria both pass on a signed build.
 
+## M7
+
+Needs a signed build (`just build-dev`) and each board flashed with its release firmware (Keith's OK for each flash), wired with buttons, an encoder and the OLED per its pin map. Steps 1 to 3 are the exit criteria.
+
+1. DevKitC. Plug it in alone: the tray offers "New device found", and the wizard pairs it with its model's name. Mappings shows its controls from HELLO. A mapped button runs, the device menu shows Detent's items after its own, a result shows on the status line, and Mapped mode follows from the board's menu. Its RGB LED blinks unpaired and turns solid when paired.
+2. Pico. The same as step 1, on the Pico. Flashing it again from `just fw-upload` (or its own target) works without pressing BOOTSEL.
+3. The XIAO, unchanged. Plug the XIAO back in: it connects as before with its mappings, device menu and status line, and `scripts/hil.sh` passes on it.
+
+Results:
+
