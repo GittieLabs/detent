@@ -18,7 +18,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use detent_protocol::codec::DeviceMessage;
 
-use crate::actions::{Executor, Outcome, RecordingExecutor};
+use crate::actions::{Done, Executor, Outcome, RecordingExecutor};
 use crate::devices::{DeviceEvent, DeviceId, Devices, Options};
 use crate::router::{trigger_of, Router};
 use crate::store::{Action, Config, MenuItem, Trigger};
@@ -215,7 +215,42 @@ struct Job {
     dry_run: bool,
 }
 
-fn worker(jobs: Receiver<Job>, executor: Arc<dyn Executor>, sink: Arc<dyn Sink>) {
+/// What the device's status line shows for an action's result (D-087): a
+/// few words, at most 20 printable ASCII characters. `None` for a dry run.
+pub fn status_of(outcome: &Outcome) -> Option<String> {
+    let text = match outcome {
+        Ok(Done::Recorded) => return None,
+        Ok(Done::Volume { to, .. }) => format!("Vol {}%", (to * 100.0).round() as i32),
+        Ok(Done::Muted(true)) => "Muted".into(),
+        Ok(Done::Muted(false)) => "Unmuted".into(),
+        Ok(Done::Opened(id)) => {
+            // `com.apple.mail` -> `Mail`: the bundle ID's last part.
+            let last = id.rsplit('.').next().unwrap_or(id);
+            let mut chars = last.chars();
+            let name: String = chars
+                .next()
+                .map(|c| c.to_uppercase().chain(chars).collect())
+                .unwrap_or_default();
+            format!("Opened {name}")
+        }
+        Ok(Done::Sent(keys)) => format!("Sent {keys}"),
+        Ok(Done::Script(_)) => "Script done".into(),
+        Err(_) => "Failed".into(),
+    };
+    Some(
+        text.chars()
+            .filter(|c| (' '..='~').contains(c))
+            .take(detent_protocol::codec::MAX_STATUS_LEN)
+            .collect(),
+    )
+}
+
+fn worker(
+    jobs: Receiver<Job>,
+    executor: Arc<dyn Executor>,
+    sink: Arc<dyn Sink>,
+    status: Sender<(DeviceId, String)>,
+) {
     let recording = RecordingExecutor::default();
     // Ends when the engine drops its sender.
     for job in jobs {
@@ -225,6 +260,9 @@ fn worker(jobs: Receiver<Job>, executor: Arc<dyn Executor>, sink: Arc<dyn Sink>)
         } else {
             executor.run(&job.action)
         };
+        if let Some(text) = status_of(&outcome) {
+            let _ = status.send((job.id.clone(), text));
+        }
         sink.record(&Record::Ran {
             id: job.id,
             action: job.action,
@@ -256,6 +294,11 @@ pub struct Engine<B> {
     dry_run: bool,
     /// Each paired unit's app owned menu items, by serial (lowercase).
     menus: HashMap<String, Vec<MenuItem>>,
+    /// Action results from the worker, for the device's status line.
+    statuses: Receiver<(DeviceId, String)>,
+    /// When each unit's status line is due to be cleared.
+    clear_at: HashMap<DeviceId, Instant>,
+    status_for: Duration,
     jobs: Sender<Job>,
     /// Kept so the worker is owned by the engine; dropping `jobs` ends it.
     _worker: JoinHandle<()>,
@@ -272,10 +315,11 @@ impl<B: Bus + 'static> Engine<B> {
         options: Options,
     ) -> Self {
         let (jobs, rx) = mpsc::channel();
+        let (status_tx, statuses) = mpsc::channel();
         let worker_sink = sink.clone();
         let worker = thread::Builder::new()
             .name("detent-actions".into())
-            .spawn(move || worker(rx, executor, worker_sink))
+            .spawn(move || worker(rx, executor, worker_sink, status_tx))
             .expect("spawn the action worker");
         Self {
             devices: Devices::new(bus, &config.devices, &config.ignored, options),
@@ -285,6 +329,9 @@ impl<B: Bus + 'static> Engine<B> {
             paused: config.paused,
             dry_run: false,
             menus: menus_of(config),
+            statuses,
+            clear_at: HashMap::new(),
+            status_for: options.status_for,
             jobs,
             _worker: worker,
         }
@@ -301,6 +348,25 @@ impl<B: Bus + 'static> Engine<B> {
             devices: config.devices.len(),
             mappings: config.mappings.len(),
         });
+    }
+
+    /// Puts each finished action's result on its device's status line, and
+    /// clears lines whose time is up (a newer result restarts the clock).
+    fn show_statuses(&mut self, now: Instant) {
+        while let Ok((id, text)) = self.statuses.try_recv() {
+            self.devices.send_status(&id, &text);
+            self.clear_at.insert(id, now + self.status_for);
+        }
+        let due: Vec<DeviceId> = self
+            .clear_at
+            .iter()
+            .filter(|(_, at)| now >= **at)
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in due {
+            self.clear_at.remove(&id);
+            self.devices.send_status(&id, "");
+        }
     }
 
     /// Runs the picked menu item's action, as a press would run a mapping:
@@ -342,6 +408,7 @@ impl<B: Bus + 'static> Engine<B> {
 
     /// One turn: read devices, then resolve and queue any input.
     pub fn step(&mut self, now: Instant) {
+        self.show_statuses(now);
         let events = self.devices.step(now);
         let read_at = Instant::now();
         for event in events {

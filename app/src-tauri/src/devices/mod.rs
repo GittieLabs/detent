@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 use detent_protocol::codec::{
     decode_device, encode_app, AppMessage, ButtonAction, DecodeError, DeviceMessage, EncoderMode,
-    Hello, Label,
+    Hello, Label, StatusText,
 };
 use detent_protocol::ids;
 
@@ -133,6 +133,9 @@ pub struct Options {
     pub heartbeat_timeout: Duration,
     /// Longest a step waits for reports, across all units.
     pub read_wait: Duration,
+    /// How long an action's result stays on the device's status line
+    /// before the engine clears it (D-087).
+    pub status_for: Duration,
 }
 
 impl Default for Options {
@@ -141,6 +144,7 @@ impl Default for Options {
             scan_every: Duration::from_secs(1),
             heartbeat_timeout: Duration::from_secs(6),
             read_wait: Duration::from_millis(20),
+            status_for: Duration::from_secs(4),
         }
     }
 }
@@ -267,6 +271,23 @@ impl<B: Bus> Devices<B> {
         self.allow = devices.to_vec();
         self.ignore = ignored.to_vec();
         self.relisted = true;
+    }
+
+    /// Sets a paired unit's OLED status line (`""` clears it). Cut to the
+    /// protocol's 20 printable ASCII characters; a unit that isn't open, or a
+    /// failed send, is ignored (the next read notices a dead link).
+    pub fn send_status(&mut self, id: &DeviceId, text: &str) {
+        let clean: String = text
+            .chars()
+            .filter(|c| (' '..='~').contains(c))
+            .take(detent_protocol::codec::MAX_STATUS_LEN)
+            .collect();
+        let Ok(text) = StatusText::new(&clean) else {
+            return;
+        };
+        if let Some(unit) = self.units.iter_mut().find(|u| !u.candidate && u.id == *id) {
+            let _ = unit.send(&AppMessage::Status { text });
+        }
     }
 
     /// The menu labels the allowlist gives a unit.

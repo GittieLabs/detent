@@ -72,7 +72,16 @@ impl Executor for ProbeExecutor {
                 .unwrap()
                 .recv_timeout(Duration::from_secs(10));
         }
-        Ok(Done::Recorded)
+        // Volume and mute answer like the real executor, so the status line
+        // has something to show; everything else is just recorded.
+        match action {
+            Action::VolumeUp { step } => Ok(Done::Volume {
+                from: 0.5,
+                to: 0.5 + step,
+            }),
+            Action::MuteToggle => Ok(Done::Muted(true)),
+            _ => Ok(Done::Recorded),
+        }
     }
 }
 
@@ -96,6 +105,11 @@ struct Rig {
 
 impl Rig {
     fn start() -> Self {
+        Self::start_with(Options::default().status_for)
+    }
+
+    /// Like `start`, with the OLED status line cleared after `status_for`.
+    fn start_with(status_for: Duration) -> Self {
         let bus = MockBus::default();
         let hid = bus.attach(VID, PID, Some(SERIAL));
         let (calls_tx, calls) = mpsc::channel();
@@ -114,6 +128,7 @@ impl Rig {
             Arc::new(ChannelSink(Mutex::new(records_tx))),
             Options {
                 read_wait: Duration::from_millis(2),
+                status_for,
                 ..Options::default()
             },
         )
@@ -513,4 +528,147 @@ fn a_menu_item_obeys_dry_run() {
     r.hid.push_device(0, &DeviceMessage::MenuSelect { item: 1 });
     r.expect(|x| matches!(x, Record::MenuPicked { .. }));
     r.no_call();
+}
+
+// The device's status line after an action (M6, D-087).
+
+#[test]
+fn an_action_result_becomes_a_short_status_line() {
+    use detent_lib::actions::ActionError;
+    use detent_lib::engine::status_of;
+    use detent_lib::keys::Refusal;
+    assert_eq!(
+        status_of(&Ok(Done::Volume {
+            from: 0.31,
+            to: 0.375
+        })),
+        Some("Vol 38%".into())
+    );
+    assert_eq!(status_of(&Ok(Done::Muted(true))), Some("Muted".into()));
+    assert_eq!(status_of(&Ok(Done::Muted(false))), Some("Unmuted".into()));
+    assert_eq!(
+        status_of(&Ok(Done::Opened("com.apple.mail".into()))),
+        Some("Opened Mail".into())
+    );
+    assert_eq!(
+        status_of(&Ok(Done::Opened("com.electron.plasticity".into()))),
+        Some("Opened Plasticity".into())
+    );
+    assert_eq!(
+        status_of(&Ok(Done::Sent("cmd+shift+e".into()))),
+        Some("Sent cmd+shift+e".into())
+    );
+    assert_eq!(
+        status_of(&Ok(Done::Script(String::new()))),
+        Some("Script done".into())
+    );
+    assert_eq!(
+        status_of(&Ok(Done::Script("42".into()))),
+        Some("Script done".into())
+    );
+    assert_eq!(
+        status_of(&Err(ActionError::Keys(Refusal::SecureInput))),
+        Some("Failed".into())
+    );
+    assert_eq!(
+        status_of(&Ok(Done::Recorded)),
+        None,
+        "a dry run shows nothing"
+    );
+    // Always at most 20 printable ASCII characters (the protocol's STATUS).
+    let long = status_of(&Ok(Done::Sent("cmd+option+control+shift+f12".into()))).unwrap();
+    assert_eq!(long.len(), 20);
+    assert!(detent_protocol::codec::StatusText::new(&long).is_ok());
+    let odd = status_of(&Ok(Done::Opened("com.example.Café".into()))).unwrap();
+    assert!(
+        detent_protocol::codec::StatusText::new(&odd).is_ok(),
+        "{odd}"
+    );
+}
+
+fn statuses(hid: &MockHid) -> Vec<String> {
+    hid.writes()
+        .iter()
+        .filter_map(
+            |w| match detent_protocol::codec::decode_app(&w[1..]).ok()?.msg {
+                detent_protocol::codec::AppMessage::Status { text } => {
+                    Some(text.as_str().to_owned())
+                }
+                _ => None,
+            },
+        )
+        .collect()
+}
+
+/// Waits until the device has been sent `want` statuses, in order.
+fn wait_for_statuses(hid: &MockHid, want: &[&str]) {
+    let deadline = Instant::now() + WAIT;
+    while statuses(hid) != want && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(statuses(hid), want);
+}
+
+#[test]
+fn a_status_goes_to_the_device_after_an_action_and_clears() {
+    let r = Rig::start_with(Duration::from_millis(150));
+    r.hid.push_device(
+        0,
+        &DeviceMessage::Encoder {
+            control: 5,
+            delta: 1,
+        },
+    );
+    r.call();
+    wait_for_statuses(&r.hid, &["Vol 63%"]);
+    // Cleared once `status_for` passes with no newer status.
+    wait_for_statuses(&r.hid, &["Vol 63%", ""]);
+}
+
+#[test]
+fn a_newer_status_restarts_the_clock() {
+    let r = Rig::start_with(Duration::from_millis(300));
+    r.hid.push_device(
+        0,
+        &DeviceMessage::Encoder {
+            control: 5,
+            delta: 1,
+        },
+    );
+    r.call();
+    wait_for_statuses(&r.hid, &["Vol 63%"]);
+    std::thread::sleep(Duration::from_millis(150));
+    r.hid.push_device(
+        1,
+        &DeviceMessage::Encoder {
+            control: 5,
+            delta: 1,
+        },
+    );
+    r.call();
+    wait_for_statuses(&r.hid, &["Vol 63%", "Vol 63%"]);
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(
+        statuses(&r.hid).len(),
+        2,
+        "not cleared under the newer one's 300 ms"
+    );
+    wait_for_statuses(&r.hid, &["Vol 63%", "Vol 63%", ""]);
+}
+
+#[test]
+fn a_dry_run_sends_no_status() {
+    let r = Rig::start_with(Duration::from_millis(100));
+    r.engine.as_ref().unwrap().set_dry_run(true);
+    r.expect(|x| matches!(x, Record::DryRun { .. }));
+    r.hid.push_device(
+        0,
+        &DeviceMessage::Encoder {
+            control: 5,
+            delta: 1,
+        },
+    );
+    r.expect(|x| matches!(x, Record::Ran { .. }));
+    std::thread::sleep(Duration::from_millis(250));
+    assert!(statuses(&r.hid).is_empty());
 }
