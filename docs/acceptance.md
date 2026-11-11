@@ -237,6 +237,7 @@ Results:
   - `ioreg`: VID `0x1209`, PID `0x0001`, manufacturer GittieLabs, product Detent Dev, serial `E6654854571A6E2F`. `ctl-probe list` shows the vendor collection (0xFF00/0x01) and Consumer Control (0x000C) on interface 2, as on the XIAO.
   - `ctl-probe` with `DETENT_PROBE_IDS=1209:0001`: HELLO (fw 0.1.0, one button) right after connecting, then 45 heartbeats in 90 s; six BOOTSEL presses as `BUTTON 1 down` and `up` in order. Keith saw the Mac's volume rise with each press (Consumer Control).
   - Step 2 (the full Pico) waits on soldered headers.
+- Feather chip check, 2026-11-11 (read only, `esptool flash-id`): ESP32-S3 (QFN56) revision v0.1, embedded 4 MB quad flash (XMC) and 2 MB PSRAM (AP 3.3 V), 40 MHz crystal, MAC `70:04:1d:cd:ec:c0`. It matches the `adafruit_feather_esp32s3` board definition. (The board Keith first tried as the DevKitC read as an original ESP32-D0WD-V3 rev 3.1 with 4 MB flash behind a CP2102, which can't be a Detent; D-097.)
 - Step 4, 2026-11-11, signed build (`just build-dev`), XIAO `E072A1FC4EDC`:
   - On v1 firmware 0.1.0: the log shows `Outdated { version: 1 }` once and no disconnect over 12 s; Keith saw Devices say its firmware is too old.
   - Flashed to 0.2.0 with Keith's OK: it reconnected with HELLO naming button 6 as encoder 5's push; Keith checked firmware 0.2.0, the knob and its Push on one row, and both handled on the device in Volume mode. PASS.
