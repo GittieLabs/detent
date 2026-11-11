@@ -18,7 +18,7 @@ pub enum DashboardMode {
 }
 
 /// The page Open dashboard shows when none is given (D-088).
-pub const DEFAULT_DASHBOARD_URL: &str = "https://github.com/gittielabs/detent";
+pub const DEFAULT_DASHBOARD_URL: &str = "https://gittielabs.github.io/detent/";
 
 fn default_true() -> bool {
     true

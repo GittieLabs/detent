@@ -1,0 +1,15 @@
+[book]
+title = "Detent"
+description = "A macOS menu bar app for USB controllers you build yourself."
+authors = ["GittieLabs"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"
+create-missing = false
+
+[output.html]
+git-repository-url = "https://github.com/gittielabs/detent"
+edit-url-template = "https://github.com/gittielabs/detent/edit/main/site/{path}"
+site-url = "/detent/"

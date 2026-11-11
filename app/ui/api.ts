@@ -184,7 +184,7 @@ export const listDisplays = () => invoke<string[]>("list_displays");
 /** Moves a config that didn't load aside and starts empty (M9). */
 export const startFresh = () => invoke<AppState>("start_fresh");
 /** Open dashboard's default page (D-088; `store::DEFAULT_DASHBOARD_URL`). */
-export const DEFAULT_DASHBOARD_URL = "https://github.com/gittielabs/detent";
+export const DEFAULT_DASHBOARD_URL = "https://gittielabs.github.io/detent/";
 
 /** One Debug log line (`app_state::DebugEntry`, M9). */
 export interface DebugEntry {

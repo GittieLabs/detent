@@ -2,7 +2,9 @@
 
 A macOS menu bar app and ESP32-S3 firmware for building your own physical controllers. Buttons and an encoder on a USB device map to Mac actions: open an app, show a web dashboard full screen, send a shortcut to a specific app, change the volume. Only devices you pair are listened to, so your keyboard never triggers anything.
 
-Status: pre-alpha, M0. See `docs/roadmap.md`.
+Status: pre-alpha, heading for v0.1. See `docs/roadmap.md`.
+
+User documentation: [gittielabs.github.io/detent](https://gittielabs.github.io/detent/), built from `site/` with mdBook (`just site`).
 
 ## Layout
 
@@ -11,6 +13,7 @@ Status: pre-alpha, M0. See `docs/roadmap.md`.
 - `protocol/` Rust crate defining the USB wire format; the C header for firmware is generated from it
 - `tools/ctl-probe/` CLI that prints decoded device events
 - `docs/` product, architecture, protocol, decisions, roadmap, acceptance
+- `site/` the user documentation site (mdBook, published to GitHub Pages)
 
 ## Building (macOS)
 

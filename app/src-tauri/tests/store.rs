@@ -573,12 +573,12 @@ fn dashboard_config(action: &str) -> String {
 }
 
 #[test]
-fn open_dashboard_defaults_to_the_project_page() {
+fn open_dashboard_defaults_to_the_documentation_site() {
     let c = parse(&dashboard_config(r#"{ "type": "open_dashboard" }"#)).unwrap();
     assert_eq!(
         c.mappings[0].action,
         Action::OpenDashboard {
-            url: "https://github.com/gittielabs/detent".into(),
+            url: "https://gittielabs.github.io/detent/".into(),
             display: None,
             mode: DashboardMode::Fullscreen,
             close_without_device: true,
@@ -648,4 +648,14 @@ fn a_broken_config_is_moved_aside_not_deleted() {
 fn moving_aside_a_missing_config_fails() {
     let dir = temp_dir("move-aside-missing");
     assert!(store::move_aside(&dir.join("config.json"), 1).is_err());
+}
+
+#[test]
+fn the_ui_offers_the_same_default_dashboard_url() {
+    let api = include_str!("../../ui/api.ts");
+    let want = format!(
+        "export const DEFAULT_DASHBOARD_URL = \"{}\";",
+        store::DEFAULT_DASHBOARD_URL
+    );
+    assert!(api.contains(&want), "app/ui/api.ts should have: {want}");
 }

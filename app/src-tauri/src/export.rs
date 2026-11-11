@@ -11,6 +11,13 @@ use std::process::Command;
 use crate::app_state::AppState;
 use crate::store::{self, Action, Config, DEFAULT_DASHBOARD_URL};
 
+/// Dashboard URLs that are the project's own and stay: the default, and
+/// the repo page that was the default before the docs site (D-088).
+const PUBLIC_URLS: &[&str] = &[
+    DEFAULT_DASHBOARD_URL,
+    "https://github.com/gittielabs/detent",
+];
+
 /// What a private dashboard URL becomes.
 pub const REDACTED_URL: &str = "https://redacted.invalid/";
 /// What a secret becomes in log text.
@@ -52,7 +59,7 @@ fn redact_action(action: &mut Action, secrets: &mut Vec<String>, displays: &mut 
             secrets.push(old);
         }
         Action::OpenDashboard { url, display, .. } => {
-            if url != DEFAULT_DASHBOARD_URL {
+            if !PUBLIC_URLS.contains(&url.as_str()) {
                 secrets.push(std::mem::replace(url, REDACTED_URL.to_owned()));
             }
             if let Some(name) = display {

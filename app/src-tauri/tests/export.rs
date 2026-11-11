@@ -64,6 +64,18 @@ fn the_config_keeps_its_shape_but_not_its_words() {
         Action::OpenDashboard { url, .. } => assert_eq!(url, DEFAULT_DASHBOARD_URL),
         a => panic!("{a:?}"),
     }
+    // Nor is the old default (D-088), still written in configs saved before.
+    let mut old = config();
+    if let Action::OpenDashboard { url, .. } = &mut old.mappings[2].action {
+        *url = "https://github.com/gittielabs/detent".into();
+    }
+    let (red_old, _) = export::redact_config(&old);
+    match &red_old.mappings[2].action {
+        Action::OpenDashboard { url, .. } => {
+            assert_eq!(url, "https://github.com/gittielabs/detent")
+        }
+        a => panic!("{a:?}"),
+    }
     // What says how Detent is used stays: serials, apps, controls.
     assert!(json.contains("E072A1FC4EDC") && json.contains("com.apple.Safari"));
     for s in [

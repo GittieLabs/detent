@@ -28,6 +28,10 @@ build-release:
 notarize-release:
     scripts/build-release.sh --notarize
 
+# Build the documentation site into site/book (needs mdbook 0.4.52)
+site:
+    mdbook build site
+
 # Hardware in the loop test: flashes debug then release firmware (board on USB)
 hil:
     scripts/hil.sh
