@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "devices": [
+    {
+      "name": "Detent Dev",
+      "vid": "0x303A",
+      "pid": "0x8FDE",
+      "serial": "E072A1FC4EDC"
+    }
+  ],
+  "ignored": [],
+  "mappings": [],
+  "paused": false
+}

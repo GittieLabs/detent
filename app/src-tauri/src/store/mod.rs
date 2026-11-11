@@ -1,6 +1,8 @@
 //! The config file: versioned JSON at
 //! `~/Library/Application Support/Detent/config.json` (D-008). Schema v1 is
-//! read-only in M2 (hand written); writing and migrations come in M3 and M7.
+//! read-only in M2 (hand written); writing came in M3, migrations in M9
+//! (D-103): an older version is migrated step by step on load, and the old
+//! file is kept beside it as `config.json.v<N>.bak`.
 //! Field reference: `app/src-tauri/examples/config.md`.
 
 mod schema;
@@ -18,6 +20,19 @@ pub use validate::ArgError;
 /// The schema version this build reads.
 pub const SCHEMA_VERSION: u64 = 1;
 
+/// One schema step: turns a config at version `from` into `from + 1`.
+/// Steps work on the raw JSON, before it's read into [`Config`], so they
+/// can rename, move or drop fields the current schema no longer knows.
+pub struct Migration {
+    pub from: u64,
+    pub run: fn(serde_json::Value) -> Result<serde_json::Value, String>,
+}
+
+/// The steps from each earlier schema version. Empty while schema 1 is the
+/// only one; the first bump adds `Migration { from: 1, .. }`, and the frozen
+/// fixtures in `tests/fixtures/configs/` prove the old shapes still load.
+pub const MIGRATIONS: &[Migration] = &[];
+
 /// Why a config couldn't be used. Every message says where the problem is.
 #[derive(Debug)]
 pub enum ConfigError {
@@ -27,6 +42,8 @@ pub enum ConfigError {
     Invalid { path: String, message: String },
     /// A `version` this build doesn't read.
     UnsupportedVersion(u64),
+    /// A migration step failed.
+    Migration { from: u64, message: String },
     /// No file at the path.
     Missing(PathBuf),
     /// The file couldn't be read.
@@ -50,6 +67,11 @@ impl fmt::Display for ConfigError {
                 f,
                 "unsupported config version {v} (this Detent reads version {SCHEMA_VERSION})"
             ),
+            Self::Migration { from, message } => write!(
+                f,
+                "couldn't migrate the config from version {from} to {}: {message}",
+                from + 1
+            ),
             Self::Missing(p) => write!(
                 f,
                 "no config at {}; copy app/src-tauri/examples/config.example.json there to start",
@@ -63,30 +85,62 @@ impl fmt::Display for ConfigError {
 
 impl std::error::Error for ConfigError {}
 
-/// Parses and validates a config.
-pub fn parse(json: &str) -> Result<Config, ConfigError> {
-    let value: serde_json::Value =
-        serde_json::from_str(json).map_err(|e| ConfigError::Syntax(e.to_string()))?;
-    // Check the version first, so a future version gets a clear message
-    // rather than whichever of its new fields fails first.
-    match value.get("version") {
+/// Brings a raw config up to version `target` with `steps`, one version at
+/// a time, and says which version it started at if it changed. A version
+/// above `target`, or one with no step forward, is refused.
+pub fn migrate(
+    mut value: serde_json::Value,
+    steps: &[Migration],
+    target: u64,
+) -> Result<(serde_json::Value, Option<u64>), ConfigError> {
+    let version = match value.get("version") {
         None => {
             return Err(ConfigError::Invalid {
                 path: String::new(),
                 message: "missing field `version`".into(),
             })
         }
-        Some(v) if v.as_u64() != Some(SCHEMA_VERSION) => {
-            return Err(match v.as_u64() {
-                Some(n) => ConfigError::UnsupportedVersion(n),
-                None => ConfigError::Invalid {
-                    path: "version".into(),
-                    message: format!("expected a number, found {v}"),
-                },
-            })
-        }
-        Some(_) => {}
+        Some(v) => v.as_u64().ok_or_else(|| ConfigError::Invalid {
+            path: "version".into(),
+            message: format!("expected a number, found {v}"),
+        })?,
+    };
+    if version > target {
+        return Err(ConfigError::UnsupportedVersion(version));
     }
+    let mut at = version;
+    while at < target {
+        let step = steps
+            .iter()
+            .find(|s| s.from == at)
+            .ok_or(ConfigError::UnsupportedVersion(version))?;
+        value =
+            (step.run)(value).map_err(|message| ConfigError::Migration { from: at, message })?;
+        at += 1;
+        if let Some(o) = value.as_object_mut() {
+            o.insert("version".into(), at.into());
+        }
+    }
+    Ok((value, (version < target).then_some(version)))
+}
+
+/// Parses and validates a config.
+pub fn parse(json: &str) -> Result<Config, ConfigError> {
+    parse_with(json, MIGRATIONS, SCHEMA_VERSION).map(|(c, _)| c)
+}
+
+/// [`parse`] with given migration steps, also saying the version it was
+/// migrated from, if any.
+fn parse_with(
+    json: &str,
+    steps: &[Migration],
+    target: u64,
+) -> Result<(Config, Option<u64>), ConfigError> {
+    let value: serde_json::Value =
+        serde_json::from_str(json).map_err(|e| ConfigError::Syntax(e.to_string()))?;
+    // Check the version first, so a future version gets a clear message
+    // rather than whichever of its new fields fails first.
+    let (value, from) = migrate(value, steps, target)?;
     let config: Config =
         serde_path_to_error::deserialize(value).map_err(|e| ConfigError::Invalid {
             path: e.path().to_string(),
@@ -96,11 +150,22 @@ pub fn parse(json: &str) -> Result<Config, ConfigError> {
         path: p.path,
         message: p.message,
     })?;
-    Ok(config)
+    Ok((config, from))
 }
 
-/// Reads and parses the config at `path`.
+/// Reads and parses the config at `path`, migrating an older version.
 pub fn load(path: &Path) -> Result<Config, ConfigError> {
+    load_with(path, MIGRATIONS, SCHEMA_VERSION)
+}
+
+/// [`load`] with given migration steps. When the file was migrated, a copy
+/// of it as it was is kept at `<path>.v<N>.bak` (an existing backup is left
+/// alone); the file itself changes only on the next save.
+pub fn load_with(path: &Path, steps: &[Migration], target: u64) -> Result<Config, ConfigError> {
+    let in_file = |error| ConfigError::InFile {
+        path: path.to_owned(),
+        error: Box::new(error),
+    };
     let text = std::fs::read_to_string(path).map_err(|e| match e.kind() {
         std::io::ErrorKind::NotFound => ConfigError::Missing(path.to_owned()),
         _ => ConfigError::Io {
@@ -108,10 +173,19 @@ pub fn load(path: &Path) -> Result<Config, ConfigError> {
             message: e.to_string(),
         },
     })?;
-    parse(&text).map_err(|e| ConfigError::InFile {
-        path: path.to_owned(),
-        error: Box::new(e),
-    })
+    let (config, from) = parse_with(&text, steps, target).map_err(in_file)?;
+    if let Some(from) = from {
+        let mut backup = path.as_os_str().to_owned();
+        backup.push(format!(".v{from}.bak"));
+        let backup = PathBuf::from(backup);
+        if !backup.exists() {
+            std::fs::write(&backup, &text).map_err(|e| ConfigError::Io {
+                path: backup.clone(),
+                message: e.to_string(),
+            })?;
+        }
+    }
+    Ok(config)
 }
 
 /// The config as Detent writes it (D-069): validated first, then pretty

@@ -1,0 +1,220 @@
+{
+  "version": 1,
+  "devices": [
+    {
+      "name": "Unit 1",
+      "vid": "0x303A",
+      "pid": "0x8FDE",
+      "serial": "E072A1FC4EDC",
+      "menu": [
+        {
+          "label": "Item 1",
+          "action": {
+            "type": "volume_up",
+            "step": 0.0625
+          }
+        },
+        {
+          "label": "Item 2",
+          "action": {
+            "type": "open_app",
+            "bundle_id": "com.apple.mail"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Unit 2",
+      "vid": "0x303A",
+      "pid": "0x8FDE",
+      "serial": "E072A1FC849C",
+      "menu": []
+    },
+    {
+      "name": "Unit 3",
+      "vid": "0x303A",
+      "pid": "0x8FDE",
+      "serial": "70041DCDECC0",
+      "menu": []
+    }
+  ],
+  "ignored": [],
+  "mappings": [
+    {
+      "device": "E072A1FC4EDC",
+      "control": 1,
+      "trigger": "press",
+      "scope": "everywhere",
+      "action": {
+        "type": "open_app",
+        "bundle_id": "com.apple.mail"
+      }
+    },
+    {
+      "device": "E072A1FC4EDC",
+      "control": 1,
+      "trigger": "press",
+      "scope": {
+        "app": "com.apple.Safari"
+      },
+      "action": {
+        "type": "mute_toggle"
+      }
+    },
+    {
+      "device": "E072A1FC4EDC",
+      "control": 2,
+      "trigger": "press",
+      "scope": "everywhere",
+      "action": {
+        "type": "volume_up",
+        "step": 0.0625
+      }
+    },
+    {
+      "device": "E072A1FC4EDC",
+      "control": 3,
+      "trigger": "press",
+      "scope": "everywhere",
+      "action": {
+        "type": "mute_toggle"
+      }
+    },
+    {
+      "device": "E072A1FC4EDC",
+      "control": 4,
+      "trigger": "press",
+      "scope": "everywhere",
+      "action": {
+        "type": "open_dashboard",
+        "url": "https://example.com/dashboard",
+        "display": null,
+        "mode": "window",
+        "close_without_device": true
+      }
+    },
+    {
+      "device": "E072A1FC849C",
+      "control": 1,
+      "trigger": "press",
+      "scope": "everywhere",
+      "action": {
+        "type": "open_app",
+        "bundle_id": "com.electron.plasticity"
+      }
+    },
+    {
+      "device": "E072A1FC849C",
+      "control": 2,
+      "trigger": "press",
+      "scope": "everywhere",
+      "action": {
+        "type": "volume_up",
+        "step": 0.1
+      }
+    },
+    {
+      "device": "E072A1FC849C",
+      "control": 3,
+      "trigger": "long_press",
+      "scope": "everywhere",
+      "action": {
+        "type": "volume_up",
+        "step": 0.25
+      }
+    },
+    {
+      "device": "E072A1FC4EDC",
+      "control": 3,
+      "trigger": "press",
+      "scope": {
+        "app": "com.electron.plasticity"
+      },
+      "action": {
+        "type": "send_shortcut",
+        "keys": "e"
+      }
+    },
+    {
+      "device": "E072A1FC4EDC",
+      "control": 5,
+      "trigger": "counterclockwise",
+      "scope": "everywhere",
+      "action": {
+        "type": "volume_down",
+        "step": 0.1
+      }
+    },
+    {
+      "device": "E072A1FC4EDC",
+      "control": 5,
+      "trigger": "clockwise",
+      "scope": "everywhere",
+      "action": {
+        "type": "volume_up",
+        "step": 0.1
+      }
+    },
+    {
+      "device": "E072A1FC4EDC",
+      "control": 6,
+      "trigger": "press",
+      "scope": "everywhere",
+      "action": {
+        "type": "mute_toggle"
+      }
+    },
+    {
+      "device": "70041DCDECC0",
+      "control": 1,
+      "trigger": "press",
+      "scope": "everywhere",
+      "action": {
+        "type": "open_app",
+        "bundle_id": "com.apple.mail"
+      }
+    },
+    {
+      "device": "70041DCDECC0",
+      "control": 1,
+      "trigger": "press",
+      "scope": {
+        "app": "com.apple.Safari"
+      },
+      "action": {
+        "type": "mute_toggle"
+      }
+    },
+    {
+      "device": "70041DCDECC0",
+      "control": 2,
+      "trigger": "press",
+      "scope": "everywhere",
+      "action": {
+        "type": "volume_up",
+        "step": 0.0625
+      }
+    },
+    {
+      "device": "70041DCDECC0",
+      "control": 3,
+      "trigger": "press",
+      "scope": "everywhere",
+      "action": {
+        "type": "mute_toggle"
+      }
+    },
+    {
+      "device": "70041DCDECC0",
+      "control": 4,
+      "trigger": "press",
+      "scope": "everywhere",
+      "action": {
+        "type": "applescript",
+        "source": "return \"redacted\"",
+        "timeout_ms": 5000
+      }
+    }
+  ],
+  "paused": false
+}
