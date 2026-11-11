@@ -49,7 +49,7 @@ A mapping is a **control**, an **action**, and a **scope**. Everything in the UI
 | Action | Needs permission | Notes |
 | --- | --- | --- |
 | Open app | None | By bundle ID via NSWorkspace |
-| Open dashboard | None | A URL shown full screen on a chosen display, inside the app. URL is per action, no default. |
+| Open dashboard | None | A web page shown full screen on a chosen display, inside the app. The URL is per action; the default is the project's page (D-088). |
 | Send shortcut | Accessibility | A key combo or short sequence to the frontmost app |
 | Volume up, down, set, mute | None | Through CoreAudio, so any control can be remapped to it |
 | Run AppleScript | Automation, per target app | The escape hatch for anything not on this list |
