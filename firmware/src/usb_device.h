@@ -28,6 +28,11 @@ bool poll_report(uint8_t report[DETENT_REPORT_LEN]);
 // on the USB event task and wait here for loop(), in order.
 bool poll_connection(bool* mounted);
 
+// Consumer Control usages the encoder's Volume mode sends (HID Usage Tables).
+const uint16_t kVolumeUp = 0x00E9;
+const uint16_t kVolumeDown = 0x00EA;
+const uint16_t kMute = 0x00E2;
+
 // Presses and releases one Consumer Control usage (volume, mute).
 void consumer_tap(uint16_t usage);
 

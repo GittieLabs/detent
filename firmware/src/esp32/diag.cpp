@@ -6,7 +6,7 @@
 #include <esp_system.h>
 
 #include "display.h"
-#include "usb_device.h"
+#include "../usb_device.h"
 
 namespace detent {
 namespace diag {

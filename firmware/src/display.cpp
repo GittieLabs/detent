@@ -26,7 +26,13 @@ bool drawn_once = false;
 }  // namespace
 
 bool begin() {
+#if defined(ARDUINO_ARCH_RP2040)
+  Wire.setSDA(board::kOledSda);
+  Wire.setSCL(board::kOledScl);
+  Wire.begin();
+#else
   Wire.begin(board::kOledSda, board::kOledScl);
+#endif
   for (uint8_t a = 0x08; a < 0x78 && scan_count < 8; a++) {
     Wire.beginTransmission(a);
     if (Wire.endTransmission() == 0) scan[scan_count++] = a;

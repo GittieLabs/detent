@@ -40,9 +40,9 @@ probe *ARGS:
 gen-header:
     scripts/gen-header.sh
 
-# Build the ESP32-S3 firmware
+# Build the firmware for every board (XIAO, DevKitC, Pico; release and debug)
 fw:
-    pio run -d firmware
+    pio run -d firmware -e xiao_esp32s3 -e xiao_esp32s3_debug -e devkitc_s3 -e devkitc_s3_debug -e pico -e pico_spike
 
 # Build the debug firmware (TEST_INJECT enabled; never ship it)
 fw-debug:
@@ -52,13 +52,13 @@ fw-debug:
 fw-test:
     pio test -d firmware -e native
 
-# Flash the firmware to a connected device
-fw-upload:
-    pio run -d firmware -t upload
+# Flash a board's firmware, e.g. `just fw-upload` (XIAO) or `just fw-upload devkitc_s3`
+fw-upload env="xiao_esp32s3":
+    pio run -d firmware -e {{env}} -t upload
 
 # Run every CI check locally (same as .github/workflows/ci.yml)
 ci: lint test
     pnpm -C app install --frozen-lockfile
     pnpm -C app tsc --noEmit
-    pio run -d firmware -e xiao_esp32s3 -e xiao_esp32s3_debug
+    pio run -d firmware -e xiao_esp32s3 -e xiao_esp32s3_debug -e devkitc_s3 -e devkitc_s3_debug -e pico -e pico_spike
     pio test -d firmware -e native

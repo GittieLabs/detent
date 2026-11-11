@@ -1,4 +1,4 @@
-#include "usb_device.h"
+#include "../usb_device.h"
 
 #include <USB.h>
 #include <USBHIDConsumerControl.h>

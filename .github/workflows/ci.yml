@@ -71,8 +71,8 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio==6.2.0  # pioarduino needs 6.2+ (D-045)
 
-      - name: pio run (release and debug)
-        run: pio run -d firmware -e xiao_esp32s3 -e xiao_esp32s3_debug
+      - name: pio run (every board, release and debug)
+        run: pio run -d firmware -e xiao_esp32s3 -e xiao_esp32s3_debug -e devkitc_s3 -e devkitc_s3_debug -e pico -e pico_spike
 
       # Native C++ tests against the Rust codec's golden vectors (D-035).
       - name: pio test (native)

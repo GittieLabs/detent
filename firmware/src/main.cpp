@@ -5,7 +5,6 @@
 // them together. Input, encoder modes, and the OLED arrive in later M1 tasks.
 
 #include <Arduino.h>
-#include <USBHIDConsumerControl.h>
 
 #include "board_pins.h"
 #include "detent_protocol.h"
@@ -15,6 +14,7 @@
 #include "link_layer.h"
 #include "menu.h"
 #include "modes.h"
+#include "platform.h"
 #include "report.h"
 #include "usb_device.h"
 #include "usb_identity.h"
@@ -25,7 +25,7 @@
 #define DETENT_DIAG 0
 #endif
 #if DETENT_DIAG
-#include "diag.h"
+#include "esp32/diag.h"
 #endif
 
 // Set by the xiao_esp32s3_debug env only: trace pin levels, encoder edges, and
@@ -82,16 +82,16 @@ detent::Button buttons[board::kButtonCount];
 // The encoder is decoded in a pin change interrupt so turns aren't lost while
 // loop() is blocked in a USB send; loop() polls coalesced deltas.
 detent::Encoder encoder;
-portMUX_TYPE encoder_mux = portMUX_INITIALIZER_UNLOCKED;
+detent::IrqLock encoder_lock;
 volatile uint32_t encoder_edges = 0;  // interrupts seen, for the input trace
 
-void IRAM_ATTR on_encoder_edge() {
+void DETENT_ISR on_encoder_edge() {
   encoder_edges = encoder_edges + 1;
   const bool a = digitalRead(board::kEncoderA);
   const bool b = digitalRead(board::kEncoderB);
-  portENTER_CRITICAL_ISR(&encoder_mux);
+  encoder_lock.lock_isr();
   encoder.on_edge(a, b);
-  portEXIT_CRITICAL_ISR(&encoder_mux);
+  encoder_lock.unlock_isr();
 }
 
 struct UsbTransport : detent::LinkTransport {
@@ -112,13 +112,12 @@ void on_menu_select();  // defined after `modes`, which it changes
 struct FirmwareModeSink : detent::ModeSink {
   void volume_steps(int8_t delta) override {
     INPUT_LOG("route: volume %+d\n", delta);
-    const uint16_t usage = delta > 0 ? CONSUMER_CONTROL_VOLUME_INCREMENT
-                                     : CONSUMER_CONTROL_VOLUME_DECREMENT;
+    const uint16_t usage = delta > 0 ? detent::usb::kVolumeUp : detent::usb::kVolumeDown;
     for (int i = 0; i < (delta > 0 ? delta : -delta); i++) detent::usb::consumer_tap(usage);
   }
   void mute_toggle() override {
     INPUT_LOG("route: mute toggle\n");
-    detent::usb::consumer_tap(CONSUMER_CONTROL_MUTE);
+    detent::usb::consumer_tap(detent::usb::kMute);
   }
   void encoder(uint8_t control, int8_t delta) override { device_link.send_encoder(control, delta); }
   void button(uint8_t control, uint8_t action) override { device_link.send_button(control, action); }
@@ -198,11 +197,32 @@ void on_turn(uint8_t control, int8_t delta) {
   }
 }
 
-// XIAO ESP32-S3 user LED (GPIO21) is active low. Off: no host. Blinking:
-// mounted, not paired. Solid: paired.
-const uint8_t LED_PIN = LED_BUILTIN;
-const uint8_t LED_ON = LOW;
-const uint8_t LED_OFF = HIGH;
+// The board's status LED (board_pins.h). Off: no host. Blinking: mounted,
+// not paired. Solid: paired.
+bool led_state = true;  // so the first set() always writes
+
+void set_led(bool on) {
+  if (on == led_state) return;  // an RGB LED write is slow: only on change
+  led_state = on;
+  switch (board::kLedKind) {
+    case board::LedKind::ActiveLow:
+      digitalWrite(board::kLedPin, on ? LOW : HIGH);
+      break;
+    case board::LedKind::ActiveHigh:
+      digitalWrite(board::kLedPin, on ? HIGH : LOW);
+      break;
+    case board::LedKind::Rgb:
+#if defined(ARDUINO_ARCH_ESP32)
+      rgbLedWrite(board::kLedPin, 0, on ? 24 : 0, 0);  // dim green
+#endif
+      break;
+  }
+}
+
+void begin_led() {
+  if (board::kLedKind != board::LedKind::Rgb) pinMode(board::kLedPin, OUTPUT);
+  set_led(false);
+}
 
 void update_led(uint32_t now) {
   bool on = false;
@@ -211,7 +231,7 @@ void update_led(uint32_t now) {
   } else if (device_link.mounted()) {
     on = (now / 500) % 2 == 0;
   }
-  digitalWrite(LED_PIN, on ? LED_ON : LED_OFF);
+  set_led(on);
 }
 
 void setup_controls() {
@@ -228,17 +248,17 @@ void setup_controls() {
 }
 
 #if DETENT_INPUT_LOG
-struct SparePin {
-  const char* label;
-  uint8_t gpio;
-};
-// Only pins board_pins.h doesn't use: the finder turns them into plain inputs,
-// which would cut off any peripheral on them (it once took the OLED's I2C).
-const SparePin kSpare[] = {{"D6", 43}, {"D7", 44}};
-static_assert(board::kOledSda != 43 && board::kOledSda != 44 && board::kOledScl != 43 &&
-                  board::kOledScl != 44,
-              "pin finder must not touch the OLED's I2C pins");
-const uint8_t kSpareCount = sizeof kSpare / sizeof kSpare[0];
+// Only pins the board doesn't use (board::kSpare): the finder turns them into
+// plain inputs, which would cut off any peripheral on them (it once took the
+// OLED's I2C).
+const auto& kSpare = board::kSpare;
+const uint8_t kSpareCount = sizeof board::kSpare / sizeof board::kSpare[0];
+constexpr bool spares_clear_of_oled(uint8_t i = 0) {
+  return i == kSpareCount || (board::kSpare[i].gpio != board::kOledSda &&
+                              board::kSpare[i].gpio != board::kOledScl &&
+                              spares_clear_of_oled(i + 1));
+}
+static_assert(spares_clear_of_oled(), "pin finder must not touch the OLED's I2C pins");
 
 int spare_levels() {
   int v = 0;
@@ -297,9 +317,9 @@ void poll_controls(uint32_t now) {
     if (e != detent::ButtonEvent::None) on_button(board::kButtons[i].control, e);
   }
   int8_t delta;
-  portENTER_CRITICAL(&encoder_mux);
+  encoder_lock.lock();
   const bool turned = encoder.poll(now, &delta);
-  portEXIT_CRITICAL(&encoder_mux);
+  encoder_lock.unlock();
   if (turned) on_turn(board::kEncoderControl, delta);
 }
 
@@ -340,8 +360,7 @@ void setup() {
 #if DETENT_DIAG
   detent::diag::on_boot();
 #endif
-  pinMode(LED_PIN, OUTPUT);
-  digitalWrite(LED_PIN, LED_OFF);
+  begin_led();
   setup_controls();
   detent::usb::begin();
   detent::display::begin();
