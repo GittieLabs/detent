@@ -241,5 +241,5 @@ Results:
   - On v1 firmware 0.1.0: the log shows `Outdated { version: 1 }` once and no disconnect over 12 s; Keith saw Devices say its firmware is too old.
   - Flashed to 0.2.0 with Keith's OK: it reconnected with HELLO naming button 6 as encoder 5's push; Keith checked firmware 0.2.0, the knob and its Push on one row, and both handled on the device in Volume mode. PASS.
   - `scripts/hil.sh` passed on it (debug and release; board left on release 0.2.0).
-  - The second XIAO (`E072A1FC849C`) is still on 0.1.0 until Keith OKs its flash.
+  - The second XIAO (`E072A1FC849C`) flashed to release 0.2.0 with Keith's OK; it reconnected with HELLO naming button 6 as encoder 5's push.
 
