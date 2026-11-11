@@ -130,6 +130,8 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
   /** The device menu item being edited: its position, or "new" (D-086). */
   let menuSel: number | "new" | null = null;
   let menuLabel = ""; // the label being typed; the action is in `draft`
+  /** Which item `draft` and `menuLabel` hold, so a stale form is never shown. */
+  let menuDraftFor: number | "new" | null = null;
   let draft: Draft | null = null;
   let note: { text: string; error: boolean } | null = null;
   let busy = false;
@@ -158,10 +160,16 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
   };
 
   /** Runs a command; its answer is the new state. */
-  const run = async (call: () => Promise<AppState>, done: string) => {
+  /**
+   * Runs a command; its answer is the new state. `onSaved` runs before the
+   * redraw, so selection follows the edit (a moved item's new position)
+   * before the form reloads from the new state.
+   */
+  const run = async (call: () => Promise<AppState>, done: string, onSaved?: () => void) => {
     busy = true;
     try {
       current = await call();
+      onSaved?.();
       draft = null; // re-read from the saved mappings
       note = { text: done, error: false };
     } catch (e) {
@@ -549,6 +557,7 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
       const item = i === "new" ? null : (unit.menu[i] ?? null);
       menuLabel = item?.label ?? "";
       draft = draftFrom(-1, "press", "everywhere", item ? ({ action: item.action } as Mapping) : undefined);
+      menuDraftFor = i;
       note = null;
       recordFresh = true;
       rerender();
@@ -601,7 +610,8 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
   /** Edits one device menu item: label, action, order. */
   function menuPanel(unit: PairedUnit, index: number | "new"): HTMLElement {
     const existing = index === "new" ? null : index;
-    if (!draft) {
+    if (!draft || menuDraftFor !== index) {
+      menuDraftFor = index;
       // After a save `run` clears the draft: reload it from the saved item.
       const saved = existing === null ? null : (unit.menu[existing] ?? null);
       draft = draftFrom(-1, "press", "everywhere", saved ? ({ action: saved.action } as Mapping) : undefined);
@@ -621,16 +631,14 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
         return;
       }
       const item: MenuItem = { label: menuLabel, action: result.action };
-      void run(() => api.setMenuItem(unit.serial, existing, item), "Saved.").then(() => {
+      void run(() => api.setMenuItem(unit.serial, existing, item), "Saved.", () => {
         if (existing === null) menuSel = Math.min(count, MAX_MENU_ITEMS - 1);
-        rerender();
       });
     };
     const move = (to: number) => {
       if (existing === null) return;
-      void run(() => api.moveMenuItem(unit.serial, existing, to), "Moved.").then(() => {
+      void run(() => api.moveMenuItem(unit.serial, existing, to), "Moved.", () => {
         menuSel = to;
-        rerender();
       });
     };
     return el(
@@ -691,9 +699,8 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
           ? button(
               "Remove",
               () =>
-                void run(() => api.removeMenuItem(unit.serial, existing), "Removed.").then(() => {
+                void run(() => api.removeMenuItem(unit.serial, existing), "Removed.", () => {
                   menuSel = null;
-                  rerender();
                 }),
               { class: "danger", disabled: busy },
             )
