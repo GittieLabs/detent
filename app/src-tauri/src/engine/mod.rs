@@ -8,6 +8,7 @@
 
 mod log;
 
+use std::collections::HashMap;
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -15,10 +16,12 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime};
 
+use detent_protocol::codec::DeviceMessage;
+
 use crate::actions::{Executor, Outcome, RecordingExecutor};
 use crate::devices::{DeviceEvent, DeviceId, Devices, Options};
 use crate::router::{trigger_of, Router};
-use crate::store::{Action, Config, Trigger};
+use crate::store::{Action, Config, MenuItem, Trigger};
 use crate::transport::Bus;
 
 pub use log::{default_path as default_log_path, FileLog};
@@ -56,6 +59,16 @@ pub enum Record {
     Reloaded { devices: usize, mappings: usize },
     /// Dry run turned on or off (D-079).
     DryRun { on: bool },
+    /// An app owned OLED menu item was picked (M6). `label` and `action`
+    /// are `None` when the id matches no item (the menu changed meanwhile).
+    MenuPicked {
+        id: DeviceId,
+        item: u8,
+        label: Option<String>,
+        action: Option<Action>,
+        paused: bool,
+        dry_run: bool,
+    },
 }
 
 /// A wall clock gain over the monotonic clock this big means the Mac slept.
@@ -148,6 +161,25 @@ impl fmt::Display for Record {
                     "config reloaded: {devices} device(s), {mappings} mapping(s)"
                 )
             }
+            Record::MenuPicked {
+                id,
+                item,
+                label,
+                action,
+                paused,
+                dry_run,
+            } => {
+                match (label, action) {
+                    (Some(l), Some(a)) => write!(f, "{} menu {l:?} -> {}", id.serial, describe(a))?,
+                    _ => write!(f, "{} menu item {item} -> no such item", id.serial)?,
+                }
+                if action.is_some() && *paused {
+                    write!(f, " (paused, not run)")?;
+                } else if action.is_some() && *dry_run {
+                    write!(f, " (dry run)")?;
+                }
+                Ok(())
+            }
             Record::DryRun { on: true } => {
                 write!(f, "dry run on: actions are logged, not run")
             }
@@ -203,6 +235,15 @@ fn worker(jobs: Receiver<Job>, executor: Arc<dyn Executor>, sink: Arc<dyn Sink>)
     }
 }
 
+/// Menu items by serial (lowercase), item `n` at index `n - 1`.
+fn menus_of(config: &Config) -> HashMap<String, Vec<MenuItem>> {
+    config
+        .devices
+        .iter()
+        .map(|d| (d.serial.to_lowercase(), d.menu.clone()))
+        .collect()
+}
+
 /// The pipeline, ready to run on its own thread with [`Engine::spawn`].
 pub struct Engine<B> {
     devices: Devices<B>,
@@ -213,6 +254,8 @@ pub struct Engine<B> {
     paused: bool,
     /// Dry run: actions go to a recording executor (D-079).
     dry_run: bool,
+    /// Each paired unit's app owned menu items, by serial (lowercase).
+    menus: HashMap<String, Vec<MenuItem>>,
     jobs: Sender<Job>,
     /// Kept so the worker is owned by the engine; dropping `jobs` ends it.
     _worker: JoinHandle<()>,
@@ -241,6 +284,7 @@ impl<B: Bus + 'static> Engine<B> {
             sink,
             paused: config.paused,
             dry_run: false,
+            menus: menus_of(config),
             jobs,
             _worker: worker,
         }
@@ -251,11 +295,39 @@ impl<B: Bus + 'static> Engine<B> {
     pub fn reload(&mut self, config: &Config) {
         self.router = Router::new(config);
         self.paused = config.paused;
+        self.menus = menus_of(config);
         self.devices.set_lists(&config.devices, &config.ignored);
         self.sink.record(&Record::Reloaded {
             devices: config.devices.len(),
             mappings: config.mappings.len(),
         });
+    }
+
+    /// Runs the picked menu item's action, as a press would run a mapping:
+    /// Pause and dry run apply.
+    fn menu_picked(&mut self, id: DeviceId, item: u8, read_at: Instant) {
+        let picked = self
+            .menus
+            .get(&id.serial.to_lowercase())
+            .and_then(|items| items.get(usize::from(item).checked_sub(1)?))
+            .cloned();
+        let action = picked.as_ref().map(|m| m.action.clone());
+        self.sink.record(&Record::MenuPicked {
+            id: id.clone(),
+            item,
+            label: picked.map(|m| m.label),
+            action: action.clone(),
+            paused: self.paused,
+            dry_run: self.dry_run,
+        });
+        if let (Some(action), false) = (action, self.paused) {
+            let _ = self.jobs.send(Job {
+                id,
+                action,
+                read_at,
+                dry_run: self.dry_run,
+            });
+        }
     }
 
     /// Turns dry run on or off (D-079): from the next input, actions are
@@ -277,6 +349,10 @@ impl<B: Bus + 'static> Engine<B> {
             let DeviceEvent::Input { id, message } = event else {
                 continue;
             };
+            if let DeviceMessage::MenuSelect { item } = message {
+                self.menu_picked(id, item, read_at);
+                continue;
+            }
             let Some((control, trigger, count)) = trigger_of(&message) else {
                 continue;
             };

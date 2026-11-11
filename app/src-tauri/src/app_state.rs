@@ -600,6 +600,7 @@ pub fn pair(
         vid,
         pid,
         serial: serial.to_owned(),
+        menu: Vec::new(),
     });
     Ok(c)
 }

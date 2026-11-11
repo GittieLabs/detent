@@ -41,6 +41,25 @@ pub fn check(config: &Config) -> Result<(), Problem> {
                 format!("{} is already listed in devices[{first}]", d.serial),
             ));
         }
+        if d.menu.len() > super::schema::MAX_MENU_ITEMS {
+            return Err(problem(
+                format!("devices[{i}].menu"),
+                format!(
+                    "has {} items; the device shows at most {}",
+                    d.menu.len(),
+                    super::schema::MAX_MENU_ITEMS
+                ),
+            ));
+        }
+        for (j, item) in d.menu.iter().enumerate() {
+            if let Err(e) = detent_protocol::codec::Label::new(&item.label) {
+                return Err(problem(
+                    format!("devices[{i}].menu[{j}].label"),
+                    format!("must be 1 to 16 printable ASCII characters ({e})"),
+                ));
+            }
+            check_action(&item.action, &format!("devices[{i}].menu[{j}].action"))?;
+        }
     }
     for (i, u) in config.ignored.iter().enumerate() {
         if u.serial.trim().is_empty() {

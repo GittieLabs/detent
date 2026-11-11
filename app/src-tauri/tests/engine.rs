@@ -19,7 +19,11 @@ const WAIT: Duration = Duration::from_secs(2);
 fn config() -> Config {
     store::parse(&format!(
         r#"{{ "version": 1,
-          "devices": [{{ "name": "desk", "vid": "0x303A", "pid": "0x8FDE", "serial": "{SERIAL}" }}],
+          "devices": [{{ "name": "desk", "vid": "0x303A", "pid": "0x8FDE", "serial": "{SERIAL}",
+            "menu": [
+              {{ "label": "Mail", "action": {{ "type": "open_app", "bundle_id": "com.apple.mail" }} }},
+              {{ "label": "Louder", "action": {{ "type": "volume_up", "step": 0.125 }} }}
+            ] }}],
           "mappings": [
             {{ "device": "{SERIAL}", "control": 1, "trigger": "press", "scope": "everywhere",
                "action": {{ "type": "open_app", "bundle_id": "com.apple.mail" }} }},
@@ -475,4 +479,38 @@ fn asking_for_the_dry_run_state_it_has_records_nothing() {
         .filter(|x| matches!(x, Record::DryRun { .. }))
         .count();
     assert_eq!(more, 0, "no repeats");
+}
+
+// Device menu items (M6): MENU_SELECT runs the picked item's action.
+
+#[test]
+fn picking_a_device_menu_item_runs_its_action() {
+    let r = Rig::start();
+    r.hid.push_device(0, &DeviceMessage::MenuSelect { item: 2 });
+    let rec = r.expect(|x| matches!(x, Record::MenuPicked { .. }));
+    assert_eq!(
+        rec.to_string(),
+        format!("{SERIAL} menu \"Louder\" -> volume_up 13%")
+    );
+    assert_eq!(r.call().0, Action::VolumeUp { step: 0.125 });
+}
+
+#[test]
+fn an_unknown_menu_item_runs_nothing() {
+    let r = Rig::start();
+    r.hid.push_device(0, &DeviceMessage::MenuSelect { item: 9 });
+    let rec = r.expect(|x| matches!(x, Record::MenuPicked { .. }));
+    assert!(rec.to_string().ends_with("-> no such item"), "{rec}");
+    r.no_call();
+}
+
+#[test]
+fn a_menu_item_obeys_dry_run() {
+    let r = Rig::start();
+    let engine = r.engine.as_ref().unwrap();
+    engine.set_dry_run(true);
+    r.expect(|x| matches!(x, Record::DryRun { .. }));
+    r.hid.push_device(0, &DeviceMessage::MenuSelect { item: 1 });
+    r.expect(|x| matches!(x, Record::MenuPicked { .. }));
+    r.no_call();
 }

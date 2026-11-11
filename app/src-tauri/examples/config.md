@@ -19,6 +19,7 @@ Detent reads `~/Library/Application Support/Detent/config.json`. In M2 you write
 | `name` | Your name for it. |
 | `vid`, `pid` | USB IDs, as `"0x303A"` (any case) or a number. Detent boards are `0x303A` / `0x8FDE` until the Espressif PID lands. |
 | `serial` | The USB serial, 12 hex chars on Detent boards (shown on the OLED's Setup screen and by `just probe list`). Must be unique. |
+| `menu` | Optional. The unit's own OLED menu items, after the device's (Volume, Mapped, Setup, Device info): an ordered list of up to 8 `{ "label": "Mail", "action": { ... } }`. Labels are 1 to 16 printable ASCII characters; the action is any from the list below. Picking one on the device runs its action (D-086). |
 
 ## `mappings[]`
 

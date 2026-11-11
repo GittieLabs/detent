@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 use detent_protocol::codec::{
     decode_device, encode_app, AppMessage, ButtonAction, DecodeError, DeviceMessage, EncoderMode,
-    Hello,
+    Hello, Label,
 };
 use detent_protocol::ids;
 
@@ -156,6 +156,8 @@ struct Unit {
     candidate: bool,
     /// HELLOs received, for spotting a candidate leaving Setup.
     hellos: u32,
+    /// Its app owned OLED menu labels, sent after each HELLO ack (M6).
+    menu: Vec<String>,
 }
 
 impl Unit {
@@ -267,6 +269,15 @@ impl<B: Bus> Devices<B> {
         self.relisted = true;
     }
 
+    /// The menu labels the allowlist gives a unit.
+    fn menu_of(&self, id: &DeviceId) -> Vec<String> {
+        self.allow
+            .iter()
+            .find(|d| d.vid == id.vid && d.pid == id.pid && same_serial(&d.serial, &id.serial))
+            .map(|d| d.menu.iter().map(|m| m.label.clone()).collect())
+            .unwrap_or_default()
+    }
+
     fn still_allowed(&self, id: &DeviceId) -> bool {
         let matches = |vid, pid, serial: &str| {
             vid == id.vid && pid == id.pid && same_serial(serial, &id.serial)
@@ -286,6 +297,18 @@ impl<B: Bus> Devices<B> {
                 .filter(|u| !u.candidate && !self.still_allowed(&u.id))
                 .map(|u| u.id.clone())
                 .collect();
+            // A changed menu goes out now to units that have said HELLO;
+            // the others get it after their HELLO is acked.
+            let menus: Vec<Vec<String>> = self.units.iter().map(|u| self.menu_of(&u.id)).collect();
+            for (unit, menu) in self.units.iter_mut().zip(menus) {
+                if unit.candidate || unit.menu == menu {
+                    continue;
+                }
+                unit.menu = menu;
+                if unit.hello.is_some() {
+                    let _ = send_menu(unit);
+                }
+            }
             // The device stays "paired" until told otherwise or unmounted.
             for unit in self.units.iter_mut().filter(|u| gone.contains(&u.id)) {
                 let _ = unit.send(&AppMessage::HelloAck { paired: false });
@@ -443,6 +466,8 @@ impl<B: Bus> Devices<B> {
             seq_out: 0,
             candidate: true,
             hellos: 0,
+            // A candidate is never written to beyond REQUEST_HELLO (D-066).
+            menu: Vec::new(),
         };
         if unit.send(&AppMessage::RequestHello).is_err() {
             return;
@@ -474,6 +499,7 @@ impl<B: Bus> Devices<B> {
             seq_out: 0,
             candidate: false,
             hellos: 0,
+            menu: self.menu_of(&id),
         };
         // The mount HELLO went out before we had the channel open; ask again.
         if let Err(e) = unit.send(&AppMessage::RequestHello) {
@@ -528,6 +554,30 @@ impl<B: Bus> Devices<B> {
         }
         self.units = kept;
     }
+}
+
+/// Sends a unit its app owned menu: every item in order, or a clear when it
+/// has none (so a device never keeps items from another host). Labels were
+/// checked by the config loader; one that somehow isn't valid is skipped.
+fn send_menu(unit: &mut Unit) -> Result<(), TransportError> {
+    let labels: Vec<Label> = unit
+        .menu
+        .iter()
+        .filter_map(|l| Label::new(l).ok())
+        .collect();
+    if labels.is_empty() {
+        return unit.send(&AppMessage::MenuClear);
+    }
+    let total = labels.len() as u8;
+    for (i, label) in labels.into_iter().enumerate() {
+        unit.send(&AppMessage::MenuItem {
+            total,
+            index: i as u8,
+            item: i as u8 + 1,
+            label,
+        })?;
+    }
+    Ok(())
 }
 
 /// The event for a unit closing: a paired unit disconnected, a candidate gone.
@@ -587,6 +637,7 @@ fn handle(
         DeviceMessage::Hello(hello) => {
             unit.send(&AppMessage::HelloAck { paired: true })
                 .map_err(Lost::Link)?;
+            send_menu(unit).map_err(Lost::Link)?;
             unit.hello = Some(hello.clone());
             events.push(DeviceEvent::Hello {
                 id: unit.id.clone(),

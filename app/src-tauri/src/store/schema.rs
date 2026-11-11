@@ -28,7 +28,7 @@ pub struct Config {
 }
 
 /// A paired unit: VID + PID + serial identifies it (D-004).
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct DeviceEntry {
     pub name: String,
@@ -37,6 +37,21 @@ pub struct DeviceEntry {
     #[serde(deserialize_with = "usb_id", serialize_with = "usb_id_out")]
     pub pid: u16,
     pub serial: String,
+    /// Its app owned OLED menu items, in order (M6, D-086).
+    #[serde(default)]
+    pub menu: Vec<MenuItem>,
+}
+
+/// The most app owned menu items a device shows (firmware `kMaxAppItems`).
+pub const MAX_MENU_ITEMS: usize = 8;
+
+/// One app owned item on a device's OLED menu: picking it runs the action.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct MenuItem {
+    /// 1 to 16 printable ASCII characters (the OLED's font).
+    pub label: String,
+    pub action: Action,
 }
 
 /// A unit by identity alone, for the ignore list.

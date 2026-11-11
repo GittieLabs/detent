@@ -31,6 +31,20 @@ fn entry(serial: &str) -> DeviceEntry {
         vid: VID,
         pid: PID,
         serial: serial.into(),
+        menu: Vec::new(),
+    }
+}
+
+fn with_menu(serial: &str, labels: &[&str]) -> DeviceEntry {
+    DeviceEntry {
+        menu: labels
+            .iter()
+            .map(|l| detent_lib::store::MenuItem {
+                label: (*l).into(),
+                action: detent_lib::store::Action::MuteToggle,
+            })
+            .collect(),
+        ..entry(serial)
     }
 }
 
@@ -146,7 +160,9 @@ fn an_allowlisted_unit_opens_requests_hello_and_is_acked() {
         sent(&hid),
         vec![
             AppMessage::RequestHello,
-            AppMessage::HelloAck { paired: true }
+            AppMessage::HelloAck { paired: true },
+            // No menu configured: clear whatever the device showed (M6).
+            AppMessage::MenuClear,
         ]
     );
     assert_eq!(r.devices.connected(), vec![&id(PAIRED)]);
@@ -945,4 +961,80 @@ fn an_encoder_mode_change_in_a_heartbeat_is_reported_once() {
         r.devices.hello(&id(PAIRED)).map(|h| h.encoder_mode),
         Some(EncoderMode::Volume)
     );
+}
+
+// Device menu items (M6): sent after each HELLO is acked, and again when they
+// change; an empty menu clears whatever the device showed.
+
+fn menu_sent(hid: &MockHid) -> Vec<AppMessage> {
+    sent(hid)
+        .into_iter()
+        .filter(|m| matches!(m, AppMessage::MenuItem { .. } | AppMessage::MenuClear))
+        .collect()
+}
+
+fn item(total: u8, index: u8, label: &str) -> AppMessage {
+    AppMessage::MenuItem {
+        total,
+        index,
+        item: index + 1,
+        label: detent_protocol::codec::Label::new(label).unwrap(),
+    }
+}
+
+#[test]
+fn the_menu_goes_out_after_each_hello_ack() {
+    let mut r = Rig::new(&[], &[]);
+    r.devices
+        .set_lists(&[with_menu(PAIRED, &["Mail", "Mute"])], &[]);
+    let hid = r.bus.attach(VID, PID, Some(PAIRED));
+    r.at(0.0);
+    hid.push_device(0, &DeviceMessage::Hello(hello()));
+    r.at(0.1);
+    assert_eq!(
+        menu_sent(&hid),
+        vec![item(2, 0, "Mail"), item(2, 1, "Mute")]
+    );
+    let all = sent(&hid);
+    let ack = all
+        .iter()
+        .position(|m| *m == AppMessage::HelloAck { paired: true });
+    let first_item = all
+        .iter()
+        .position(|m| matches!(m, AppMessage::MenuItem { .. }));
+    assert!(ack < first_item, "acked before the menu: {all:?}");
+}
+
+#[test]
+fn a_unit_without_a_menu_is_told_to_clear_it() {
+    let mut r = Rig::new(&[PAIRED], &[]);
+    let hid = r.bus.attach(VID, PID, Some(PAIRED));
+    r.at(0.0);
+    hid.push_device(0, &DeviceMessage::Hello(hello()));
+    r.at(0.1);
+    assert_eq!(menu_sent(&hid), vec![AppMessage::MenuClear]);
+}
+
+#[test]
+fn a_changed_menu_is_resent_and_an_unchanged_one_is_not() {
+    let mut r = Rig::new(&[], &[]);
+    r.devices.set_lists(&[with_menu(PAIRED, &["Mail"])], &[]);
+    let hid = r.bus.attach(VID, PID, Some(PAIRED));
+    r.at(0.0);
+    hid.push_device(0, &DeviceMessage::Hello(hello()));
+    r.at(0.1);
+    let before = menu_sent(&hid).len();
+    r.devices.set_lists(&[with_menu(PAIRED, &["Mail"])], &[]);
+    r.at(0.2);
+    assert_eq!(menu_sent(&hid).len(), before, "unchanged: nothing sent");
+    r.devices
+        .set_lists(&[with_menu(PAIRED, &["Mute", "Mail"])], &[]);
+    r.at(0.3);
+    assert_eq!(
+        menu_sent(&hid)[before..],
+        [item(2, 0, "Mute"), item(2, 1, "Mail")]
+    );
+    r.devices.set_lists(&[with_menu(PAIRED, &[])], &[]);
+    r.at(0.4);
+    assert_eq!(menu_sent(&hid).last(), Some(&AppMessage::MenuClear));
 }

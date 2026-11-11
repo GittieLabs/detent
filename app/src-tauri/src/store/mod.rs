@@ -10,8 +10,8 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 pub use schema::{
-    Action, Config, DeviceEntry, Mapping, Scope, Trigger, UnitRef, DEFAULT_APPLESCRIPT_TIMEOUT_MS,
-    DEFAULT_VOLUME_STEP,
+    Action, Config, DeviceEntry, Mapping, MenuItem, Scope, Trigger, UnitRef,
+    DEFAULT_APPLESCRIPT_TIMEOUT_MS, DEFAULT_VOLUME_STEP, MAX_MENU_ITEMS,
 };
 pub use validate::ArgError;
 

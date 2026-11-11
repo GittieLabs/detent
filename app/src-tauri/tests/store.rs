@@ -507,3 +507,56 @@ fn send_shortcut_parses_validates_and_saves() {
         "extra",
     );
 }
+
+// Device menu items (M6): app owned OLED menu entries per unit.
+
+const MENU_CONFIG: &str = r#"{ "version": 1,
+  "devices": [{ "name": "Desk", "vid": "0x303A", "pid": "0x8FDE", "serial": "E072A1FC4EDC",
+    "menu": [
+      { "label": "Mail", "action": { "type": "open_app", "bundle_id": "com.apple.mail" } },
+      { "label": "Mute", "action": { "type": "mute_toggle" } }
+    ] }] }"#;
+
+#[test]
+fn device_menu_items_parse_and_save() {
+    let c = parse(MENU_CONFIG).unwrap();
+    let menu = &c.devices[0].menu;
+    assert_eq!(menu.len(), 2);
+    assert_eq!(menu[1].label, "Mute");
+    assert_eq!(menu[1].action, Action::MuteToggle);
+    let text = store::to_json(&c).unwrap();
+    assert_eq!(parse(&text).unwrap(), c);
+    // A unit without a menu reads as an empty one, and is written out empty.
+    let plain = parse(r#"{ "version": 1, "devices": [{ "name": "D", "vid": "0x303A", "pid": "0x8FDE", "serial": "S" }] }"#).unwrap();
+    assert!(plain.devices[0].menu.is_empty());
+    assert!(store::to_json(&plain).unwrap().contains("\"menu\": []"));
+}
+
+#[test]
+fn bad_device_menu_items_name_the_field() {
+    assert_err(
+        &MENU_CONFIG.replace(r#""label": "Mute""#, r#""label": """#),
+        "devices[0].menu[1].label",
+    );
+    assert_err(
+        &MENU_CONFIG.replace(r#""label": "Mute""#, r#""label": "A label far too long""#),
+        "devices[0].menu[1].label",
+    );
+    assert_err(
+        &MENU_CONFIG.replace(r#""label": "Mute""#, r#""label": "Café""#),
+        "devices[0].menu[1].label",
+    );
+    assert_err(
+        &MENU_CONFIG.replace(r#""bundle_id": "com.apple.mail""#, r#""bundle_id": "Mail""#),
+        "devices[0].menu[0].action.bundle_id",
+    );
+    let nine: Vec<String> = (1..=9)
+        .map(|i| format!(r#"{{ "label": "Item {i}", "action": {{ "type": "mute_toggle" }} }}"#))
+        .collect();
+    let too_many = format!(
+        r#"{{ "version": 1, "devices": [{{ "name": "D", "vid": "0x303A", "pid": "0x8FDE",
+             "serial": "S", "menu": [{}] }}] }}"#,
+        nine.join(",")
+    );
+    assert_err(&too_many, "devices[0].menu");
+}
