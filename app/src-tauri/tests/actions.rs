@@ -296,3 +296,11 @@ fn shortcuts_are_refused_before_any_key_without_the_grant_or_with_secure_input()
         "Detent needs Accessibility to send shortcuts"
     );
 }
+
+#[test]
+fn a_dashboard_window_failure_says_so() {
+    assert_eq!(
+        ActionError::Window("no answer from the main thread".into()).to_string(),
+        "the dashboard window failed: no answer from the main thread"
+    );
+}

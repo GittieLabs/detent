@@ -21,8 +21,18 @@ use tauri::{
     WebviewWindowBuilder,
 };
 
-/// The dashboard window's label. Not in any capability.
-pub const DASHBOARD_WINDOW: &str = "dashboard";
+/// The dashboard windows' labels, one per mode, so switching modes only hides
+/// the other (rebuilding one label at once fails while macOS tears the old
+/// window down). Neither is in any capability.
+const FULLSCREEN_WINDOW: &str = "dashboard-full";
+const WINDOWED_WINDOW: &str = "dashboard-window";
+
+fn label(mode: DashboardMode) -> &'static str {
+    match mode {
+        DashboardMode::Fullscreen => FULLSCREEN_WINDOW,
+        DashboardMode::Window => WINDOWED_WINDOW,
+    }
+}
 /// How often the watcher checks the window is still on a connected display.
 const WATCH_EVERY: Duration = Duration::from_secs(2);
 
@@ -142,7 +152,8 @@ fn fit(window: &WebviewWindow, d: &Display) -> tauri::Result<()> {
 fn build(app: &AppHandle, url: tauri::Url, mode: DashboardMode) -> tauri::Result<WebviewWindow> {
     let full = mode == DashboardMode::Fullscreen;
     let handle = app.clone();
-    let mut builder = WebviewWindowBuilder::new(app, DASHBOARD_WINDOW, WebviewUrl::External(url));
+    let me = label(mode);
+    let mut builder = WebviewWindowBuilder::new(app, me, WebviewUrl::External(url));
     if full {
         // Never takes focus from the app in front; the hover button closes it.
         builder = builder.focusable(false).initialization_script(CLOSE_SCRIPT);
@@ -164,7 +175,7 @@ fn build(app: &AppHandle, url: tauri::Url, mode: DashboardMode) -> tauri::Result
             }
             let h = handle.clone();
             let _ = handle.run_on_main_thread(move || {
-                if let Some(w) = h.get_webview_window(DASHBOARD_WINDOW) {
+                if let Some(w) = h.get_webview_window(me) {
                     let _ = w.hide();
                 }
             });
@@ -182,26 +193,25 @@ fn toggle(
     mode: DashboardMode,
     close_without_device: bool,
 ) -> tauri::Result<bool> {
-    let was_mode = std::mem::replace(
-        &mut *WANTED.lock().unwrap_or_else(|e| e.into_inner()),
-        Shown {
-            display: display.map(str::to_owned),
-            mode,
-            close_without_device,
-        },
-    )
-    .mode;
-    let mut existing = app.get_webview_window(DASHBOARD_WINDOW);
+    *WANTED.lock().unwrap_or_else(|e| e.into_inner()) = Shown {
+        display: display.map(str::to_owned),
+        mode,
+        close_without_device,
+    };
+    // The other mode's window, if it's up, gives way.
+    let other = match mode {
+        DashboardMode::Fullscreen => WINDOWED_WINDOW,
+        DashboardMode::Window => FULLSCREEN_WINDOW,
+    };
+    if let Some(w) = app.get_webview_window(other) {
+        w.hide()?;
+    }
+    let existing = app.get_webview_window(label(mode));
     if let Some(w) = &existing {
         let same_page = w.url().map(|u| u == parsed).unwrap_or(false);
-        if w.is_visible()? && same_page && was_mode == mode {
+        if w.is_visible()? && same_page {
             w.hide()?;
             return Ok(false);
-        }
-        // A different mode needs a different kind of window.
-        if was_mode != mode {
-            w.destroy()?;
-            existing = None;
         }
     }
     let window = match existing {
@@ -240,9 +250,9 @@ impl Executor for AppExecutor {
             return self.inner.run(action);
         };
         action.check_args().map_err(ActionError::Invalid)?;
-        let Ok(parsed) = url.parse::<tauri::Url>() else {
-            return Err(ActionError::NeedsTheApp);
-        };
+        let parsed = url
+            .parse::<tauri::Url>()
+            .map_err(|e| ActionError::Window(format!("bad address {url}: {e}")))?;
         let (tx, rx) = mpsc::channel();
         let (app, display, mode, close) = (
             self.app.clone(),
@@ -260,11 +270,8 @@ impl Executor for AppExecutor {
         }
         match rx.recv_timeout(Duration::from_secs(3)) {
             Ok(Ok(shown)) => Ok(Done::Dashboard { shown }),
-            Ok(Err(e)) => {
-                eprintln!("detent: dashboard: {e}");
-                Err(ActionError::NeedsTheApp)
-            }
-            Err(_) => Err(ActionError::NeedsTheApp),
+            Ok(Err(e)) => Err(ActionError::Window(e)),
+            Err(_) => Err(ActionError::Window("no answer from the main thread".into())),
         }
     }
 }
@@ -288,7 +295,7 @@ pub fn watch(app: AppHandle) {
                 continue;
             }
             let _ = app.run_on_main_thread(move || {
-                let Some(w) = handle.get_webview_window(DASHBOARD_WINDOW) else {
+                let Some(w) = handle.get_webview_window(FULLSCREEN_WINDOW) else {
                     return;
                 };
                 if !w.is_visible().unwrap_or(false) {
@@ -331,7 +338,7 @@ pub fn watch_hover(app: AppHandle) {
             }
             let (handle, last) = (app.clone(), last.clone());
             let _ = app.run_on_main_thread(move || {
-                let Some(w) = handle.get_webview_window(DASHBOARD_WINDOW) else {
+                let Some(w) = handle.get_webview_window(FULLSCREEN_WINDOW) else {
                     return;
                 };
                 if !w.is_visible().unwrap_or(false) {
@@ -372,9 +379,11 @@ pub fn no_device(app: &AppHandle) {
     }
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
-        if let Some(w) = handle.get_webview_window(DASHBOARD_WINDOW) {
-            if w.is_visible().unwrap_or(false) {
-                let _ = w.hide();
+        for me in [FULLSCREEN_WINDOW, WINDOWED_WINDOW] {
+            if let Some(w) = handle.get_webview_window(me) {
+                if w.is_visible().unwrap_or(false) {
+                    let _ = w.hide();
+                }
             }
         }
     });

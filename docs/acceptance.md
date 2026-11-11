@@ -215,4 +215,11 @@ Results:
   - Step 2: `PASS`, Keith. After presses the OLED's status screen showed the result (volume level, Muted and Unmuted, Opened Mail from the device menu) and cleared after a few seconds.
 - Early checks of task 7, 2026-11-10, signed builds on Keith's config, `Detent Dev`, Studio Display and the MacBook's screen:
   - Steps 4 and 5 (exit criteria): `PASS`, Keith. Button 4 showed the repo page full screen on the chosen display without taking focus (`open_dashboard ...: dashboard shown`), a second press hid it, and unplugging the Studio Display moved it to the main screen without a crash. After his review the close control became a large bottom right "Close" pill shown while the mouse moves, which he saw and used, and the page now sits below the menu bar. Window mode and Close when no device is connected were built after that round and haven't been tried on screen yet.
+- Acceptance pass, 2026-11-10, signed `Detent.app` from `just build-dev` at `741c01d` plus the mode switch fix below, `Detent Dev` on the M6 firmware, Keith's config, Studio Display and the MacBook's screen. Keith did each step; Claude read the log.
+  - Step 1: `PASS`. `menu "Louder" -> volume_up 6%` from the device's menu.
+  - Step 2: `PASS`. Button 2 stepped 50 -> 56% and the OLED showed the result.
+  - Step 3: `PASS`. Mode Menu, Mapped (turns stepped 10% each way: 56 -> 66 -> 56 -> 66 -> 56 -> 46%), Menu, Volume, with no replug.
+  - Step 4 (exit criterion): `PASS`. Full screen below the menu bar, closed with the Close pill, shown again. Window mode first failed on the first press after switching ("this action runs only inside the Detent app", a misleading message): switching rebuilt one window label while macOS was still tearing the old one down. Fixed with a window per mode and a truthful error; then Window, Full screen and Window again each showed on the first press after the switch, and hid on the next.
+  - Step 5 (exit criterion): `PASS` earlier (Studio Display unplugged, the dashboard moved to the main screen). Unplugging Detent Dev hid the dashboard (Close when no device is connected).
+  - M6 exit criteria both pass on a signed build.
 

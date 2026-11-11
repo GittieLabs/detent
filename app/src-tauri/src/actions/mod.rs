@@ -66,6 +66,8 @@ pub enum ActionError {
     Keys(crate::keys::Refusal),
     /// The action needs the app around it (a window), not this executor.
     NeedsTheApp,
+    /// The dashboard's window couldn't be shown or hidden.
+    Window(String),
 }
 
 impl fmt::Display for ActionError {
@@ -79,6 +81,7 @@ impl fmt::Display for ActionError {
             Self::Script(e) => e.fmt(f),
             Self::Keys(e) => e.fmt(f),
             Self::NeedsTheApp => write!(f, "this action runs only inside the Detent app"),
+            Self::Window(e) => write!(f, "the dashboard window failed: {e}"),
         }
     }
 }
