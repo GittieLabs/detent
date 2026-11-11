@@ -12,7 +12,8 @@ use crate::app_state::AppState;
 use crate::store::{self, Action, Config, DEFAULT_DASHBOARD_URL};
 
 /// Dashboard URLs that are the project's own and stay: the default, and
-/// the repo page that was the default before the docs site (D-088).
+/// the repo page (the default before the docs site, D-088; schema 2 moves
+/// it to the docs, D-109, but a typed link to it is still public).
 const PUBLIC_URLS: &[&str] = &[
     DEFAULT_DASHBOARD_URL,
     "https://github.com/gittielabs/detent",

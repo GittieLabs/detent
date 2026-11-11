@@ -8,7 +8,7 @@ If the file can't be read, Detent never overwrites it: Devices explains the prob
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `version` | yes | `1`. An older version is upgraded on load and the original kept as `config.json.v<N>.bak`; a newer one is refused and left alone. |
+| `version` | yes | `2`. An older version is upgraded on load and the original kept as `config.json.v<N>.bak`; a newer one is refused and left alone. |
 | `devices` | no | Paired devices. Detent opens these and nothing else. |
 | `ignored` | no | Devices Detent never opens or offers to pair (`vid`, `pid`, `serial`). |
 | `mappings` | no | What each control does. |
@@ -51,7 +51,7 @@ Two mappings with the same device, control, trigger and scope are an error.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "devices": [
     { "name": "Desk", "vid": "0x303A", "pid": "0x8FDE", "serial": "E072A1FC4EDC" }
   ],

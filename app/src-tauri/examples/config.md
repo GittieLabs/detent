@@ -6,7 +6,7 @@ Detent reads `~/Library/Application Support/Detent/config.json`. In M2 you write
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `version` | yes | Always `1` today. An older version is migrated on load and the old file kept as `config.json.v<N>.bak`; a newer one is refused with a clear message and left untouched. |
+| `version` | yes | `2` today. An older version is migrated on load and the old file kept as `config.json.v<N>.bak`; a newer one is refused with a clear message and left untouched. |
 | `devices` | no | Paired units. Detent opens these and nothing else. |
 | `ignored` | no | Units Detent never opens or offers to pair (`vid`, `pid`, `serial`). |
 | `mappings` | no | What each control does. |

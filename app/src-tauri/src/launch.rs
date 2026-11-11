@@ -275,7 +275,7 @@ mod crash_test {
 /// An empty v1 config: what a first launch starts from.
 pub fn empty_config() -> Config {
     Config {
-        version: 1,
+        version: 2,
         devices: Vec::new(),
         ignored: Vec::new(),
         mappings: Vec::new(),

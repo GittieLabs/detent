@@ -18,7 +18,7 @@ pub use schema::{
 pub use validate::ArgError;
 
 /// The schema version this build reads.
-pub const SCHEMA_VERSION: u64 = 1;
+pub const SCHEMA_VERSION: u64 = 2;
 
 /// One schema step: turns a config at version `from` into `from + 1`.
 /// Steps work on the raw JSON, before it's read into [`Config`], so they
@@ -28,10 +28,47 @@ pub struct Migration {
     pub run: fn(serde_json::Value) -> Result<serde_json::Value, String>,
 }
 
-/// The steps from each earlier schema version. Empty while schema 1 is the
-/// only one; the first bump adds `Migration { from: 1, .. }`, and the frozen
-/// fixtures in `tests/fixtures/configs/` prove the old shapes still load.
-pub const MIGRATIONS: &[Migration] = &[];
+/// The steps from each earlier schema version; the frozen fixtures in
+/// `tests/fixtures/configs/` prove the old shapes still load.
+pub const MIGRATIONS: &[Migration] = &[Migration {
+    from: 1,
+    run: v1_to_v2,
+}];
+
+/// Open dashboard's default before the docs site (D-088). Detent wrote it
+/// into every saved mapping that left the URL empty.
+const V1_DEFAULT_DASHBOARD_URL: &str = "https://github.com/gittielabs/detent";
+
+/// Schema 2 (D-109): an Open dashboard still on schema 1's default page,
+/// the repo, shows the docs site instead. Any other URL is the user's.
+fn v1_to_v2(mut v: serde_json::Value) -> Result<serde_json::Value, String> {
+    let fix = |action: &mut serde_json::Value| {
+        let is_old = action.get("type").and_then(|t| t.as_str()) == Some("open_dashboard")
+            && action.get("url").and_then(|u| u.as_str()) == Some(V1_DEFAULT_DASHBOARD_URL);
+        if is_old {
+            action["url"] = DEFAULT_DASHBOARD_URL.into();
+        }
+    };
+    if let Some(maps) = v.get_mut("mappings").and_then(|m| m.as_array_mut()) {
+        for m in maps {
+            if let Some(a) = m.get_mut("action") {
+                fix(a);
+            }
+        }
+    }
+    if let Some(devs) = v.get_mut("devices").and_then(|d| d.as_array_mut()) {
+        for d in devs {
+            if let Some(items) = d.get_mut("menu").and_then(|m| m.as_array_mut()) {
+                for item in items {
+                    if let Some(a) = item.get_mut("action") {
+                        fix(a);
+                    }
+                }
+            }
+        }
+    }
+    Ok(v)
+}
 
 /// Why a config couldn't be used. Every message says where the problem is.
 #[derive(Debug)]

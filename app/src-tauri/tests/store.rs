@@ -50,7 +50,7 @@ fn assert_err(json: &str, expected: &str) {
 #[test]
 fn example_config_parses() {
     let c = parse(EXAMPLE).expect("the example is valid");
-    assert_eq!(c.version, 1);
+    assert_eq!(c.version, 2);
     assert!(!c.devices.is_empty());
     assert!(!c.mappings.is_empty());
 }
@@ -146,12 +146,17 @@ fn malformed_json_reports_line_and_column() {
 }
 
 #[test]
-fn version_is_required_and_must_be_1() {
+fn version_is_required_and_at_most_the_current_one() {
     assert_err(r#"{ "devices": [] }"#, "missing field `version`");
     assert_err(
-        r#"{ "version": 2 }"#,
-        "unsupported config version 2 (this Detent reads version 1)",
+        r#"{ "version": 3 }"#,
+        "unsupported config version 3 (this Detent reads version 2)",
     );
+    assert_err(
+        r#"{ "version": 0 }"#,
+        "unsupported config version 0 (this Detent reads version 2)",
+    );
+    assert_eq!(parse(r#"{ "version": 1 }"#).unwrap().version, 2);
 }
 
 #[test]
@@ -381,7 +386,7 @@ fn saved_text_parses_back_to_the_same_config() {
 fn saved_text_is_canonical_and_readable() {
     let text = store::to_json(&example()).unwrap();
     assert!(
-        text.starts_with("{\n  \"version\": 1,\n  \"devices\": ["),
+        text.starts_with("{\n  \"version\": 2,\n  \"devices\": ["),
         "{text}"
     );
     assert!(

@@ -1,6 +1,8 @@
 //! Every config shape Detent has written or documented must keep loading
 //! (D-008, D-103), like `protocol/tests/frozen.rs` for the wire format.
 //!
+//! Schema 2 (D-109) is the first real migration: every fixture is schema 1.
+//!
 //! The files in `tests/fixtures/configs/` are frozen: never edit or delete
 //! one. A schema change that breaks one needs a `store::MIGRATIONS` step
 //! and a `SCHEMA_VERSION` bump, and the fixture stays as it was. Add a new
@@ -155,8 +157,9 @@ fn loading_a_migrated_config_keeps_the_old_file_as_a_backup() {
 fn a_current_config_makes_no_backup() {
     let dir = temp("no-backup");
     let path = dir.join("config.json");
-    write(&path, &fixture("m3-first-save.json"));
-    store::load_with(&path, STEPS, SCHEMA_VERSION).unwrap();
+    let current = store::to_json(&store::parse(&fixture("m3-first-save.json")).unwrap()).unwrap();
+    write(&path, &current);
+    store::load(&path).unwrap();
     assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
 }
 
@@ -173,4 +176,64 @@ fn a_future_version_is_refused_and_left_untouched() {
     );
     assert_eq!(std::fs::read_to_string(&path).unwrap(), future);
     assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+}
+
+// Schema 2 (D-109): the old default dashboard page becomes the docs site.
+
+const REPO: &str = "https://github.com/gittielabs/detent";
+
+fn dashboard_url(a: &detent_lib::store::Action) -> &str {
+    match a {
+        detent_lib::store::Action::OpenDashboard { url, .. } => url,
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn the_old_default_dashboard_page_moves_to_the_docs_site() {
+    let v1 = format!(
+        r#"{{ "version": 1,
+          "devices": [{{ "name": "D", "vid": "0x303A", "pid": "0x8FDE", "serial": "S",
+            "menu": [{{ "label": "Docs", "action": {{ "type": "open_dashboard", "url": "{REPO}" }} }}] }}],
+          "mappings": [
+            {{ "device": "S", "control": 1, "trigger": "press", "scope": "everywhere",
+               "action": {{ "type": "open_dashboard", "url": "{REPO}", "mode": "window" }} }},
+            {{ "device": "S", "control": 2, "trigger": "press", "scope": "everywhere",
+               "action": {{ "type": "open_dashboard", "url": "{REPO}/issues" }} }},
+            {{ "device": "S", "control": 3, "trigger": "press", "scope": "everywhere",
+               "action": {{ "type": "open_app", "bundle_id": "com.apple.mail" }} }}
+          ] }}"#
+    );
+    let c = store::parse(&v1).unwrap();
+    assert_eq!(c.version, 2);
+    let docs = store::DEFAULT_DASHBOARD_URL;
+    assert_eq!(dashboard_url(&c.mappings[0].action), docs);
+    assert_eq!(dashboard_url(&c.devices[0].menu[0].action), docs);
+    // Anything else, even another page of the repo, is the user's choice.
+    assert_eq!(
+        dashboard_url(&c.mappings[1].action),
+        format!("{REPO}/issues")
+    );
+    // Other fields of the action are kept.
+    assert!(matches!(
+        &c.mappings[0].action,
+        detent_lib::store::Action::OpenDashboard {
+            mode: detent_lib::store::DashboardMode::Window,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn loading_a_v1_config_keeps_it_as_a_backup() {
+    let dir = temp("v1-backup");
+    let path = dir.join("config.json");
+    let text = fixture("m7-keith-redacted.json");
+    write(&path, &text);
+    let c = store::load(&path).unwrap();
+    assert_eq!(c.version, 2);
+    assert_eq!(
+        std::fs::read_to_string(dir.join("config.json.v1.bak")).unwrap(),
+        text
+    );
 }
