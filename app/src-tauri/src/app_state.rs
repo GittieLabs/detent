@@ -148,7 +148,7 @@ pub struct DebugEntry {
     /// Unix time in milliseconds when the app saw it.
     pub at_ms: u64,
     /// `report`, `device`, `resolved`, `ran`, `menu`, `reloaded`,
-    /// `dry_run` or `recovered`.
+    /// `dry_run`, `recovered` or `wake`.
     pub kind: &'static str,
     pub serial: Option<String>,
     /// A report's decoded message, or the record's log line.
@@ -211,6 +211,8 @@ pub fn debug_entry(record: &Record, at_ms: u64) -> DebugEntry {
         Record::Reloaded { .. } => ("reloaded", None, record.to_string(), None),
         Record::DryRun { .. } => ("dry_run", None, record.to_string(), None),
         Record::Recovered { .. } => ("recovered", None, record.to_string(), None),
+        Record::Woke { .. } => ("wake", None, record.to_string(), None),
+        Record::BackAfterWake { id, .. } => ("wake", serial_of(id), record.to_string(), None),
     };
     DebugEntry {
         at_ms,

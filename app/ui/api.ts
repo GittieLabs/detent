@@ -189,7 +189,7 @@ export const DEFAULT_DASHBOARD_URL = "https://github.com/gittielabs/detent";
 /** One Debug log line (`app_state::DebugEntry`, M9). */
 export interface DebugEntry {
   at_ms: number;
-  kind: "report" | "device" | "resolved" | "ran" | "menu" | "reloaded" | "dry_run" | "recovered";
+  kind: "report" | "device" | "resolved" | "ran" | "menu" | "reloaded" | "dry_run" | "recovered" | "wake";
   serial: string | null;
   text: string;
   raw: string | null; // hex, trailing zeros collapsed

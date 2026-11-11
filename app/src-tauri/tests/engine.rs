@@ -805,3 +805,95 @@ fn raw_reports_are_recorded_only_while_asked_for() {
     r.expect(|x| matches!(x, Record::Device(DeviceEvent::Report { .. })));
     let _ = r.call();
 }
+
+// Sleep and wake on hardware (M9): the log says when a wake was seen and
+// how long each unit took to come back.
+
+#[test]
+fn a_wake_is_logged_with_its_gap_and_each_unit_logs_its_reconnect_time() {
+    let bus = MockBus::default();
+    let _hid = bus.attach(VID, PID, Some(SERIAL));
+    let (tx, records) = mpsc::channel();
+    let (calls_tx, _calls) = mpsc::channel();
+    let (_release, release_rx) = mpsc::channel();
+    let mut engine = Engine::new(
+        bus.clone(),
+        &config(),
+        Arc::new(ProbeExecutor {
+            calls: Mutex::new(calls_tx),
+            release: Mutex::new(release_rx),
+        }),
+        Arc::new(|| None),
+        Arc::new(ChannelSink(Mutex::new(tx))),
+        Options {
+            read_wait: Duration::from_millis(1),
+            ..Options::default()
+        },
+    );
+    let t0 = Instant::now();
+    engine.step(t0);
+    let woke_at = t0 + Duration::from_secs(1);
+    engine.woke(Duration::from_secs(95), woke_at);
+    engine.step(woke_at + Duration::from_millis(1_250));
+    let got: Vec<Record> = records.try_iter().collect();
+
+    let at =
+        |f: &dyn Fn(&Record) -> bool| got.iter().position(f).unwrap_or_else(|| panic!("{got:#?}"));
+    let woke = at(&|r| matches!(r, Record::Woke { .. }));
+    let lost = at(&|r| {
+        matches!(
+            r,
+            Record::Device(DeviceEvent::Disconnected {
+                why: Lost::Slept,
+                ..
+            })
+        )
+    });
+    let back = at(&|r| matches!(r, Record::BackAfterWake { .. }));
+    assert!(woke < lost && lost < back, "{got:#?}");
+    assert_eq!(
+        got[woke].to_string(),
+        "woke from sleep: the wall clock jumped 95.0 s; reopening every unit"
+    );
+    assert_eq!(
+        got[back].to_string(),
+        format!("{SERIAL} back 1.25 s after the wake")
+    );
+}
+
+#[test]
+fn only_the_first_reconnect_after_a_wake_is_timed() {
+    let bus = MockBus::default();
+    let _hid = bus.attach(VID, PID, Some(SERIAL));
+    let (tx, records) = mpsc::channel();
+    let (calls_tx, _calls) = mpsc::channel();
+    let (_release, release_rx) = mpsc::channel();
+    let mut engine = Engine::new(
+        bus.clone(),
+        &config(),
+        Arc::new(ProbeExecutor {
+            calls: Mutex::new(calls_tx),
+            release: Mutex::new(release_rx),
+        }),
+        Arc::new(|| None),
+        Arc::new(ChannelSink(Mutex::new(tx))),
+        Options {
+            read_wait: Duration::from_millis(1),
+            ..Options::default()
+        },
+    );
+    let t0 = Instant::now();
+    engine.step(t0);
+    engine.woke(Duration::from_secs(10), t0);
+    engine.step(t0 + Duration::from_millis(10));
+    // A later unplug and replug isn't about the wake.
+    bus.detach(SERIAL);
+    engine.step(t0 + Duration::from_secs(20));
+    let _hid = bus.attach(VID, PID, Some(SERIAL));
+    engine.step(t0 + Duration::from_secs(25));
+    let backs = records
+        .try_iter()
+        .filter(|r| matches!(r, Record::BackAfterWake { .. }))
+        .count();
+    assert_eq!(backs, 1);
+}

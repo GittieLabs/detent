@@ -72,7 +72,16 @@ pub enum Record {
     /// A thread caught a panic and carried on (M9 crash recovery). The
     /// panic hook has already logged where it happened, with a backtrace.
     Recovered { thread: String, message: String },
+    /// The Mac woke from sleep (D-068): the wall clock outran the monotonic
+    /// one by `gap` between two turns, and every unit is being reopened.
+    Woke { gap: Duration },
+    /// A paired unit connected again `after` the wake was seen; logged once
+    /// per unit within [`WAKE_WINDOW`] of the wake (M9).
+    BackAfterWake { id: DeviceId, after: Duration },
 }
+
+/// How long after a wake a unit's reconnect is still timed as part of it.
+pub const WAKE_WINDOW: Duration = Duration::from_secs(60);
 
 /// A wall clock gain over the monotonic clock this big means the Mac slept.
 pub const SLEEP_GAP: Duration = Duration::from_secs(2);
@@ -244,6 +253,17 @@ impl fmt::Display for Record {
                 write!(f, "dry run on: actions are logged, not run")
             }
             Record::DryRun { on: false } => write!(f, "dry run off"),
+            Record::Woke { gap } => write!(
+                f,
+                "woke from sleep: the wall clock jumped {:.1} s; reopening every unit",
+                gap.as_secs_f64()
+            ),
+            Record::BackAfterWake { id, after } => write!(
+                f,
+                "{} back {:.2} s after the wake",
+                id.serial,
+                after.as_secs_f64()
+            ),
             Record::Recovered { thread, message } => {
                 write!(
                     f,
@@ -379,6 +399,8 @@ pub struct Engine<B> {
     /// When each unit's status line is due to be cleared.
     clear_at: HashMap<DeviceId, Instant>,
     status_for: Duration,
+    /// When the last wake was seen, and the units already timed since.
+    waking: Option<(Instant, Vec<DeviceId>)>,
     jobs: Sender<Job>,
     /// Kept so the worker is owned by the engine; dropping `jobs` ends it.
     _worker: JoinHandle<()>,
@@ -412,6 +434,7 @@ impl<B: Bus + 'static> Engine<B> {
             statuses,
             clear_at: HashMap::new(),
             status_for: options.status_for,
+            waking: None,
             jobs,
             _worker: worker,
         }
@@ -486,13 +509,47 @@ impl<B: Bus + 'static> Engine<B> {
         }
     }
 
+    /// The Mac just woke (D-068): logs it with the clock `gap`, has every
+    /// unit reopened on the next step, and times each unit's return.
+    pub fn woke(&mut self, gap: Duration, now: Instant) {
+        self.sink.record(&Record::Woke { gap });
+        self.devices.woke();
+        self.waking = Some((now, Vec::new()));
+    }
+
+    /// Logs a unit's first reconnect within [`WAKE_WINDOW`] of a wake.
+    fn time_wake(&mut self, id: &DeviceId, now: Instant) {
+        let Some((at, seen)) = &mut self.waking else {
+            return;
+        };
+        let after = now.saturating_duration_since(*at);
+        if after > WAKE_WINDOW || seen.contains(id) {
+            return;
+        }
+        seen.push(id.clone());
+        self.sink.record(&Record::BackAfterWake {
+            id: id.clone(),
+            after,
+        });
+    }
+
     /// One turn: read devices, then resolve and queue any input.
     pub fn step(&mut self, now: Instant) {
         self.show_statuses(now);
+        if self
+            .waking
+            .as_ref()
+            .is_some_and(|(at, _)| now.saturating_duration_since(*at) > WAKE_WINDOW)
+        {
+            self.waking = None;
+        }
         let events = self.devices.step(now);
         let read_at = Instant::now();
         for event in events {
             self.sink.record(&Record::Device(event.clone()));
+            if let DeviceEvent::Connected { id, .. } = &event {
+                self.time_wake(id, now);
+            }
             let DeviceEvent::Input { id, message } = event else {
                 continue;
             };
@@ -547,8 +604,9 @@ impl<B: Bus + 'static> Engine<B> {
         }
         let now = (Instant::now(), SystemTime::now());
         let wall = now.1.duration_since(last.1).unwrap_or_default();
-        if slept(now.0 - last.0, wall) {
-            self.devices.woke();
+        let mono = now.0 - last.0;
+        if slept(mono, wall) {
+            self.woke(wall.saturating_sub(mono), now.0);
         }
         *last = now;
         self.step(now.0);
