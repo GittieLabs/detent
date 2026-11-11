@@ -4,7 +4,7 @@
 //! may call them (capability `default`, D-071).
 
 use detent_lib::app_state::{self, AppState, EditError};
-use detent_lib::store::{self, Config, Mapping, Scope, Trigger};
+use detent_lib::store::{self, Config, Mapping, MenuItem, Scope, Trigger};
 use tauri::State;
 
 use crate::launch::Shared;
@@ -105,6 +105,29 @@ pub fn remove_mapping(
     edit(&shared, |c| {
         app_state::remove_mapping(c, &serial, control, trigger, &scope)
     })
+}
+
+/// Adds a device menu item (`index` None) or replaces the one at `index`.
+#[tauri::command]
+pub fn set_menu_item(
+    shared: State<'_, Shared>,
+    serial: String,
+    index: Option<usize>,
+    item: MenuItem,
+) -> Answer {
+    edit(&shared, |c| {
+        app_state::set_menu_item(c, &serial, index, item)
+    })
+}
+
+#[tauri::command]
+pub fn remove_menu_item(shared: State<'_, Shared>, serial: String, index: usize) -> Answer {
+    edit(&shared, |c| app_state::remove_menu_item(c, &serial, index))
+}
+
+#[tauri::command]
+pub fn move_menu_item(shared: State<'_, Shared>, serial: String, from: usize, to: usize) -> Answer {
+    edit(&shared, |c| app_state::move_menu_item(c, &serial, from, to))
 }
 
 /// Adds the unit's starter template (D-077), keeping its own mappings.
@@ -218,4 +241,7 @@ pub const ALL: &[&str] = &[
     "remove_mapping",
     "apply_template",
     "fix_accessibility",
+    "set_menu_item",
+    "remove_menu_item",
+    "move_menu_item",
 ];

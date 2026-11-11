@@ -38,7 +38,18 @@ export interface PairedUnit {
   controls: ControlView[]; // empty until its HELLO this session
   mappings: Mapping[];
   template: Mapping[]; // what its starter template would still add (D-077)
+  menu: MenuItem[]; // its OLED menu items (D-086)
 }
+
+/** One app owned item on a device's OLED menu (`store::MenuItem`). */
+export interface MenuItem {
+  label: string; // 1 to 16 printable ASCII
+  action: Action;
+}
+
+/** The device's own menu items, shown before the app's (firmware lib/menu). */
+export const DEVICE_MENU_ITEMS = ["Volume", "Mapped", "Setup", "Device info"];
+export const MAX_MENU_ITEMS = 8;
 
 export interface Candidate {
   vid: number;
@@ -141,6 +152,12 @@ export const setPaused = (on: boolean) => invoke<AppState>("set_paused", { on })
 export const setDryRun = (on: boolean) => invoke<void>("set_dry_run", { on });
 export const fixAccessibility = () => invoke<AppState>("fix_accessibility");
 export const setMapping = (mapping: Mapping) => invoke<AppState>("set_mapping", { mapping });
+export const setMenuItem = (serial: string, index: number | null, item: MenuItem) =>
+  invoke<AppState>("set_menu_item", { serial, index, item });
+export const removeMenuItem = (serial: string, index: number) =>
+  invoke<AppState>("remove_menu_item", { serial, index });
+export const moveMenuItem = (serial: string, from: number, to: number) =>
+  invoke<AppState>("move_menu_item", { serial, from, to });
 export const applyTemplate = (serial: string) =>
   invoke<AppState>("apply_template", { serial });
 export const removeMapping = (serial: string, control: number, trigger: Trigger, scope: Scope) =>

@@ -10,7 +10,10 @@ use serde::Serialize;
 use crate::devices::{DeviceEvent, DeviceId};
 use crate::engine::{describe, Record};
 use crate::models;
-use crate::store::{Action, ArgError, Config, DeviceEntry, Mapping, Scope, Trigger, UnitRef};
+use crate::store::{
+    Action, ArgError, Config, DeviceEntry, Mapping, MenuItem, Scope, Trigger, UnitRef,
+    MAX_MENU_ITEMS,
+};
 
 /// Button or encoder, as the drawing shows it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -216,6 +219,8 @@ pub struct PairedUnit {
     pub mappings: Vec<Mapping>,
     /// What its model's starter template would still add (D-077).
     pub template: Vec<Mapping>,
+    /// Its app owned OLED menu items, in order (D-086).
+    pub menu: Vec<MenuItem>,
 }
 
 /// An unpaired unit the wizard has open read only (D-066).
@@ -367,6 +372,7 @@ impl AppState {
                         .cloned()
                         .collect(),
                     template: template_left(config, d),
+                    menu: d.menu.clone(),
                 }
             })
             .collect();
@@ -544,6 +550,12 @@ pub enum EditError {
     Invalid(ArgError),
     /// No mapping with that control, trigger and scope.
     NotMapped,
+    /// A device menu label isn't 1 to 16 printable ASCII characters.
+    BadLabel,
+    /// The device menu already has [`MAX_MENU_ITEMS`] items.
+    MenuFull,
+    /// No device menu item at that position.
+    NoSuchItem(usize),
 }
 
 impl fmt::Display for EditError {
@@ -561,6 +573,12 @@ impl fmt::Display for EditError {
             Self::WrongTrigger(c) => write!(f, "control {c} can't fire on that trigger"),
             Self::Invalid(e) => write!(f, "{e}"),
             Self::NotMapped => write!(f, "there's no such mapping"),
+            Self::BadLabel => write!(
+                f,
+                "a menu label is 1 to 16 plain characters (letters, digits, punctuation, spaces)"
+            ),
+            Self::MenuFull => write!(f, "the device menu holds at most {MAX_MENU_ITEMS} items"),
+            Self::NoSuchItem(i) => write!(f, "there's no menu item {}", i + 1),
             Self::NotIgnored(s) => write!(f, "{s} isn't ignored"),
         }
     }
@@ -694,6 +712,66 @@ pub fn remove_mapping(
     if c.mappings.len() == before {
         return Err(EditError::NotMapped);
     }
+    Ok(c)
+}
+
+/// The unit's config entry to edit, or `NotPaired`.
+fn unit_mut<'a>(c: &'a mut Config, serial: &str) -> Result<&'a mut DeviceEntry, EditError> {
+    c.devices
+        .iter_mut()
+        .find(|d| same(&d.serial, serial))
+        .ok_or_else(|| EditError::NotPaired(serial.to_owned()))
+}
+
+/// Adds a device menu item at the end (`index` None) or replaces the one at
+/// `index`, checked by the config loader's rules.
+pub fn set_menu_item(
+    config: &Config,
+    serial: &str,
+    index: Option<usize>,
+    item: MenuItem,
+) -> Result<Config, EditError> {
+    if detent_protocol::codec::Label::new(&item.label).is_err() {
+        return Err(EditError::BadLabel);
+    }
+    item.action.check_args().map_err(EditError::Invalid)?;
+    let mut c = config.clone();
+    let menu = &mut unit_mut(&mut c, serial)?.menu;
+    match index {
+        Some(i) => *menu.get_mut(i).ok_or(EditError::NoSuchItem(i))? = item,
+        None if menu.len() >= MAX_MENU_ITEMS => return Err(EditError::MenuFull),
+        None => menu.push(item),
+    }
+    Ok(c)
+}
+
+/// Removes the device menu item at `index`.
+pub fn remove_menu_item(config: &Config, serial: &str, index: usize) -> Result<Config, EditError> {
+    let mut c = config.clone();
+    let menu = &mut unit_mut(&mut c, serial)?.menu;
+    if index >= menu.len() {
+        return Err(EditError::NoSuchItem(index));
+    }
+    menu.remove(index);
+    Ok(c)
+}
+
+/// Moves the device menu item at `from` to position `to`.
+pub fn move_menu_item(
+    config: &Config,
+    serial: &str,
+    from: usize,
+    to: usize,
+) -> Result<Config, EditError> {
+    let mut c = config.clone();
+    let menu = &mut unit_mut(&mut c, serial)?.menu;
+    for i in [from, to] {
+        if i >= menu.len() {
+            return Err(EditError::NoSuchItem(i));
+        }
+    }
+    let item = menu.remove(from);
+    menu.insert(to, item);
     Ok(c)
 }
 

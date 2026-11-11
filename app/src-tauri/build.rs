@@ -19,6 +19,9 @@ fn main() {
         "remove_mapping",
         "apply_template",
         "fix_accessibility",
+        "set_menu_item",
+        "remove_menu_item",
+        "move_menu_item",
     ];
     tauri_build::try_build(
         tauri_build::Attributes::new()

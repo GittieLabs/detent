@@ -5,7 +5,8 @@
 // checks every edit (`app_state::set_mapping`); the panel checks ranges in
 // percent first so its messages match what the user typed.
 
-import type { Action, AppEntry, AppState, ControlView, Mapping, PairedUnit, Scope, Trigger } from "./api";
+import type { Action, AppEntry, AppState, ControlView, Mapping, MenuItem, PairedUnit, Scope, Trigger } from "./api";
+import { DEVICE_MENU_ITEMS, MAX_MENU_ITEMS } from "./api";
 import * as api from "./api";
 import { type AppName, actionText, idName, namesFrom, shortcutText, triggerText } from "./describe";
 import { MAX_COMBOS, comboOf } from "./keys";
@@ -111,11 +112,24 @@ function sameScope(a: Scope, b: Scope): boolean {
 const findMapping = (u: PairedUnit, control: number, trigger: Trigger, scope: Scope) =>
   u.mappings.find((m) => m.control === control && m.trigger === trigger && sameScope(m.scope, scope));
 
+/** The device menu group goes at the end of the control list. */
+function withMenu(list: HTMLElement, menu: HTMLElement): HTMLElement {
+  if (list.classList.contains("control-list")) {
+    list.append(menu);
+    return list;
+  }
+  // No controls yet (not connected): the menu can still be edited.
+  return el("div", { class: "control-list" }, list, menu);
+}
+
 export function mappingsScreen(root: HTMLElement, chosen: { serial: string | null }): Screen {
   let current: AppState | null = null;
   let selected: number | null = null;
   let trigger: Trigger = "press"; // outlives the draft, so a save stays on it
   let where: Scope = "everywhere"; // likewise for the scope being edited
+  /** The device menu item being edited: its position, or "new" (D-086). */
+  let menuSel: number | "new" | null = null;
+  let menuLabel = ""; // the label being typed; the action is in `draft`
   let draft: Draft | null = null;
   let note: { text: string; error: boolean } | null = null;
   let busy = false;
@@ -519,6 +533,177 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
     );
   }
 
+  /** Device menu labels: 1 to 16 printable ASCII (the OLED's font). */
+  const labelProblem = (label: string): string | null => {
+    if (label.length === 0) return "Give the item a label.";
+    if (label.length > 16) return "Labels are at most 16 characters.";
+    if (!/^[\x20-\x7E]+$/.test(label)) return "Labels use plain characters only (no accents or emoji).";
+    return null;
+  };
+
+  /** The board's menu: its own items greyed, then the app's, then Add. */
+  function menuGroup(unit: PairedUnit): HTMLElement {
+    const pickItem = (i: number | "new") => {
+      selected = null;
+      menuSel = i;
+      const item = i === "new" ? null : (unit.menu[i] ?? null);
+      menuLabel = item?.label ?? "";
+      draft = draftFrom(-1, "press", "everywhere", item ? ({ action: item.action } as Mapping) : undefined);
+      note = null;
+      recordFresh = true;
+      rerender();
+    };
+    const rows = unit.menu.map((m, i) =>
+      el(
+        "div",
+        {
+          class: menuSel === i ? "control-row selected" : "control-row",
+          onClick: () => pickItem(i),
+        },
+        el("span", { class: "row-name" }, m.label),
+        el(
+          "span",
+          { class: "scope-chip everywhere", title: actionText(m.action, appName) },
+          actionText(m.action, appName),
+        ),
+      ),
+    );
+    const full = unit.menu.length >= MAX_MENU_ITEMS;
+    return el(
+      "section",
+      // Shares the height with Buttons and scrolls in its own box.
+      { class: "control-group" },
+      el("h3", { class: "group-title" }, "Device menu"),
+      el(
+        "div",
+        { class: "group-rows", attrs: { "data-scroll": "group:menu" } },
+        el(
+          "div",
+          {
+            class: "control-row device-owned",
+            title: "The device's own items; Detent's follow them on the OLED menu",
+          },
+          el("span", { class: "row-name" }, "On the device"),
+          el("span", { class: "on-device" }, DEVICE_MENU_ITEMS.join(" · ")),
+        ),
+        ...rows,
+        el(
+          "div",
+          { class: "control-row add-row" },
+          full
+            ? el("span", { class: "none" }, `Full: the device shows ${MAX_MENU_ITEMS} items`)
+            : button("Add item", () => pickItem("new"), { class: menuSel === "new" ? "primary" : "" }),
+        ),
+      ),
+    );
+  }
+
+  /** Edits one device menu item: label, action, order. */
+  function menuPanel(unit: PairedUnit, index: number | "new"): HTMLElement {
+    const existing = index === "new" ? null : index;
+    if (!draft) {
+      // After a save `run` clears the draft: reload it from the saved item.
+      const saved = existing === null ? null : (unit.menu[existing] ?? null);
+      draft = draftFrom(-1, "press", "everywhere", saved ? ({ action: saved.action } as Mapping) : undefined);
+      if (saved) menuLabel = saved.label;
+    }
+    const d = draft;
+    const count = unit.menu.length;
+    const save = () => {
+      const problem = labelProblem(menuLabel);
+      const result = actionFrom(d);
+      if (problem || result === null || "error" in result) {
+        note = {
+          text: problem ?? (result === null ? "Choose what it does." : "error" in result ? result.error : ""),
+          error: true,
+        };
+        rerender();
+        return;
+      }
+      const item: MenuItem = { label: menuLabel, action: result.action };
+      void run(() => api.setMenuItem(unit.serial, existing, item), "Saved.").then(() => {
+        if (existing === null) menuSel = Math.min(count, MAX_MENU_ITEMS - 1);
+        rerender();
+      });
+    };
+    const move = (to: number) => {
+      if (existing === null) return;
+      void run(() => api.moveMenuItem(unit.serial, existing, to), "Moved.").then(() => {
+        menuSel = to;
+        rerender();
+      });
+    };
+    return el(
+      "aside",
+      { class: "panel", attrs: { "data-scroll": "panel" } },
+      el("h2", { class: "panel-title" }, existing === null ? "New device menu item" : "Device menu item"),
+      el(
+        "label",
+        { class: "field" },
+        el("span", {}, `Label (${menuLabel.length}/16)`),
+        el("input", {
+          class: "field-input",
+          value: menuLabel,
+          ariaLabel: "Menu label",
+          attrs: { maxlength: "16", placeholder: "Mail", spellcheck: "false" },
+          onInput: (v) => {
+            menuLabel = v;
+            note = null;
+            rerender();
+          },
+          onKey: (e) => {
+            if (e.key === "Enter") save();
+          },
+        }),
+      ),
+      el(
+        "label",
+        { class: "field" },
+        el("span", {}, "Does"),
+        el(
+          "select",
+          {
+            class: "field-input",
+            ariaLabel: "Action",
+            value: d.kind === "none" ? "" : d.kind,
+            onInput: (v) => edit({ kind: v as Kind }),
+          },
+          el("option", { value: "" }, "Choose…"),
+          ...KINDS.filter(([k]) => k !== "none").map(([k, label]) => el("option", { value: k }, label)),
+        ),
+      ),
+      fields(d),
+      note ? el("p", { class: note.error ? "note error" : "note" }, note.text) : null,
+      el(
+        "footer",
+        { class: "actions" },
+        existing !== null
+          ? button("Move up", () => move(existing - 1), { disabled: busy || existing === 0 })
+          : null,
+        existing !== null
+          ? button("Move down", () => move(existing + 1), { disabled: busy || existing >= count - 1 })
+          : null,
+      ),
+      el(
+        "footer",
+        { class: "actions" },
+        existing !== null
+          ? button(
+              "Remove",
+              () =>
+                void run(() => api.removeMenuItem(unit.serial, existing), "Removed.").then(() => {
+                  menuSel = null;
+                  rerender();
+                }),
+              { class: "danger", disabled: busy },
+            )
+          : null,
+        button("Save", save, { class: "primary", disabled: busy }),
+      ),
+      el("p", { class: "hint" }, "Items show on the device's menu after its own, in this order."),
+    );
+  }
+
   function render(state: AppState) {
     const unit = pickUnit(state, chosen.serial);
     if (!unit) {
@@ -530,19 +715,22 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
     }
     if (chosen.serial !== unit.serial) {
       selected = null;
+      menuSel = null;
       draft = null;
     }
     chosen.serial = unit.serial;
     const control = unit.controls.find((c) => c.id === selected && !c.handled_by_device) ?? null;
+    if (typeof menuSel === "number" && menuSel >= unit.menu.length) menuSel = null;
     if (!control) {
       selected = null;
-      draft = null;
+      if (menuSel === null) draft = null;
     }
     /** A row opens its first trigger, Everywhere; a chip opens its own mapping. */
     const pick = (c: ControlView, t?: Trigger, scope?: Scope) => {
       const nextTrigger = t ?? c.triggers[0] ?? "press";
       const nextWhere = scope ?? "everywhere";
-      if (selected !== c.id || trigger !== nextTrigger || where !== nextWhere) {
+      if (selected !== c.id || trigger !== nextTrigger || where !== nextWhere || menuSel !== null) {
+        menuSel = null;
         recordFresh = true;
         selected = c.id;
         trigger = nextTrigger;
@@ -572,10 +760,16 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
           el(
             "div",
             { class: "editor" },
-            drawUnit(unit, { selected, onPick: pick, appName }),
+            withMenu(drawUnit(unit, { selected, onPick: pick, appName }), menuGroup(unit)),
             control
               ? panel(unit, control)
-              : el("aside", { class: "panel empty-panel" }, "Click a button to choose what it does."),
+              : menuSel !== null
+                ? menuPanel(unit, menuSel)
+                : el(
+                    "aside",
+                    { class: "panel empty-panel" },
+                    "Click a button or a device menu item to choose what it does.",
+                  ),
           ),
         ].filter((p): p is HTMLElement => p !== null),
       ),

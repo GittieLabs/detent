@@ -872,7 +872,9 @@ main#app > .tabs {
 
 .screen.fill .control-list {
   min-height: 0;
-  overflow: hidden;
+  /* Groups scroll in their own boxes; if even their minimum heights don't
+     fit (a short window), the column scrolls so nothing is cut off. */
+  overflow-y: auto;
 }
 
 .control-group {
@@ -946,4 +948,12 @@ main#app > .tabs {
 .cell.pickable:hover {
   background: var(--card);
   box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.add-row {
+  cursor: default;
+}
+
+.add-row:hover {
+  background: transparent;
 }

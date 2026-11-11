@@ -22,6 +22,9 @@
     "allow-set-mapping",
     "allow-remove-mapping",
     "allow-apply-template",
-    "allow-fix-accessibility"
+    "allow-fix-accessibility",
+    "allow-set-menu-item",
+    "allow-remove-menu-item",
+    "allow-move-menu-item"
   ]
 }

@@ -968,3 +968,85 @@ fn encoder_mappings_are_taken_in_mapped_mode_only() {
         Err(EditError::HandledByDevice(5))
     );
 }
+
+// Device menu editor (M6 task 5): edits to a unit's app owned menu items.
+
+use detent_lib::store::MenuItem;
+
+fn menu_item(label: &str) -> MenuItem {
+    MenuItem {
+        label: label.into(),
+        action: Action::MuteToggle,
+    }
+}
+
+fn labels(c: &Config) -> Vec<String> {
+    c.devices[0].menu.iter().map(|m| m.label.clone()).collect()
+}
+
+#[test]
+fn menu_items_are_added_replaced_moved_and_removed() {
+    let c = app_state::set_menu_item(&config(), PAIRED, None, menu_item("Mail")).unwrap();
+    let c = app_state::set_menu_item(&c, PAIRED, None, menu_item("Mute")).unwrap();
+    assert_eq!(labels(&c), ["Mail", "Mute"]);
+    let c = app_state::set_menu_item(&c, PAIRED, Some(0), menu_item("Notes")).unwrap();
+    assert_eq!(labels(&c), ["Notes", "Mute"]);
+    let c = app_state::move_menu_item(&c, PAIRED, 1, 0).unwrap();
+    assert_eq!(labels(&c), ["Mute", "Notes"]);
+    let c = app_state::remove_menu_item(&c, PAIRED, 0).unwrap();
+    assert_eq!(labels(&c), ["Notes"]);
+    assert!(store::to_json(&c).is_ok());
+    // The state shows each unit's menu.
+    let s = AppState::new(&c);
+    assert_eq!(s.paired[0].menu, c.devices[0].menu);
+}
+
+#[test]
+fn bad_menu_edits_are_refused_with_a_reason() {
+    let one = app_state::set_menu_item(&config(), PAIRED, None, menu_item("Mail")).unwrap();
+    assert_eq!(
+        app_state::set_menu_item(&one, PAIRED, None, menu_item("")),
+        Err(EditError::BadLabel)
+    );
+    assert_eq!(
+        app_state::set_menu_item(&one, PAIRED, None, menu_item("A label far too long")),
+        Err(EditError::BadLabel)
+    );
+    assert_eq!(
+        app_state::set_menu_item(&one, PAIRED, Some(5), menu_item("X")),
+        Err(EditError::NoSuchItem(5))
+    );
+    assert_eq!(
+        app_state::remove_menu_item(&one, PAIRED, 3),
+        Err(EditError::NoSuchItem(3))
+    );
+    assert_eq!(
+        app_state::move_menu_item(&one, PAIRED, 0, 4),
+        Err(EditError::NoSuchItem(4))
+    );
+    assert_eq!(
+        app_state::set_menu_item(&one, OTHER, None, menu_item("X")),
+        Err(EditError::NotPaired(OTHER.into()))
+    );
+    let mut bad = menu_item("Vol");
+    bad.action = Action::VolumeSet { level: 2.0 };
+    assert_eq!(
+        app_state::set_menu_item(&one, PAIRED, None, bad)
+            .unwrap_err()
+            .to_string(),
+        "level: must be from 0 to 1"
+    );
+    let mut full = config();
+    for i in 0..8 {
+        full =
+            app_state::set_menu_item(&full, PAIRED, None, menu_item(&format!("Item {i}"))).unwrap();
+    }
+    assert_eq!(
+        app_state::set_menu_item(&full, PAIRED, None, menu_item("Ninth")),
+        Err(EditError::MenuFull)
+    );
+    assert_eq!(
+        EditError::BadLabel.to_string(),
+        "a menu label is 1 to 16 plain characters (letters, digits, punctuation, spaces)"
+    );
+}
