@@ -5,9 +5,9 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use detent_lib::actions::{Done, Executor, Outcome};
-use detent_lib::devices::{DeviceEvent, Options};
-use detent_lib::engine::{Engine, Record, Sink};
+use detent_lib::actions::{ActionError, Done, Executor, Outcome};
+use detent_lib::devices::{DeviceEvent, Lost, Options};
+use detent_lib::engine::{recovery_delay, Engine, Record, Sink};
 use detent_lib::store::{self, Action, Config, Trigger};
 use detent_lib::transport::{MockBus, MockHid};
 use detent_protocol::codec::{ButtonAction, DeviceMessage};
@@ -15,6 +15,8 @@ use detent_protocol::ids::{PID, VID};
 
 const SERIAL: &str = "E072A1FC4EDC";
 const WAIT: Duration = Duration::from_secs(2);
+/// A frontmost app that makes the rig's frontmost lookup panic.
+const PANIC_APP: &str = "!panic";
 
 fn config() -> Config {
     store::parse(&format!(
@@ -31,6 +33,8 @@ fn config() -> Config {
                "action": {{ "type": "mute_toggle" }} }},
             {{ "device": "{SERIAL}", "control": 2, "trigger": "press", "scope": "everywhere",
                "action": {{ "type": "applescript", "source": "slow" }} }},
+            {{ "device": "{SERIAL}", "control": 3, "trigger": "press", "scope": "everywhere",
+               "action": {{ "type": "open_app", "bundle_id": "com.example.panic" }} }},
             {{ "device": "{SERIAL}", "control": 5, "trigger": "clockwise", "scope": "everywhere",
                "action": {{ "type": "volume_up", "step": 0.125 }} }}
           ] }}"#
@@ -65,6 +69,9 @@ impl Executor for ProbeExecutor {
             .lock()
             .unwrap()
             .send((action.clone(), Instant::now()));
+        if matches!(action, Action::OpenApp { bundle_id } if bundle_id == "com.example.panic") {
+            panic!("probe executor told to panic");
+        }
         if matches!(action, Action::AppleScript { .. }) {
             let _ = self
                 .release
@@ -124,7 +131,14 @@ impl Rig {
                 calls: Mutex::new(calls_tx),
                 release: Mutex::new(release_rx),
             }),
-            Arc::new(move || front.lock().unwrap().clone()),
+            Arc::new(move || {
+                let app = front.lock().unwrap().clone();
+                // Stands in for a bug anywhere in the engine's turn.
+                if app.as_deref() == Some(PANIC_APP) {
+                    panic!("frontmost told to panic");
+                }
+                app
+            }),
             Arc::new(ChannelSink(Mutex::new(records_tx))),
             Options {
                 read_wait: Duration::from_millis(2),
@@ -684,4 +698,73 @@ fn the_dashboard_says_shown_or_hidden_on_the_status_line() {
         status_of(&Ok(Done::Dashboard { shown: false })),
         Some("Dashboard off".into())
     );
+}
+
+#[test]
+fn a_panicking_action_is_reported_and_the_next_one_runs() {
+    let r = Rig::start();
+    r.hid.push_device(0, &press(3));
+    let rec = r.expect(|x| matches!(x, Record::Recovered { .. }));
+    let Record::Recovered { thread, message } = rec else {
+        unreachable!()
+    };
+    assert_eq!(thread, "actions");
+    assert_eq!(message, "probe executor told to panic");
+    let ran = r.expect(|x| matches!(x, Record::Ran { .. }));
+    let Record::Ran { outcome, .. } = ran else {
+        unreachable!()
+    };
+    assert!(
+        matches!(outcome, Err(ActionError::Panicked(_))),
+        "{outcome:?}"
+    );
+    let _ = r.call(); // the panicking call itself
+    r.hid.push_device(0, &press(1));
+    assert_eq!(r.call().0, mail());
+}
+
+#[test]
+fn a_panic_in_the_engine_is_recovered_and_input_works_again() {
+    let r = Rig::start();
+    *r.frontmost.lock().unwrap() = Some(PANIC_APP.into());
+    r.hid.push_device(0, &press(1));
+    let rec = r.expect(|x| matches!(x, Record::Recovered { .. }));
+    let Record::Recovered { thread, message } = rec else {
+        unreachable!()
+    };
+    assert_eq!(thread, "engine");
+    assert_eq!(message, "frontmost told to panic");
+    // Every unit is closed and reopened, so none is left half read.
+    r.expect(|x| {
+        matches!(
+            x,
+            Record::Device(DeviceEvent::Disconnected {
+                why: Lost::Recovered,
+                ..
+            })
+        )
+    });
+    *r.frontmost.lock().unwrap() = None;
+    r.expect(|x| matches!(x, Record::Device(DeviceEvent::Connected { .. })));
+    r.hid.push_device(0, &press(1));
+    assert_eq!(r.call().0, mail());
+}
+
+#[test]
+fn recovery_waits_longer_after_each_panic_in_a_row_up_to_a_cap() {
+    assert_eq!(recovery_delay(1), Duration::from_millis(250));
+    assert_eq!(recovery_delay(2), Duration::from_millis(500));
+    assert_eq!(recovery_delay(3), Duration::from_secs(1));
+    assert_eq!(recovery_delay(8), Duration::from_secs(30));
+    assert_eq!(recovery_delay(200), Duration::from_secs(30));
+}
+
+#[test]
+fn a_recovery_reads_well_in_the_log() {
+    let line = Record::Recovered {
+        thread: "engine".into(),
+        message: "boom".into(),
+    }
+    .to_string();
+    assert_eq!(line, "recovered from a panic in the engine thread: boom");
 }

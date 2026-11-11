@@ -69,6 +69,9 @@ pub enum Record {
         paused: bool,
         dry_run: bool,
     },
+    /// A thread caught a panic and carried on (M9 crash recovery). The
+    /// panic hook has already logged where it happened, with a backtrace.
+    Recovered { thread: String, message: String },
 }
 
 /// A wall clock gain over the monotonic clock this big means the Mac slept.
@@ -79,6 +82,49 @@ pub const SLEEP_GAP: Duration = Duration::from_secs(2);
 /// (D-068); a wall clock step backwards counts as zero, not a sleep.
 pub fn slept(monotonic: Duration, wall: Duration) -> bool {
     wall.saturating_sub(monotonic) >= SLEEP_GAP
+}
+
+/// How long the engine waits before its next turn after `in_a_row` panics
+/// without a clean turn between: 250 ms, doubling, at most 30 s. A bug that
+/// panics on every turn then costs a log line every 30 s, not a busy loop.
+pub fn recovery_delay(in_a_row: u32) -> Duration {
+    let max = Duration::from_secs(30);
+    let shift = in_a_row.saturating_sub(1).min(16);
+    Duration::from_millis(250)
+        .checked_mul(1 << shift)
+        .map_or(max, |d| d.min(max))
+}
+
+/// A panic's message, from its payload (`panic!` gives a `&str` or a
+/// `String`).
+pub fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        (*s).to_owned()
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "a panic with no message".to_owned()
+    }
+}
+
+/// Writes every panic to `log`: the thread, the message, where, and a
+/// backtrace, then hands it to the previous hook (stderr). Panics the
+/// engine catches are logged this way too, before it carries on.
+pub fn install_panic_hook(log: Arc<FileLog>) {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let thread = thread::current();
+        let name = thread.name().unwrap_or("unnamed");
+        let message = panic_message(info.payload());
+        let at = info
+            .location()
+            .map(|l| format!(" at {}:{}", l.file(), l.line()))
+            .unwrap_or_default();
+        log.line(&format!("panic in thread {name}: {message}{at}"));
+        let trace = std::backtrace::Backtrace::force_capture().to_string();
+        log.line(&format!("backtrace:\n{trace}"));
+        previous(info);
+    }));
 }
 
 /// Where records go. Called from the engine and worker threads.
@@ -198,6 +244,12 @@ impl fmt::Display for Record {
                 write!(f, "dry run on: actions are logged, not run")
             }
             Record::DryRun { on: false } => write!(f, "dry run off"),
+            Record::Recovered { thread, message } => {
+                write!(
+                    f,
+                    "recovered from a panic in the {thread} thread: {message}"
+                )
+            }
             Record::Ran {
                 id,
                 action,
@@ -271,11 +323,23 @@ fn worker(
     // Ends when the engine drops its sender.
     for job in jobs {
         let started = Instant::now();
-        let outcome = if job.dry_run {
-            recording.run(&job.action)
-        } else {
-            executor.run(&job.action)
+        let run = || {
+            if job.dry_run {
+                recording.run(&job.action)
+            } else {
+                executor.run(&job.action)
+            }
         };
+        // A panicking action fails that action only; the worker keeps going.
+        let outcome =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(run)).unwrap_or_else(|payload| {
+                let message = panic_message(payload.as_ref());
+                sink.record(&Record::Recovered {
+                    thread: "actions".into(),
+                    message: message.clone(),
+                });
+                Err(crate::actions::ActionError::Panicked(message))
+            });
         if let Some(text) = status_of(&outcome) {
             let _ = status.send((job.id.clone(), text));
         }
@@ -470,6 +534,25 @@ impl<B: Bus + 'static> Engine<B> {
         }
     }
 
+    /// One loop turn: the app's commands, the sleep check, then a step.
+    fn turn(&mut self, incoming: &Receiver<Command>, last: &mut (Instant, SystemTime)) {
+        for command in incoming.try_iter() {
+            match command {
+                Command::Reload(config) => self.reload(&config),
+                Command::Identify(true) => self.devices.start_identify(),
+                Command::Identify(false) => self.devices.end_identify(),
+                Command::DryRun(on) => self.set_dry_run(on),
+            }
+        }
+        let now = (Instant::now(), SystemTime::now());
+        let wall = now.1.duration_since(last.1).unwrap_or_default();
+        if slept(now.0 - last.0, wall) {
+            self.devices.woke();
+        }
+        *last = now;
+        self.step(now.0);
+    }
+
     /// Runs the engine on its own thread until [`EngineHandle::stop`].
     pub fn spawn(mut self) -> EngineHandle {
         let stop = Arc::new(AtomicBool::new(false));
@@ -479,24 +562,32 @@ impl<B: Bus + 'static> Engine<B> {
             .name("detent-engine".into())
             .spawn(move || {
                 let mut last = (Instant::now(), SystemTime::now());
+                let mut panics = 0u32;
                 while !flag.load(Ordering::Relaxed) {
-                    for command in incoming.try_iter() {
-                        match command {
-                            Command::Reload(config) => self.reload(&config),
-                            Command::Identify(true) => self.devices.start_identify(),
-                            Command::Identify(false) => self.devices.end_identify(),
-                            Command::DryRun(on) => self.set_dry_run(on),
+                    let turn = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        self.turn(&incoming, &mut last)
+                    }));
+                    match turn {
+                        Ok(()) => panics = 0,
+                        Err(payload) => {
+                            // Carry on in place (D-102): log it, reopen every
+                            // unit so none is left half read, and back off.
+                            panics = panics.saturating_add(1);
+                            self.sink.record(&Record::Recovered {
+                                thread: "engine".into(),
+                                message: panic_message(payload.as_ref()),
+                            });
+                            self.devices.reopen_all();
+                            let until = Instant::now() + recovery_delay(panics);
+                            while Instant::now() < until && !flag.load(Ordering::Relaxed) {
+                                thread::sleep(Duration::from_millis(20));
+                            }
                         }
                     }
-                    let now = (Instant::now(), SystemTime::now());
-                    let wall = now.1.duration_since(last.1).unwrap_or_default();
-                    if slept(now.0 - last.0, wall) {
-                        self.devices.woke();
-                    }
-                    last = now;
-                    self.step(now.0);
                 }
-                self.devices.release_all();
+                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    self.devices.release_all()
+                }));
                 // Dropping `self` drops the job sender: the worker finishes
                 // what's queued, then ends.
             })

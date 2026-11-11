@@ -66,6 +66,9 @@ pub enum ActionError {
     Keys(crate::keys::Refusal),
     /// The action needs the app around it (a window), not this executor.
     NeedsTheApp,
+    /// The executor panicked: a bug in Detent, not in the action. The panic
+    /// and its backtrace are in the log; the worker carries on.
+    Panicked(String),
     /// The dashboard's window couldn't be shown or hidden.
     Window(String),
 }
@@ -82,6 +85,10 @@ impl fmt::Display for ActionError {
             Self::Keys(e) => e.fmt(f),
             Self::NeedsTheApp => write!(f, "this action runs only inside the Detent app"),
             Self::Window(e) => write!(f, "the dashboard window failed: {e}"),
+            Self::Panicked(m) => write!(
+                f,
+                "Detent hit a bug running this action ({m}); details are in the log"
+            ),
         }
     }
 }

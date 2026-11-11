@@ -5,6 +5,8 @@
 
 use detent_lib::app_state::{self, AppState, EditError};
 use detent_lib::store::{self, Config, Mapping, MenuItem, Scope, Trigger};
+use std::sync::atomic::Ordering;
+
 use tauri::State;
 
 use crate::launch::Shared;
@@ -31,7 +33,7 @@ fn edit(shared: &Shared, change: impl FnOnce(&Config) -> Result<Config, EditErro
 }
 
 fn apply_edit(shared: &Shared, edit: impl FnOnce(&Config) -> Result<Config, EditError>) -> Answer {
-    if !shared.writable {
+    if !shared.writable.load(Ordering::Relaxed) {
         return Err(
             "The config file couldn't be read, so Detent won't overwrite it. \
                     Fix or remove it, then relaunch Detent."
@@ -230,6 +232,62 @@ pub fn unignore(shared: State<'_, Shared>, serial: String) -> Answer {
     edit(&shared, |c| app_state::unignore(c, &serial))
 }
 
+/// Moves a config that didn't load aside (`config.json.bad-<time>`) and
+/// starts from an empty one, which is saved at once (M9 crash recovery).
+/// The old file is kept for the user to fix or copy from.
+#[tauri::command]
+pub fn start_fresh(shared: State<'_, Shared>) -> Answer {
+    let answer = start_fresh_now(&shared);
+    match &answer {
+        Ok(_) => {}
+        Err(e) => shared.say(&format!("start fresh refused: {e}")),
+    }
+    answer
+}
+
+fn start_fresh_now(shared: &Shared) -> Answer {
+    if shared.writable.load(Ordering::Relaxed) {
+        return Err("The config loaded fine; there's nothing to start over from.".into());
+    }
+    let path = shared.path.as_ref().ok_or("no place to save the config")?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let aside = match store::move_aside(path, now) {
+        Ok(p) => Some(p),
+        // Nothing there any more (removed by hand): just start empty.
+        Err(store::ConfigError::Missing(_)) => None,
+        Err(e) => return Err(e.to_string()),
+    };
+    let fresh = crate::launch::empty_config();
+    store::save(path, &fresh).map_err(|e| e.to_string())?;
+    match &aside {
+        Some(p) => shared.say(&format!(
+            "started fresh; the old config is at {}",
+            p.display()
+        )),
+        None => shared.say("started fresh with an empty config"),
+    }
+    shared.writable.store(true, Ordering::Relaxed);
+    if let Some(engine) = &shared.engine {
+        engine.reload(fresh.clone());
+    }
+    let state = {
+        let mut state = shared.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.set_config(&fresh);
+        state.config_broken = false;
+        // A config problem is gone; USB being unavailable isn't.
+        if shared.engine.is_some() {
+            state.problem = None;
+        }
+        state.clone()
+    };
+    *shared.config.lock().unwrap_or_else(|e| e.into_inner()) = fresh;
+    shared.publish(&state);
+    Ok(state)
+}
+
 /// Every command, checked against `build.rs` and the capability by a test.
 #[cfg(test)]
 pub const ALL: &[&str] = &[
@@ -253,4 +311,5 @@ pub const ALL: &[&str] = &[
     "remove_menu_item",
     "move_menu_item",
     "list_displays",
+    "start_fresh",
 ];

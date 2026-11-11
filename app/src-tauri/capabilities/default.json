@@ -26,6 +26,7 @@
     "allow-set-menu-item",
     "allow-remove-menu-item",
     "allow-move-menu-item",
-    "allow-list-displays"
+    "allow-list-displays",
+    "allow-start-fresh"
   ]
 }

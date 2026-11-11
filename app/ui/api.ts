@@ -88,6 +88,10 @@ export interface AppState {
   dry_run: boolean; // only while the Test screen shows (D-079)
   accessibility: { granted: boolean; needed: boolean; banner: boolean };
   problem: string | null;
+  /** The config on disk didn't load; Start fresh is offered (M9). */
+  config_broken: boolean;
+  /** Errors the engine recovered from since launch (M9). */
+  recovered: number;
 }
 
 /** The event the Rust side sends with the whole state after any change. */
@@ -175,6 +179,8 @@ export const removeMapping = (serial: string, control: number, trigger: Trigger,
 export const listApps = () => invoke<AppEntry[]>("list_apps");
 /** Connected displays' names, main first (Open dashboard's picker). */
 export const listDisplays = () => invoke<string[]>("list_displays");
+/** Moves a config that didn't load aside and starts empty (M9). */
+export const startFresh = () => invoke<AppState>("start_fresh");
 /** Open dashboard's default page (D-088; `store::DEFAULT_DASHBOARD_URL`). */
 export const DEFAULT_DASHBOARD_URL = "https://github.com/gittielabs/detent";
 

@@ -159,6 +159,33 @@ pub fn save(path: &Path, config: &Config) -> Result<(), ConfigError> {
     written.map_err(io)
 }
 
+/// Moves a config that won't load out of the way, to
+/// `<path>.bad-<unix_secs>` beside it (`-2`, `-3`, ... if that's taken), so
+/// Start fresh never destroys what the user wrote. Returns the new path.
+pub fn move_aside(path: &Path, unix_secs: u64) -> Result<PathBuf, ConfigError> {
+    let io = |e: std::io::Error| ConfigError::Io {
+        path: path.to_owned(),
+        message: e.to_string(),
+    };
+    if !path.is_file() {
+        return Err(ConfigError::Missing(path.to_owned()));
+    }
+    let name = |n: u32| {
+        let mut p = path.as_os_str().to_owned();
+        p.push(format!(".bad-{unix_secs}"));
+        if n > 1 {
+            p.push(format!("-{n}"));
+        }
+        PathBuf::from(p)
+    };
+    let to = (1..)
+        .map(name)
+        .find(|p| !p.exists())
+        .expect("some suffix is free");
+    std::fs::rename(path, &to).map_err(io)?;
+    Ok(to)
+}
+
 /// `~/Library/Application Support/Detent/config.json`, or `None` without a
 /// home directory.
 pub fn default_path() -> Option<PathBuf> {

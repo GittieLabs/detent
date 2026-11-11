@@ -49,6 +49,9 @@ pub enum Lost {
     HeartbeatTimeout,
     /// The Mac slept; handles are reopened rather than trusted (D-068).
     Slept,
+    /// The engine recovered from a panic; handles are reopened so none is
+    /// left half read.
+    Recovered,
     /// Taken off the allowlist, or put on the ignore list.
     Unpaired,
 }
@@ -198,8 +201,9 @@ pub struct Devices<B> {
     unknown_seen: HashMap<CString, (u16, u16, Option<String>)>,
     /// Paired units whose open failure was already reported.
     open_failed: HashSet<DeviceId>,
-    /// Set by [`Devices::woke`]; handled at the start of the next step.
-    woke: bool,
+    /// Set by [`Devices::woke`] or [`Devices::reopen_all`]: every unit is
+    /// closed for this reason at the start of the next step, then rescanned.
+    reopen: Option<Lost>,
     /// Set by [`Devices::set_lists`]; handled at the start of the next step.
     relisted: bool,
     /// The pairing wizard is open: unpaired units are opened read only.
@@ -217,7 +221,7 @@ impl<B: Bus> Devices<B> {
             units: Vec::new(),
             unknown_seen: HashMap::new(),
             open_failed: HashSet::new(),
-            woke: false,
+            reopen: None,
             relisted: false,
             identifying: false,
         }
@@ -269,7 +273,13 @@ impl<B: Bus> Devices<B> {
     /// rescans at once, so units come back in about a second instead of
     /// after the 6 s silence timeout, and none is read through a stale handle.
     pub fn woke(&mut self) {
-        self.woke = true;
+        self.reopen = Some(Lost::Slept);
+    }
+
+    /// The engine just recovered from a panic. Like [`Devices::woke`]: the
+    /// next step closes every unit and rescans at once.
+    pub fn reopen_all(&mut self) {
+        self.reopen = Some(Lost::Recovered);
     }
 
     /// Replaces the allowlist and ignore list (a config reload). The next
@@ -361,8 +371,8 @@ impl<B: Bus> Devices<B> {
             self.open_failed.clear();
             self.next_scan = None;
         }
-        if std::mem::take(&mut self.woke) {
-            self.drop_where(&mut events, |_| Some(Lost::Slept));
+        if let Some(why) = self.reopen.take() {
+            self.drop_where(&mut events, |_| Some(why.clone()));
             self.next_scan = None;
         }
         if self.next_scan.is_none_or(|t| now >= t) {

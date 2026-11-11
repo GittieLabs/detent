@@ -65,6 +65,7 @@ fn main() {
             commands::remove_menu_item,
             commands::move_menu_item,
             commands::list_displays,
+            commands::start_fresh,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build the Detent app");

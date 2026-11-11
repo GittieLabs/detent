@@ -9,6 +9,7 @@
 //! arguments are ignored: macOS and Tauri may pass their own.
 
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use detent_lib::actions::{Executor, RecordingExecutor};
@@ -59,7 +60,7 @@ pub struct Shared {
     pub config: Mutex<Config>,
     /// False when the file on disk didn't load: saving would overwrite what
     /// the user wrote, so commands refuse until it's fixed (D-070).
-    pub writable: bool,
+    pub writable: AtomicBool,
     pub state: Arc<Mutex<AppState>>,
     pub engine: Option<EngineHandle>,
     pub app: AppHandle,
@@ -182,6 +183,59 @@ fn executor(dry_run: bool, app: &AppHandle) -> Arc<dyn Executor> {
     Arc::new(RecordingExecutor::default())
 }
 
+/// Debug builds only: `DETENT_CRASH_TEST=engine` panics the engine on its
+/// first input, and `DETENT_CRASH_TEST=actions` panics the first action, so
+/// acceptance can check crash recovery (M9 step 3). Release builds ignore it.
+mod crash_test {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    use detent_lib::actions::{Executor, Outcome};
+    use detent_lib::engine::Frontmost;
+    use detent_lib::store::Action;
+
+    fn wants(what: &str) -> bool {
+        cfg!(debug_assertions) && std::env::var("DETENT_CRASH_TEST").is_ok_and(|v| v == what)
+    }
+
+    pub fn frontmost(inner: Frontmost) -> Frontmost {
+        if !wants("engine") {
+            return inner;
+        }
+        let armed = AtomicBool::new(true);
+        Arc::new(move || {
+            if armed.swap(false, Ordering::Relaxed) {
+                panic!("DETENT_CRASH_TEST=engine");
+            }
+            inner()
+        })
+    }
+
+    struct Once {
+        inner: Arc<dyn Executor>,
+        armed: AtomicBool,
+    }
+
+    impl Executor for Once {
+        fn run(&self, action: &Action) -> Outcome {
+            if self.armed.swap(false, Ordering::Relaxed) {
+                panic!("DETENT_CRASH_TEST=actions");
+            }
+            self.inner.run(action)
+        }
+    }
+
+    pub fn executor(inner: Arc<dyn Executor>) -> Arc<dyn Executor> {
+        if !wants("actions") {
+            return inner;
+        }
+        Arc::new(Once {
+            inner,
+            armed: AtomicBool::new(true),
+        })
+    }
+}
+
 /// An empty v1 config: what a first launch starts from.
 pub fn empty_config() -> Config {
     Config {
@@ -205,6 +259,9 @@ pub fn start(launch: &Launch, app: AppHandle, tray: tray::Tray) -> Shared {
             None
         }
     });
+    if let Some(log) = &log {
+        detent_lib::engine::install_panic_hook(log.clone());
+    }
     let say = |line: &str| {
         eprintln!("detent: {line}");
         if let Some(log) = &log {
@@ -252,6 +309,7 @@ pub fn start(launch: &Launch, app: AppHandle, tray: tray::Tray) -> Shared {
         say(p);
     }
     let mut initial = AppState::new(&config);
+    initial.config_broken = !writable && path.is_some();
     initial.problem = problem;
     initial.set_accessibility(accessibility_granted());
     let state = Arc::new(Mutex::new(initial));
@@ -273,8 +331,8 @@ pub fn start(launch: &Launch, app: AppHandle, tray: tray::Tray) -> Shared {
                 Engine::new(
                     bus,
                     &config,
-                    executor(launch.dry_run, &app),
-                    Arc::new(frontmost),
+                    crash_test::executor(executor(launch.dry_run, &app)),
+                    crash_test::frontmost(Arc::new(frontmost)),
                     sink,
                     Options::default(),
                 )
@@ -291,7 +349,7 @@ pub fn start(launch: &Launch, app: AppHandle, tray: tray::Tray) -> Shared {
     let shared = Shared {
         path,
         config: Mutex::new(config),
-        writable,
+        writable: AtomicBool::new(writable),
         state,
         engine,
         app,

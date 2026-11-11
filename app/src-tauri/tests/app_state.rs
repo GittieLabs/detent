@@ -1118,3 +1118,16 @@ fn an_outdated_unit_says_so_until_it_reconnects() {
     s.apply(&connected(PAIRED));
     assert!(!s.paired[0].outdated);
 }
+
+#[test]
+fn a_recovery_is_counted_and_shown() {
+    let mut s = AppState::new(&detent_lib::store::parse(r#"{ "version": 1 }"#).unwrap());
+    assert_eq!(s.recovered, 0);
+    let r = detent_lib::engine::Record::Recovered {
+        thread: "engine".into(),
+        message: "boom".into(),
+    };
+    assert!(s.apply(&r));
+    assert!(s.apply(&r));
+    assert_eq!(s.recovered, 2);
+}

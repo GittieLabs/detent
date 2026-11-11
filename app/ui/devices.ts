@@ -191,7 +191,20 @@ export function devicesScreen(root: HTMLElement, openWizard: (() => void) | null
         wizardButton("Pair new device", { class: "primary" }),
       ),
       state.problem
-        ? el("div", { class: "banner" }, el("strong", {}, "Detent can't run normally. "), state.problem)
+        ? el(
+            "div",
+            { class: "banner" },
+            el("strong", {}, "Detent can't run normally. "),
+            state.problem,
+            state.config_broken
+              ? el(
+                  "p",
+                  {},
+                  "Fix the file and relaunch Detent, or start fresh: the broken file is kept beside the new one. ",
+                  button("Start fresh", () => run(api.startFresh)),
+                )
+              : null,
+          )
         : null,
       local.error ? el("div", { class: "banner" }, local.error) : null,
       state.paused

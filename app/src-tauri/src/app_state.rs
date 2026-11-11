@@ -316,6 +316,12 @@ pub struct AppState {
     pub accessibility: Accessibility,
     /// Why Detent can't run normally (no config loaded, USB unavailable).
     pub problem: Option<String>,
+    /// The config file on disk didn't load, so Detent won't save over it;
+    /// the Devices screen offers Start fresh (M9).
+    pub config_broken: bool,
+    /// Panics the engine or action worker caught and carried on from since
+    /// launch (M9 crash recovery); the tray says so.
+    pub recovered: u32,
 }
 
 /// `Detent Dev` -> `Dev`; other product strings as they are.
@@ -372,6 +378,8 @@ impl AppState {
             dry_run: false,
             accessibility: Accessibility::default(),
             problem: None,
+            config_broken: false,
+            recovered: 0,
         };
         s.set_config(config);
         s
@@ -470,6 +478,10 @@ impl AppState {
             let changed = self.dry_run != *on;
             self.dry_run = *on;
             return changed;
+        }
+        if let Record::Recovered { .. } = record {
+            self.recovered = self.recovered.saturating_add(1);
+            return true;
         }
         let Record::Device(event) = record else {
             return false;

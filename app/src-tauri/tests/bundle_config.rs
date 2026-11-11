@@ -51,3 +51,16 @@ fn info_plist_explains_the_automation_prompt() {
 fn the_release_is_version_0_1_0() {
     assert_eq!(env!("CARGO_PKG_VERSION"), "0.1.0");
 }
+
+#[test]
+fn panics_unwind_so_crash_recovery_can_catch_them() {
+    // `panic = "abort"` in any profile would turn every caught panic (the
+    // engine and action worker, M9) into a crash.
+    for file in ["../../Cargo.toml", "Cargo.toml"] {
+        let text = src_tauri(file);
+        assert!(
+            !text.contains("panic = \"abort\""),
+            "{file} aborts on panic"
+        );
+    }
+}

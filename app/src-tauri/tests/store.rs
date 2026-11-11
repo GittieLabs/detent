@@ -624,3 +624,28 @@ fn open_dashboard_needs_a_web_url_and_a_real_display_name() {
         "mappings[0].action.display",
     );
 }
+
+#[test]
+fn a_broken_config_is_moved_aside_not_deleted() {
+    let dir = temp_dir("move-aside");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("config.json");
+    std::fs::write(&path, "{ not json").unwrap();
+    let aside = store::move_aside(&path, 1_700_000_000).unwrap();
+    assert_eq!(aside, dir.join("config.json.bad-1700000000"));
+    assert!(!path.exists());
+    assert_eq!(std::fs::read_to_string(&aside).unwrap(), "{ not json");
+
+    // A second one in the same second doesn't overwrite the first.
+    std::fs::write(&path, "{ also broken").unwrap();
+    let second = store::move_aside(&path, 1_700_000_000).unwrap();
+    assert_eq!(second, dir.join("config.json.bad-1700000000-2"));
+    assert_eq!(std::fs::read_to_string(&aside).unwrap(), "{ not json");
+    assert_eq!(std::fs::read_to_string(&second).unwrap(), "{ also broken");
+}
+
+#[test]
+fn moving_aside_a_missing_config_fails() {
+    let dir = temp_dir("move-aside-missing");
+    assert!(store::move_aside(&dir.join("config.json"), 1).is_err());
+}

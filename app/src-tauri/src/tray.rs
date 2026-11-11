@@ -148,8 +148,14 @@ pub fn view(state: &AppState, dry_run: bool) -> View {
     } else {
         DeviceStatus::Running(&connected)
     };
+    let mut device = device_label(&line, dry_run);
+    match (state.problem.is_some(), state.recovered) {
+        (true, _) | (_, 0) => {}
+        (false, 1) => device.push_str(" · recovered from an error"),
+        (false, n) => device.push_str(&format!(" · recovered from {n} errors")),
+    }
     View {
-        device: device_label(&line, dry_run),
+        device,
         paused: state.paused,
         // A unit with no serial can't be paired, so it isn't offered.
         new_device: state.unknown.iter().any(|u| u.serial.is_some()),
@@ -415,6 +421,24 @@ mod tests {
         let v = view(&s, false);
         assert_eq!(v.device, "🟢 Connected: Desk");
         assert!(v.paused);
+        s.problem = Some("config not loaded".into());
+        assert_eq!(view(&s, false).device, "🔴 Problem: see the log");
+    }
+
+    #[test]
+    fn a_recovery_shows_on_the_device_line_until_relaunch() {
+        let mut s = state();
+        s.paired[0].connected = true;
+        s.recovered = 1;
+        assert_eq!(
+            view(&s, false).device,
+            "🟢 Connected: Desk · recovered from an error"
+        );
+        s.recovered = 3;
+        assert_eq!(
+            view(&s, true).device,
+            "🟢 Connected: Desk (dry run) · recovered from 3 errors"
+        );
         s.problem = Some("config not loaded".into());
         assert_eq!(view(&s, false).device, "🔴 Problem: see the log");
     }
