@@ -12,7 +12,7 @@
 
 namespace {
 
-const detent::Control kControls[] = {{1, DETENT_KIND_BUTTON}};
+const detent::Control kControls[] = {{1, DETENT_KIND_BUTTON, 0}};
 const detent::LinkConfig kConfig = {DETENT_FW_MAJOR, DETENT_FW_MINOR, DETENT_FW_PATCH, kControls, 1};
 
 struct UsbTransport : detent::LinkTransport {

@@ -21,12 +21,16 @@ namespace detent {
 struct Control {
   uint8_t id;
   uint8_t kind;  // DETENT_KIND_*
+  // With kind DETENT_KIND_ENCODER_WITH_PUSH: the ID of the button that is this
+  // encoder's push switch, listed in the same HELLO (protocol v2, D-094).
+  uint8_t push;
 };
 
 // Pack functions fill `out` (DETENT_REPORT_LEN bytes) and return true, or
 // return false, leaving `out` unspecified, for a message the app would reject.
 
-// controls may be null when count is 0. IDs must be unique.
+// controls may be null when count is 0. IDs must be unique; each push switch
+// must be a listed button and belong to one encoder; it must fit one report.
 bool pack_hello(uint8_t* out, uint8_t seq, uint8_t fw_major, uint8_t fw_minor, uint8_t fw_patch,
                 uint8_t encoder_mode, const Control* controls, uint8_t count);
 bool pack_button(uint8_t* out, uint8_t seq, uint8_t control, uint8_t action);

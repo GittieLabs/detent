@@ -35,7 +35,7 @@ fn header_carries_every_message_type() {
 #[test]
 fn header_carries_version_and_usb_ids() {
     let header = detent_protocol::header::c_header();
-    assert!(header.contains("#define DETENT_PROTOCOL_VERSION 1\n"));
+    assert!(header.contains("#define DETENT_PROTOCOL_VERSION 2\n"));
     assert!(header.contains("#define DETENT_USB_VID 0x303A"));
     assert!(header.contains("#define DETENT_USB_PID 0x8FDE"));
     assert!(header.contains("#define DETENT_REPORT_LEN 63\n"));
@@ -48,6 +48,7 @@ fn header_carries_codec_limits_and_enum_values() {
     let header = detent_protocol::header::c_header();
     for line in [
         "#define DETENT_MAX_CONTROLS 27\n",
+        "#define DETENT_KIND_ENCODER_WITH_PUSH 3\n",
         "#define DETENT_MAX_LABEL_LEN 16\n",
         "#define DETENT_MAX_STATUS_LEN 20\n",
         "#define DETENT_MAX_INJECT_EVENTS 11\n",

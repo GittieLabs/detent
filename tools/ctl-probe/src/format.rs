@@ -62,7 +62,10 @@ pub fn describe(m: &DeviceMessage) -> String {
             let controls: Vec<String> = h
                 .controls
                 .iter()
-                .map(|c| format!("{} {}", c.id, kind(c.kind)))
+                .map(|c| match c.push {
+                    Some(push) => format!("{} {} (push {push})", c.id, kind(c.kind)),
+                    None => format!("{} {}", c.id, kind(c.kind)),
+                })
                 .collect();
             format!(
                 "HELLO fw {}.{}.{}, mode {}, {} controls{}{}",
@@ -128,6 +131,7 @@ pub fn line(at: Duration, read: &[u8], raw: bool) -> Option<String> {
 mod tests {
     use super::*;
     use detent_protocol::codec::{encode_device, Control, FirmwareVersion, Hello};
+    use detent_protocol::PROTOCOL_VERSION;
 
     /// A hidapi read: report ID 6, then the encoded report.
     fn read_of(seq: u8, m: &DeviceMessage) -> Vec<u8> {
@@ -153,16 +157,15 @@ mod tests {
                 Control {
                     id: 1,
                     kind: ControlKind::Button,
+                    push: None,
                 },
-                Control {
-                    id: 9,
-                    kind: ControlKind::Encoder,
-                },
+                Control::encoder(9, Some(1)),
+                Control::encoder(5, None),
             ],
         });
         assert_eq!(
             describe(&hello),
-            "HELLO fw 0.1.2, mode mapped, 2 controls: 1 button, 9 encoder"
+            "HELLO fw 0.1.2, mode mapped, 3 controls: 1 button, 9 encoder (push 1), 5 encoder"
         );
         let empty = DeviceMessage::Hello(Hello {
             firmware: FirmwareVersion {
@@ -222,7 +225,9 @@ mod tests {
         let read = read_of(7, &DeviceMessage::MenuSelect { item: 42 });
         let l = line(at(), &read, true).unwrap();
         assert!(
-            l.ends_with("\n          06 01 04 07 01 2a ... 00 x58"),
+            l.ends_with(&format!(
+                "\n          06 {PROTOCOL_VERSION:02x} 04 07 01 2a ... 00 x58"
+            )),
             "{l}"
         );
     }
@@ -234,7 +239,7 @@ mod tests {
         read.resize(64, 0);
         assert_eq!(
             line(at(), &read, false).unwrap(),
-            "   1.234s  rejected: protocol version 68, expected 1"
+            format!("   1.234s  rejected: protocol version 68, expected {PROTOCOL_VERSION}")
         );
     }
 

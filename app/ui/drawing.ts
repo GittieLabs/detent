@@ -45,13 +45,12 @@ function cellsOf(c: ControlView, name?: string): Cell[] {
   }));
 }
 
-/** The encoder's push switch: a button the drawing shows on the knob's row. */
-const isPush = (c: ControlView) => c.type === "button" && c.label === "Encoder push";
+/** An encoder's push switch: a button the drawing shows on its knob's row. */
+const isPush = (c: ControlView) => c.push_of !== null;
 
 function rowsOf(unit: PairedUnit): { title: string; rows: Row[] }[] {
   const buttons = unit.controls.filter((c) => c.type === "button" && !isPush(c));
   const encoders = unit.controls.filter((c) => c.type === "encoder");
-  const push = unit.controls.find(isPush) ?? null;
   const groups: { title: string; rows: Row[] }[] = [];
   if (buttons.length) {
     groups.push({
@@ -67,9 +66,9 @@ function rowsOf(unit: PairedUnit): { title: string; rows: Row[] }[] {
   if (encoders.length) {
     groups.push({
       title: encoders.length === 1 ? "Encoder" : "Encoders",
-      rows: encoders.map((c, i) => {
-        // One push switch per device today; it belongs to the first knob.
-        const sw = i === 0 ? push : null;
+      rows: encoders.map((c) => {
+        // HELLO says which button is this knob's push switch (D-094).
+        const sw = unit.controls.find((x) => x.push_of === c.id) ?? null;
         const controls = sw ? [c, sw] : [c];
         const onDevice = controls.every((x) => x.handled_by_device)
           ? `Turn: volume${sw ? " · Push: mute" : ""}, on the device`
@@ -80,19 +79,6 @@ function rowsOf(unit: PairedUnit): { title: string; rows: Row[] }[] {
         ];
         return { name: c.label, controls, cells, onDevice };
       }),
-    });
-  } else if (push) {
-    // A push switch with no knob reported: list it with the buttons.
-    groups.push({
-      title: "Switch",
-      rows: [
-        {
-          name: push.label,
-          controls: [push],
-          cells: cellsOf(push),
-          onDevice: push.handled_by_device ? "Handled on the device" : null,
-        },
-      ],
     });
   }
   return groups;

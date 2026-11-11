@@ -29,8 +29,12 @@ pub struct ControlView {
     pub id: u8,
     #[serde(rename = "type")]
     pub kind: ControlType,
-    /// `Button 1`, `Encoder`, `Encoder push`.
+    /// `Button 1`, `Encoder`, `Encoder push`; with more than one encoder,
+    /// `Encoder 5` and `Encoder 5 push`.
     pub label: String,
+    /// For an encoder's push switch, the encoder's control ID (from HELLO,
+    /// D-094).
+    pub push_of: Option<u8>,
     /// The device handles it itself (the encoder and its push switch in
     /// Volume and Menu modes), so it can't be mapped.
     pub handled_by_device: bool,
@@ -40,27 +44,49 @@ pub struct ControlView {
 }
 
 /// A unit's controls from its HELLO, in HELLO order.
-pub fn controls_of(vid: u16, pid: u16, hello: &Hello) -> Vec<ControlView> {
-    let push = models::encoder_push(vid, pid);
+pub fn controls_of(hello: &Hello) -> Vec<ControlView> {
     let device_mode = hello.encoder_mode != EncoderMode::Mapped;
+    let encoders = hello
+        .controls
+        .iter()
+        .filter(|c| c.kind == ControlKind::Encoder)
+        .count();
+    let encoder_name = |id: u8| {
+        if encoders > 1 {
+            format!("Encoder {id}")
+        } else {
+            "Encoder".to_owned()
+        }
+    };
+    let push_of = |id: u8| {
+        hello
+            .controls
+            .iter()
+            .find(|e| e.kind == ControlKind::Encoder && e.push == Some(id))
+            .map(|e| e.id)
+    };
     hello
         .controls
         .iter()
         .map(|c| {
-            let (kind, label, encoderish, triggers) = match c.kind {
-                ControlKind::Encoder => (
+            let owner = match c.kind {
+                ControlKind::Button => push_of(c.id),
+                ControlKind::Encoder => None,
+            };
+            let (kind, label, encoderish, triggers) = match (c.kind, owner) {
+                (ControlKind::Encoder, _) => (
                     ControlType::Encoder,
-                    "Encoder".to_owned(),
+                    encoder_name(c.id),
                     true,
                     vec![Trigger::Counterclockwise, Trigger::Clockwise],
                 ),
-                ControlKind::Button if Some(c.id) == push => (
+                (ControlKind::Button, Some(encoder)) => (
                     ControlType::Button,
-                    "Encoder push".to_owned(),
+                    format!("{} push", encoder_name(encoder)),
                     true,
                     vec![Trigger::Press],
                 ),
-                ControlKind::Button => (
+                (ControlKind::Button, None) => (
                     ControlType::Button,
                     format!("Button {}", c.id),
                     false,
@@ -71,6 +97,7 @@ pub fn controls_of(vid: u16, pid: u16, hello: &Hello) -> Vec<ControlView> {
                 id: c.id,
                 kind,
                 label,
+                push_of: owner,
                 handled_by_device: encoderish && device_mode,
                 triggers,
             }
@@ -211,6 +238,9 @@ pub struct PairedUnit {
     pub model: Option<String>,
     /// `major.minor.patch` from the last HELLO this session.
     pub firmware: Option<String>,
+    /// Its firmware speaks an older protocol than this app, so it can't be
+    /// used until it's updated (D-094). Cleared when it reconnects.
+    pub outdated: bool,
     pub buttons: usize,
     pub encoders: usize,
     /// From its last HELLO this session; empty until then.
@@ -231,6 +261,8 @@ pub struct Candidate {
     pub serial: String,
     pub model: Option<String>,
     pub firmware: Option<String>,
+    /// See [`PairedUnit::outdated`].
+    pub outdated: bool,
     pub buttons: usize,
     pub encoders: usize,
     /// The user pressed a button on this one most recently.
@@ -362,6 +394,7 @@ impl AppState {
                     connected: live.is_some_and(|u| u.connected),
                     model: live.and_then(|u| u.model.clone()),
                     firmware: live.and_then(|u| u.firmware.clone()),
+                    outdated: live.is_some_and(|u| u.outdated),
                     buttons: live.map_or(0, |u| u.buttons),
                     encoders: live.map_or(0, |u| u.encoders),
                     controls: live.map(|u| u.controls.clone()).unwrap_or_default(),
@@ -446,6 +479,7 @@ impl AppState {
             DeviceEvent::Connected { id, product } => {
                 if let Some(u) = self.paired_mut(id) {
                     u.connected = true;
+                    u.outdated = false;
                     if product.is_some() {
                         u.model = model_of(product);
                     }
@@ -458,7 +492,8 @@ impl AppState {
                 if let Some(u) = self.paired_mut(id) {
                     u.firmware = Some(firmware_of(hello));
                     (u.buttons, u.encoders) = (buttons, encoders);
-                    u.controls = controls_of(id.vid, id.pid, hello);
+                    u.controls = controls_of(hello);
+                    u.outdated = false;
                 }
             }
             DeviceEvent::Disconnected { id, .. } => {
@@ -490,6 +525,7 @@ impl AppState {
                         serial: id.serial.clone(),
                         model,
                         firmware: None,
+                        outdated: false,
                         buttons: 0,
                         encoders: 0,
                         picked: false,
@@ -517,15 +553,21 @@ impl AppState {
                 });
             }
             DeviceEvent::Mode { id, mode } => {
-                let push = models::encoder_push(id.vid, id.pid);
                 if let Some(u) = self.paired_mut(id) {
                     let device_mode = *mode != EncoderMode::Mapped;
                     for c in &mut u.controls {
-                        let encoderish = c.kind == ControlType::Encoder || Some(c.id) == push;
+                        let encoderish = c.kind == ControlType::Encoder || c.push_of.is_some();
                         if encoderish {
                             c.handled_by_device = device_mode;
                         }
                     }
+                }
+            }
+            DeviceEvent::Outdated { id, .. } => {
+                if let Some(u) = self.paired_mut(id) {
+                    u.outdated = true;
+                } else if let Some(c) = self.candidate_mut(id) {
+                    c.outdated = true;
                 }
             }
             DeviceEvent::Input { .. }

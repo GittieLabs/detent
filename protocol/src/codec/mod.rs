@@ -20,7 +20,7 @@ pub use app::{
 };
 pub use device::{
     decode_device, encode_device, ButtonAction, Control, ControlKind, DeviceMessage, EncoderMode,
-    FirmwareVersion, Hello, MAX_CONTROLS,
+    FirmwareVersion, Hello, KIND_ENCODER_WITH_PUSH, MAX_CONTROLS,
 };
 
 /// Offset of the payload within a report.
@@ -62,6 +62,9 @@ pub enum DecodeError {
     TooManyControls { count: u8 },
     /// HELLO lists the same control ID twice.
     DuplicateControl { id: u8 },
+    /// An encoder's push switch isn't a button in the same HELLO, or two
+    /// encoders share it (v2, D-094).
+    BadPush { encoder: u8, push: u8 },
     /// TEST_INJECT carries more than [`MAX_INJECT_EVENTS`] events.
     TooManyEvents { count: u8 },
 }
@@ -97,6 +100,12 @@ impl fmt::Display for DecodeError {
                 write!(f, "HELLO lists {count} controls, max {MAX_CONTROLS}")
             }
             Self::DuplicateControl { id } => write!(f, "HELLO lists control {id} twice"),
+            Self::BadPush { encoder, push } => {
+                write!(
+                    f,
+                    "encoder {encoder}'s push switch {push} isn't its own button"
+                )
+            }
             Self::TooManyEvents { count } => {
                 write!(
                     f,
@@ -119,6 +128,15 @@ pub enum EncodeError {
     DuplicateControl {
         id: u8,
     },
+    /// See [`DecodeError::BadPush`].
+    BadPush {
+        encoder: u8,
+        push: u8,
+    },
+    /// The controls and their push switches don't fit one report.
+    HelloTooLong {
+        len: usize,
+    },
     ZeroDelta,
     /// MENU item with `index >= total` (including `total = 0`).
     MenuIndex {
@@ -139,6 +157,15 @@ impl fmt::Display for EncodeError {
                 write!(f, "HELLO has {count} controls, max {MAX_CONTROLS}")
             }
             Self::DuplicateControl { id } => write!(f, "HELLO lists control {id} twice"),
+            Self::BadPush { encoder, push } => {
+                write!(
+                    f,
+                    "encoder {encoder}'s push switch {push} isn't its own button"
+                )
+            }
+            Self::HelloTooLong { len } => {
+                write!(f, "HELLO needs {len} bytes, max {MAX_PAYLOAD_LEN}")
+            }
             Self::ZeroDelta => write!(f, "encoder delta can't be zero"),
             Self::MenuIndex { index, total } => {
                 write!(f, "menu index {index} isn't below total {total}")

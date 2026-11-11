@@ -21,7 +21,7 @@ void tearDown() {}
 // --- pack: device to app, byte for byte ---
 
 static void test_pack_hello() {
-  const Control controls[] = {{1, DETENT_KIND_BUTTON}, {2, DETENT_KIND_BUTTON}, {9, DETENT_KIND_ENCODER}};
+  const Control controls[] = {{1, DETENT_KIND_BUTTON, 0}, {2, DETENT_KIND_BUTTON, 0}, {9, DETENT_KIND_ENCODER, 0}};
   TEST_ASSERT_TRUE(detent::pack_hello(out, 0, 0, 1, 2, DETENT_ENCODER_MODE_MAPPED, controls, 3));
   TEST_ASSERT_EQUAL_UINT8_ARRAY(DETENT_VEC_PACK_HELLO, out, DETENT_REPORT_LEN);
 }
@@ -34,10 +34,38 @@ static void test_pack_hello_empty() {
 static void test_pack_hello_max() {
   Control controls[DETENT_MAX_CONTROLS];
   for (uint8_t id = 0; id < DETENT_MAX_CONTROLS; id++) {
-    controls[id] = {id, static_cast<uint8_t>(id % 2 == 0 ? DETENT_KIND_BUTTON : DETENT_KIND_ENCODER)};
+    controls[id] = {id, static_cast<uint8_t>(id % 2 == 0 ? DETENT_KIND_BUTTON : DETENT_KIND_ENCODER), 0};
   }
   TEST_ASSERT_TRUE(detent::pack_hello(out, 1, 2, 3, 4, DETENT_ENCODER_MODE_MENU, controls, DETENT_MAX_CONTROLS));
   TEST_ASSERT_EQUAL_UINT8_ARRAY(DETENT_VEC_PACK_HELLO_MAX, out, DETENT_REPORT_LEN);
+}
+
+static void test_pack_hello_push() {
+  const Control controls[] = {{1, DETENT_KIND_BUTTON, 0},
+                              {5, DETENT_KIND_ENCODER_WITH_PUSH, 6},
+                              {6, DETENT_KIND_BUTTON, 0},
+                              {7, DETENT_KIND_ENCODER, 0}};
+  TEST_ASSERT_TRUE(detent::pack_hello(out, 2, 0, 2, 0, DETENT_ENCODER_MODE_VOLUME, controls, 4));
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(DETENT_VEC_PACK_HELLO_PUSH, out, DETENT_REPORT_LEN);
+}
+
+static void test_pack_refuses_a_bad_push() {
+  // Push 9 isn't listed; push 7 is an encoder; two encoders share 6.
+  const Control unlisted[] = {{5, DETENT_KIND_ENCODER_WITH_PUSH, 9}};
+  TEST_ASSERT_FALSE(detent::pack_hello(out, 0, 0, 0, 0, 0, unlisted, 1));
+  const Control on_encoder[] = {{5, DETENT_KIND_ENCODER_WITH_PUSH, 7}, {7, DETENT_KIND_ENCODER, 0}};
+  TEST_ASSERT_FALSE(detent::pack_hello(out, 0, 0, 0, 0, 0, on_encoder, 2));
+  const Control shared[] = {{5, DETENT_KIND_ENCODER_WITH_PUSH, 6},
+                            {7, DETENT_KIND_ENCODER_WITH_PUSH, 6},
+                            {6, DETENT_KIND_BUTTON, 0}};
+  TEST_ASSERT_FALSE(detent::pack_hello(out, 0, 0, 0, 0, 0, shared, 3));
+  // 13 encoders with their own push buttons: 26 controls, 70 bytes.
+  Control big[26];
+  for (uint8_t i = 0; i < 13; i++) {
+    big[2 * i] = {i, DETENT_KIND_ENCODER_WITH_PUSH, static_cast<uint8_t>(100 + i)};
+    big[2 * i + 1] = {static_cast<uint8_t>(100 + i), DETENT_KIND_BUTTON, 0};
+  }
+  TEST_ASSERT_FALSE(detent::pack_hello(out, 0, 0, 0, 0, 0, big, 26));
 }
 
 static void test_pack_button() {
@@ -62,11 +90,11 @@ static void test_pack_heartbeat() {
 
 static void test_pack_refuses_invalid_messages() {
   Control many[DETENT_MAX_CONTROLS + 1];
-  for (uint8_t id = 0; id <= DETENT_MAX_CONTROLS; id++) many[id] = {id, DETENT_KIND_BUTTON};
+  for (uint8_t id = 0; id <= DETENT_MAX_CONTROLS; id++) many[id] = {id, DETENT_KIND_BUTTON, 0};
   TEST_ASSERT_FALSE(detent::pack_hello(out, 0, 0, 0, 0, 0, many, DETENT_MAX_CONTROLS + 1));
-  const Control dup[] = {{3, DETENT_KIND_BUTTON}, {3, DETENT_KIND_ENCODER}};
+  const Control dup[] = {{3, DETENT_KIND_BUTTON, 0}, {3, DETENT_KIND_ENCODER, 0}};
   TEST_ASSERT_FALSE(detent::pack_hello(out, 0, 0, 0, 0, 0, dup, 2));
-  const Control bad_kind[] = {{3, 7}};
+  const Control bad_kind[] = {{3, 7, 0}};
   TEST_ASSERT_FALSE(detent::pack_hello(out, 0, 0, 0, 0, 0, bad_kind, 1));
   TEST_ASSERT_FALSE(detent::pack_hello(out, 0, 0, 0, 0, 3, nullptr, 0));
   TEST_ASSERT_FALSE(detent::pack_button(out, 0, 1, 0));
@@ -167,6 +195,8 @@ int main() {
   RUN_TEST(test_pack_menu_select);
   RUN_TEST(test_pack_heartbeat);
   RUN_TEST(test_pack_refuses_invalid_messages);
+  RUN_TEST(test_pack_hello_push);
+  RUN_TEST(test_pack_refuses_a_bad_push);
   RUN_TEST(test_parse_hello_ack);
   RUN_TEST(test_parse_menu_item);
   RUN_TEST(test_parse_menu_clear);

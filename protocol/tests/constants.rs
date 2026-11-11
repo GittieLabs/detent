@@ -6,8 +6,8 @@ use detent_protocol::{ids, msg, HEADER_LEN, MAX_PAYLOAD_LEN, PROTOCOL_VERSION, R
 use detent_protocol::{CONSUMER_REPORT_ID, USAGE, USAGE_PAGE, VENDOR_REPORT_ID};
 
 #[test]
-fn version_is_one() {
-    assert_eq!(PROTOCOL_VERSION, 1);
+fn version_is_two() {
+    assert_eq!(PROTOCOL_VERSION, 2);
 }
 
 #[test]

@@ -27,20 +27,47 @@ fn hello() -> impl Strategy<Value = Hello> {
         // Distinct IDs: a set, then paired with kinds.
         prop::collection::btree_set(any::<u8>(), 0..=MAX_CONTROLS),
         prop::collection::vec(kind(), MAX_CONTROLS),
+        prop::collection::vec(any::<bool>(), MAX_CONTROLS),
     )
-        .prop_map(|((major, minor, patch), encoder_mode, ids, kinds)| Hello {
-            firmware: FirmwareVersion {
-                major,
-                minor,
-                patch,
+        .prop_map(
+            |((major, minor, patch), encoder_mode, ids, kinds, wants_push)| {
+                let mut controls: Vec<Control> = ids
+                    .into_iter()
+                    .zip(kinds)
+                    .map(|(id, kind)| Control {
+                        id,
+                        kind,
+                        push: None,
+                    })
+                    .collect();
+                // v2 (D-094): some encoders take a free button as their push
+                // switch, while the HELLO still fits one report.
+                let buttons: Vec<u8> = controls
+                    .iter()
+                    .filter(|c| c.kind == ControlKind::Button)
+                    .map(|c| c.id)
+                    .collect();
+                let mut free = buttons.into_iter();
+                let mut len = 5 + 2 * controls.len();
+                for (c, wants) in controls.iter_mut().zip(wants_push) {
+                    if c.kind == ControlKind::Encoder && wants && len < 59 {
+                        if let Some(b) = free.next() {
+                            c.push = Some(b);
+                            len += 1;
+                        }
+                    }
+                }
+                Hello {
+                    firmware: FirmwareVersion {
+                        major,
+                        minor,
+                        patch,
+                    },
+                    encoder_mode,
+                    controls,
+                }
             },
-            encoder_mode,
-            controls: ids
-                .into_iter()
-                .zip(kinds)
-                .map(|(id, kind)| Control { id, kind })
-                .collect(),
-        })
+        )
 }
 
 fn device_message() -> impl Strategy<Value = DeviceMessage> {

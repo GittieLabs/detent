@@ -35,14 +35,17 @@ pub fn pack_cases() -> Vec<(&'static str, DeviceMessage, u8)> {
                     Control {
                         id: 1,
                         kind: Button,
+                        push: None,
                     },
                     Control {
                         id: 2,
                         kind: Button,
+                        push: None,
                     },
                     Control {
                         id: 9,
                         kind: Encoder,
+                        push: None,
                     },
                 ],
             }),
@@ -75,10 +78,30 @@ pub fn pack_cases() -> Vec<(&'static str, DeviceMessage, u8)> {
                     .map(|id| Control {
                         id,
                         kind: if id % 2 == 0 { Button } else { Encoder },
+                        push: None,
                     })
                     .collect(),
             }),
             1,
+        ),
+        (
+            // v2 (D-094): encoder 5's push switch is button 6.
+            "HELLO_PUSH",
+            DeviceMessage::Hello(Hello {
+                firmware: FirmwareVersion {
+                    major: 0,
+                    minor: 2,
+                    patch: 0,
+                },
+                encoder_mode: EncoderMode::Volume,
+                controls: vec![
+                    Control::button(1),
+                    Control::encoder(5, Some(6)),
+                    Control::button(6),
+                    Control::encoder(7, None),
+                ],
+            }),
+            2,
         ),
         (
             "BUTTON_LONG_PRESS",
@@ -189,7 +212,7 @@ fn status(text: &[u8]) -> Vec<u8> {
 pub fn reject_cases() -> Vec<(&'static str, [u8; REPORT_LEN])> {
     let mut v = Vec::new();
     let mut r = raw(msg::REQUEST_HELLO, &[]);
-    r[0] = 2;
+    r[0] = 9;
     v.push(("bad_version", r));
     let mut r = raw(msg::HELLO_ACK, &[1]);
     r[3] = (MAX_PAYLOAD_LEN + 1) as u8;
@@ -260,6 +283,7 @@ pub fn error_kind(e: &DecodeError) -> &'static str {
         DecodeError::InvalidField { .. } => "InvalidField",
         DecodeError::TooManyControls { .. } => "TooManyControls",
         DecodeError::DuplicateControl { .. } => "DuplicateControl",
+        DecodeError::BadPush { .. } => "BadPush",
         DecodeError::TooManyEvents { .. } => "TooManyEvents",
     }
 }

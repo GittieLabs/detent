@@ -34,14 +34,17 @@ fn sample_hello() -> Hello {
             Control {
                 id: 1,
                 kind: ControlKind::Button,
+                push: None,
             },
             Control {
                 id: 2,
                 kind: ControlKind::Button,
+                push: None,
             },
             Control {
                 id: 9,
                 kind: ControlKind::Encoder,
+                push: None,
             },
         ],
     }
@@ -150,8 +153,15 @@ fn rejects_wrong_report_length() {
 #[test]
 fn rejects_wrong_version() {
     let mut r = raw(msg::MENU_SELECT, 0, &[1]);
-    r[0] = 2;
-    assert_eq!(decode_device(&r), Err(DecodeError::Version { got: 2 }));
+    r[0] = PROTOCOL_VERSION + 1;
+    assert_eq!(
+        decode_device(&r),
+        Err(DecodeError::Version {
+            got: PROTOCOL_VERSION + 1
+        })
+    );
+    r[0] = 1;
+    assert_eq!(decode_device(&r), Err(DecodeError::Version { got: 1 }));
 }
 
 #[test]
@@ -258,8 +268,8 @@ fn rejects_invalid_field_values() {
         Err(bad(msg::HELLO, "encoder_mode", 9))
     );
     assert_eq!(
-        decoded(msg::HELLO, &[0, 0, 0, 0, 1, 5, 3]),
-        Err(bad(msg::HELLO, "kind", 3))
+        decoded(msg::HELLO, &[0, 0, 0, 0, 1, 5, 4]),
+        Err(bad(msg::HELLO, "kind", 4))
     );
 }
 
@@ -305,12 +315,7 @@ fn encodes_to_the_documented_bytes() {
 
 #[test]
 fn encodes_max_controls_hello() {
-    let controls = (0..MAX_CONTROLS as u8)
-        .map(|id| Control {
-            id,
-            kind: ControlKind::Button,
-        })
-        .collect();
+    let controls = (0..MAX_CONTROLS as u8).map(Control::button).collect();
     let hello = DeviceMessage::Hello(Hello {
         controls,
         ..sample_hello()
@@ -322,12 +327,7 @@ fn encodes_max_controls_hello() {
 
 #[test]
 fn refuses_to_encode_invalid_messages() {
-    let controls = (0..=MAX_CONTROLS as u8)
-        .map(|id| Control {
-            id,
-            kind: ControlKind::Button,
-        })
-        .collect();
+    let controls = (0..=MAX_CONTROLS as u8).map(Control::button).collect();
     let too_many = DeviceMessage::Hello(Hello {
         controls,
         ..sample_hello()
@@ -343,10 +343,12 @@ fn refuses_to_encode_invalid_messages() {
         Control {
             id: 3,
             kind: ControlKind::Button,
+            push: None,
         },
         Control {
             id: 3,
             kind: ControlKind::Encoder,
+            push: None,
         },
     ];
     let dup = DeviceMessage::Hello(Hello {
@@ -374,4 +376,111 @@ fn refuses_to_encode_invalid_messages() {
 fn errors_render_readably() {
     let text = DecodeError::Version { got: 2 }.to_string();
     assert!(text.contains("version") && text.contains('2'), "{text}");
+}
+
+// v2 (D-094): an encoder's entry can name its push switch.
+
+#[test]
+fn decodes_an_encoder_with_its_push_switch() {
+    // Button 1, encoder 5 with push 6, button 6, encoder 7 without one.
+    let m = decoded(msg::HELLO, &[0, 2, 0, 0, 4, 1, 1, 5, 3, 6, 6, 1, 7, 2]).unwrap();
+    let DeviceMessage::Hello(h) = m else {
+        panic!("{m:?}")
+    };
+    assert_eq!(
+        h.controls,
+        vec![
+            Control::button(1),
+            Control::encoder(5, Some(6)),
+            Control::button(6),
+            Control::encoder(7, None),
+        ]
+    );
+    let r = encode_device(7, &DeviceMessage::Hello(h)).unwrap();
+    assert_eq!(
+        r,
+        raw(msg::HELLO, 7, &[0, 2, 0, 0, 4, 1, 1, 5, 3, 6, 6, 1, 7, 2])
+    );
+}
+
+#[test]
+fn a_push_switch_must_be_one_listed_button_of_one_encoder() {
+    let bad = |payload: &[u8]| decoded(msg::HELLO, payload);
+    // Push 9 isn't listed.
+    assert_eq!(
+        bad(&[0, 2, 0, 0, 1, 5, 3, 9]),
+        Err(DecodeError::BadPush {
+            encoder: 5,
+            push: 9
+        })
+    );
+    // Push 7 is an encoder, not a button.
+    assert_eq!(
+        bad(&[0, 2, 0, 0, 2, 5, 3, 7, 7, 2]),
+        Err(DecodeError::BadPush {
+            encoder: 5,
+            push: 7
+        })
+    );
+    // Two encoders share button 6.
+    assert_eq!(
+        bad(&[0, 2, 0, 0, 3, 5, 3, 6, 7, 3, 6, 6, 1]),
+        Err(DecodeError::BadPush {
+            encoder: 7,
+            push: 6
+        })
+    );
+    // An encoder that is its own push.
+    assert_eq!(
+        bad(&[0, 2, 0, 0, 1, 5, 3, 5]),
+        Err(DecodeError::BadPush {
+            encoder: 5,
+            push: 5
+        })
+    );
+    // The count says two entries but the bytes stop inside the second.
+    assert!(matches!(
+        bad(&[0, 2, 0, 0, 2, 1, 1, 5, 3]),
+        Err(DecodeError::PayloadSize { .. })
+    ));
+    // Extra bytes after the last entry.
+    assert!(matches!(
+        bad(&[0, 2, 0, 0, 1, 1, 1, 0]),
+        Err(DecodeError::PayloadSize { .. })
+    ));
+}
+
+#[test]
+fn refuses_to_encode_a_bad_push_or_a_hello_too_long() {
+    let hello = |controls| {
+        DeviceMessage::Hello(Hello {
+            controls,
+            ..sample_hello()
+        })
+    };
+    assert_eq!(
+        encode_device(0, &hello(vec![Control::encoder(5, Some(6))])),
+        Err(EncodeError::BadPush {
+            encoder: 5,
+            push: 6
+        })
+    );
+    let mut on_button = Control::button(1);
+    on_button.push = Some(2);
+    assert_eq!(
+        encode_device(0, &hello(vec![on_button, Control::button(2)])),
+        Err(EncodeError::BadPush {
+            encoder: 1,
+            push: 2
+        })
+    );
+    // 13 encoders each with its own push button is 26 controls in 5 + 13 * 5
+    // = 70 bytes: under the control limit, over the payload.
+    let controls = (0..13u8)
+        .flat_map(|i| [Control::encoder(i, Some(100 + i)), Control::button(100 + i)])
+        .collect();
+    assert_eq!(
+        encode_device(0, &hello(controls)),
+        Err(EncodeError::HelloTooLong { len: 70 })
+    );
 }

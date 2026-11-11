@@ -16,7 +16,11 @@ bool valid_mode(uint8_t m) {
          m == DETENT_ENCODER_MODE_MAPPED;
 }
 
-bool valid_kind(uint8_t k) { return k == DETENT_KIND_BUTTON || k == DETENT_KIND_ENCODER; }
+bool valid_kind(uint8_t k) {
+  return k == DETENT_KIND_BUTTON || k == DETENT_KIND_ENCODER || k == DETENT_KIND_ENCODER_WITH_PUSH;
+}
+
+size_t entry_len(const Control& c) { return c.kind == DETENT_KIND_ENCODER_WITH_PUSH ? 3 : 2; }
 
 bool valid_action(uint8_t a) {
   return a == DETENT_ACTION_DOWN || a == DETENT_ACTION_UP || a == DETENT_ACTION_LONG_PRESS;
@@ -102,19 +106,33 @@ bool pack_hello(uint8_t* out, uint8_t seq, uint8_t fw_major, uint8_t fw_minor, u
   if (count > DETENT_MAX_CONTROLS || !valid_mode(encoder_mode)) return false;
   if (count > 0 && controls == nullptr) return false;
   bool seen[256] = {false};
+  bool is_button[256] = {false};
+  size_t len = HELLO_FIXED;
   for (uint8_t i = 0; i < count; i++) {
     if (!valid_kind(controls[i].kind) || seen[controls[i].id]) return false;
     seen[controls[i].id] = true;
+    is_button[controls[i].id] = controls[i].kind == DETENT_KIND_BUTTON;
+    len += entry_len(controls[i]);
   }
-  uint8_t* p = begin(out, DETENT_MSG_HELLO, seq, static_cast<uint8_t>(HELLO_FIXED + 2 * count));
+  if (len > DETENT_MAX_PAYLOAD_LEN) return false;
+  bool claimed[256] = {false};
+  for (uint8_t i = 0; i < count; i++) {
+    if (controls[i].kind != DETENT_KIND_ENCODER_WITH_PUSH) continue;
+    const uint8_t push = controls[i].push;
+    if (!is_button[push] || claimed[push]) return false;
+    claimed[push] = true;
+  }
+  uint8_t* p = begin(out, DETENT_MSG_HELLO, seq, static_cast<uint8_t>(len));
   p[0] = fw_major;
   p[1] = fw_minor;
   p[2] = fw_patch;
   p[3] = encoder_mode;
   p[4] = count;
+  size_t at = HELLO_FIXED;
   for (uint8_t i = 0; i < count; i++) {
-    p[HELLO_FIXED + 2 * i] = controls[i].id;
-    p[HELLO_FIXED + 2 * i + 1] = controls[i].kind;
+    p[at++] = controls[i].id;
+    p[at++] = controls[i].kind;
+    if (controls[i].kind == DETENT_KIND_ENCODER_WITH_PUSH) p[at++] = controls[i].push;
   }
   return true;
 }

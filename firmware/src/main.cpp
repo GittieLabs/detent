@@ -50,8 +50,8 @@ namespace {
 
 namespace board = detent::board;
 
-// What HELLO reports: every button in board_pins.h, then the encoder. Filled in
-// setup(), before USB starts.
+// What HELLO reports: every button in the board header, then the encoder with
+// its push switch (protocol v2, D-094). Filled in setup(), before USB starts.
 const uint8_t kControlCount = board::kButtonCount + 1;
 detent::Control controls[kControlCount];
 
@@ -236,10 +236,11 @@ void update_led(uint32_t now) {
 
 void setup_controls() {
   for (uint8_t i = 0; i < board::kButtonCount; i++) {
-    controls[i] = {board::kButtons[i].control, DETENT_KIND_BUTTON};
+    controls[i] = {board::kButtons[i].control, DETENT_KIND_BUTTON, 0};
     pinMode(board::kButtons[i].gpio, INPUT_PULLUP);
   }
-  controls[board::kButtonCount] = {board::kEncoderControl, DETENT_KIND_ENCODER};
+  controls[board::kButtonCount] = {board::kEncoderControl, DETENT_KIND_ENCODER_WITH_PUSH,
+                                   board::kEncoderPushControl};
   pinMode(board::kEncoderA, INPUT_PULLUP);
   pinMode(board::kEncoderB, INPUT_PULLUP);
   encoder.reset(digitalRead(board::kEncoderA), digitalRead(board::kEncoderB));

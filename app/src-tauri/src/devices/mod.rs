@@ -18,7 +18,7 @@ use detent_protocol::codec::{
     decode_device, encode_app, AppMessage, ButtonAction, DecodeError, DeviceMessage, EncoderMode,
     Hello, Label, StatusText,
 };
-use detent_protocol::ids;
+use detent_protocol::{ids, PROTOCOL_VERSION};
 
 use crate::store::{DeviceEntry, UnitRef};
 use crate::transport::{Bus, Channel, DeviceTransport, TransportError};
@@ -77,6 +77,13 @@ pub enum DeviceEvent {
     Input {
         id: DeviceId,
         message: DeviceMessage,
+    },
+    /// The unit's firmware speaks an older protocol `version` than this app
+    /// (D-094). It stays connected, its reports count as hearing from it, and
+    /// nothing is sent to it. Reported once per open.
+    Outdated {
+        id: DeviceId,
+        version: u8,
     },
     /// A report the codec refused. The unit stays connected.
     Rejected {
@@ -162,6 +169,8 @@ struct Unit {
     hellos: u32,
     /// Its app owned OLED menu labels, sent after each HELLO ack (M6).
     menu: Vec<String>,
+    /// It spoke an older protocol and that was reported (D-094).
+    outdated: bool,
 }
 
 impl Unit {
@@ -483,6 +492,7 @@ impl<B: Bus> Devices<B> {
             path: c.path.clone(),
             transport,
             last_heard: now,
+            outdated: false,
             hello: None,
             seq_out: 0,
             candidate: true,
@@ -516,6 +526,7 @@ impl<B: Bus> Devices<B> {
             path: c.path.clone(),
             transport,
             last_heard: now,
+            outdated: false,
             hello: None,
             seq_out: 0,
             candidate: false,
@@ -641,6 +652,18 @@ fn handle(
 ) -> Result<(), Lost> {
     let frame = match decode_device(report) {
         Ok(frame) => frame,
+        // An older protocol: the unit is alive but needs new firmware. Newer
+        // or unknown versions stay garbage, as before.
+        Err(DecodeError::Version { got }) if (1..PROTOCOL_VERSION).contains(&got) => {
+            unit.last_heard = now;
+            if !std::mem::replace(&mut unit.outdated, true) {
+                events.push(DeviceEvent::Outdated {
+                    id: unit.id.clone(),
+                    version: got,
+                });
+            }
+            return Ok(());
+        }
         Err(error) => {
             events.push(DeviceEvent::Rejected {
                 id: unit.id.clone(),

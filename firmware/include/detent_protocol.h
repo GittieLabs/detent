@@ -4,7 +4,7 @@
 #ifndef DETENT_PROTOCOL_H
 #define DETENT_PROTOCOL_H
 
-#define DETENT_PROTOCOL_VERSION 1
+#define DETENT_PROTOCOL_VERSION 2
 
 // Report layout
 #define DETENT_REPORT_LEN 63
@@ -45,6 +45,8 @@
 #define DETENT_ENCODER_MODE_MAPPED 2
 #define DETENT_KIND_BUTTON 1
 #define DETENT_KIND_ENCODER 2
+// v2: an encoder entry whose third byte is its push switch's control ID
+#define DETENT_KIND_ENCODER_WITH_PUSH 3
 #define DETENT_ACTION_DOWN 1
 #define DETENT_ACTION_UP 2
 #define DETENT_ACTION_LONG_PRESS 3

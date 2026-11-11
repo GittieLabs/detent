@@ -76,10 +76,12 @@ fn hello() -> Hello {
             Control {
                 id: 1,
                 kind: ControlKind::Button,
+                push: None,
             },
             Control {
                 id: 5,
                 kind: ControlKind::Encoder,
+                push: None,
             },
         ],
     }
@@ -1073,4 +1075,34 @@ fn a_board_that_is_not_a_detent_model_is_never_reported() {
     let mut r = Rig::new(&[], &[]);
     r.bus.attach(0x1209, 0x0002, Some(OTHER));
     assert_eq!(r.at(0.0), vec![]);
+}
+
+// Protocol v2 (D-094): a unit on older firmware is alive but can't talk.
+
+fn v1_heartbeat() -> Vec<u8> {
+    // Report ID, version 1, HEARTBEAT, seq, len 5, uptime, mode.
+    let mut r = vec![VENDOR_REPORT_ID, 1, 0x05, 0, 5, 1, 0, 0, 0, 0];
+    r.resize(64, 0);
+    r
+}
+
+#[test]
+fn an_older_firmware_is_reported_once_and_kept_up_by_its_heartbeats() {
+    let mut r = Rig::new(&[PAIRED], &[]);
+    let hid = r.bus.attach(VID, PID, Some(PAIRED));
+    r.at(0.0);
+    hid.push_raw(v1_heartbeat());
+    assert_eq!(
+        r.at(2.0),
+        vec![DeviceEvent::Outdated {
+            id: id(PAIRED),
+            version: 1
+        }]
+    );
+    // Its v1 heartbeats count as hearing from it, and aren't news again.
+    for t in [4.0, 6.0, 8.0, 10.0] {
+        hid.push_raw(v1_heartbeat());
+        assert_eq!(r.at(t), vec![], "t = {t}");
+    }
+    assert_eq!(r.devices.connected(), vec![&id(PAIRED)]);
 }

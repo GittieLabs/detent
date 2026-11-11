@@ -2,8 +2,8 @@
 //! Run `scripts/gen-header.sh`; a test fails if the committed header drifts.
 
 use crate::codec::{
-    ButtonAction, ControlKind, EncoderMode, MAX_CONTROLS, MAX_INJECT_EVENTS, MAX_LABEL_LEN,
-    MAX_STATUS_LEN,
+    ButtonAction, ControlKind, EncoderMode, KIND_ENCODER_WITH_PUSH, MAX_CONTROLS,
+    MAX_INJECT_EVENTS, MAX_LABEL_LEN, MAX_STATUS_LEN,
 };
 use crate::{ids, msg, HEADER_LEN, MAX_PAYLOAD_LEN, PROTOCOL_VERSION, REPORT_LEN};
 use crate::{CONSUMER_REPORT_ID, USAGE, USAGE_PAGE, VENDOR_REPORT_ID};
@@ -68,6 +68,8 @@ pub fn c_header() -> String {
 #define DETENT_ENCODER_MODE_MAPPED {mode_mapped}
 #define DETENT_KIND_BUTTON {kind_button}
 #define DETENT_KIND_ENCODER {kind_encoder}
+// v2: an encoder entry whose third byte is its push switch's control ID
+#define DETENT_KIND_ENCODER_WITH_PUSH {KIND_ENCODER_WITH_PUSH}
 #define DETENT_ACTION_DOWN {action_down}
 #define DETENT_ACTION_UP {action_up}
 #define DETENT_ACTION_LONG_PRESS {action_long}

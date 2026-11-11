@@ -45,14 +45,17 @@ fn hello() -> Hello {
             Control {
                 id: 1,
                 kind: ControlKind::Button,
+                push: None,
             },
             Control {
                 id: 2,
                 kind: ControlKind::Button,
+                push: None,
             },
             Control {
                 id: 5,
                 kind: ControlKind::Encoder,
+                push: None,
             },
         ],
     }
@@ -175,6 +178,7 @@ fn candidates_are_found_described_and_picked() {
             serial: OTHER.into(),
             model: Some("Dev".into()),
             firmware: Some("0.1.2".into()),
+            outdated: false,
             buttons: 2,
             encoders: 1,
             picked: false,
@@ -433,10 +437,7 @@ use detent_lib::store::{Action, Mapping, Scope, Trigger};
 
 /// The Detent Dev layout: buttons 1 to 4, the encoder 5, its push switch 6.
 fn dev_hello(mode: EncoderMode) -> Hello {
-    let button = |id| Control {
-        id,
-        kind: ControlKind::Button,
-    };
+    let button = Control::button;
     Hello {
         encoder_mode: mode,
         controls: vec![
@@ -445,10 +446,7 @@ fn dev_hello(mode: EncoderMode) -> Hello {
             button(3),
             button(4),
             button(6),
-            Control {
-                id: 5,
-                kind: ControlKind::Encoder,
-            },
+            Control::encoder(5, Some(6)),
         ],
         ..hello()
     }
@@ -646,8 +644,8 @@ fn mappings_and_controls_cross_to_the_window_as_the_ui_expects() {
     assert_eq!(
         json,
         serde_json::json!({
-            "id": 1, "type": "button", "label": "Button 1", "handled_by_device": false,
-            "triggers": ["press", "long_press"]
+            "id": 1, "type": "button", "label": "Button 1", "push_of": null,
+            "handled_by_device": false, "triggers": ["press", "long_press"]
         })
     );
 }
@@ -1073,14 +1071,50 @@ fn any_connected_follows_the_paired_units() {
     );
 }
 
+// Protocol v2 (D-094): the push switch comes from HELLO, not the USB IDs.
+
 #[test]
-fn a_picos_encoder_push_is_known_from_its_model() {
-    use detent_protocol::ids::{PICO_PID, PICO_VID};
-    let controls = app_state::controls_of(PICO_VID, PICO_PID, &dev_hello(EncoderMode::Volume));
-    let push = controls.iter().find(|c| c.id == 6).unwrap();
-    assert_eq!(push.label, "Encoder push");
-    assert!(push.handled_by_device);
-    // An unknown model: no push switch is assumed, so 6 is a plain button.
-    let other = app_state::controls_of(0x1209, 0x0002, &dev_hello(EncoderMode::Volume));
-    assert_eq!(other.iter().find(|c| c.id == 6).unwrap().label, "Button 6");
+fn encoder_push_switches_come_from_hello_for_any_board() {
+    // An unknown model with two encoders, each with its own push switch.
+    let hello = Hello {
+        encoder_mode: EncoderMode::Volume,
+        controls: vec![
+            Control::button(1),
+            Control::encoder(2, Some(3)),
+            Control::button(3),
+            Control::encoder(4, Some(9)),
+            Control::button(9),
+            Control::encoder(5, None),
+        ],
+        ..hello()
+    };
+    let controls = app_state::controls_of(&hello);
+    let label = |id: u8| {
+        let c = controls.iter().find(|c| c.id == id).unwrap();
+        (c.label.as_str(), c.handled_by_device)
+    };
+    assert_eq!(label(1), ("Button 1", false));
+    assert_eq!(label(3), ("Encoder 2 push", true));
+    assert_eq!(label(9), ("Encoder 4 push", true));
+    assert!(
+        label(5).1,
+        "an encoder without a push is still the device's"
+    );
+}
+
+#[test]
+fn an_outdated_unit_says_so_until_it_reconnects() {
+    let mut s = AppState::new(&config());
+    s.apply(&connected(PAIRED));
+    assert!(s.apply(&dev(DeviceEvent::Outdated {
+        id: id(PAIRED),
+        version: 1
+    })));
+    assert!(s.paired[0].outdated);
+    s.apply(&dev(DeviceEvent::Disconnected {
+        id: id(PAIRED),
+        why: Lost::HeartbeatTimeout,
+    }));
+    s.apply(&connected(PAIRED));
+    assert!(!s.paired[0].outdated);
 }

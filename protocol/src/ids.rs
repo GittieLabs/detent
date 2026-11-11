@@ -17,15 +17,13 @@ pub const PICO_VID: u16 = 0x1209;
 pub const PICO_PID: u16 = 0x0001;
 
 /// A Detent model: a board build with its own USB IDs (M7). The PID names
-/// the model (D-004); what HELLO doesn't say about it lives here (D-081).
+/// the model (D-004). Its controls come from HELLO (D-094), not from here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Model {
     pub vid: u16,
     pub pid: u16,
     /// The `<model name>` in the product string `Detent <model name>`.
     pub name: &'static str,
-    /// The control ID of the encoder's push switch, if it has one.
-    pub encoder_push: Option<u8>,
 }
 
 /// Every model Detent knows. The DevKitC build shares the XIAO's IDs for now
@@ -35,13 +33,11 @@ pub const MODELS: &[Model] = &[
         vid: VID,
         pid: PID,
         name: "Dev",
-        encoder_push: Some(6),
     },
     Model {
         vid: PICO_VID,
         pid: PICO_PID,
         name: "Pico",
-        encoder_push: Some(6),
     },
 ];
 

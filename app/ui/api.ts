@@ -8,7 +8,8 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 export interface ControlView {
   id: number;
   type: "button" | "encoder";
-  label: string; // "Button 1", "Encoder", "Encoder push"
+  label: string; // "Button 1", "Encoder", "Encoder push"; with 2+ encoders "Encoder 5", "Encoder 5 push"
+  push_of: number | null; // for an encoder's push switch, the encoder's ID (from HELLO, D-094)
   handled_by_device: boolean;
   triggers: Trigger[]; // what it can fire, in the editor's order
 }
@@ -33,6 +34,7 @@ export interface PairedUnit {
   connected: boolean;
   model: string | null;
   firmware: string | null;
+  outdated: boolean; // its firmware speaks an older protocol; update it (D-094)
   buttons: number;
   encoders: number;
   controls: ControlView[]; // empty until its HELLO this session
@@ -57,6 +59,7 @@ export interface Candidate {
   serial: string;
   model: string | null;
   firmware: string | null;
+  outdated: boolean; // see PairedUnit.outdated
   buttons: number;
   encoders: number;
   picked: boolean;

@@ -14,7 +14,7 @@ pub mod msg;
 pub mod vectors;
 
 /// Wire format version, byte 0 of every report. Receivers drop any other value.
-pub const PROTOCOL_VERSION: u8 = 1;
+pub const PROTOCOL_VERSION: u8 = 2;
 
 /// Every vendor report is exactly this many bytes after the report ID, in
 /// both directions. The 64 byte endpoint minus the report ID (D-036).

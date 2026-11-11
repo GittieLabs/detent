@@ -27,6 +27,7 @@ function title(model: string | null): string {
 
 function describe(c: Candidate): string {
   const parts: string[] = [];
+  if (c.outdated) return "Firmware too old for this Detent: update it before pairing";
   if (c.firmware) parts.push(`firmware ${c.firmware}`);
   if (c.buttons || c.encoders) {
     parts.push(

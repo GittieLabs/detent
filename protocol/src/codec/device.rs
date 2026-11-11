@@ -1,11 +1,17 @@
 //! Device to app messages: HELLO, BUTTON, ENCODER, MENU_SELECT, HEARTBEAT.
 
 use super::{build_report, expect_size, parse_header, DecodeError, EncodeError, Frame};
-use crate::{msg, REPORT_LEN};
+use crate::{msg, MAX_PAYLOAD_LEN, REPORT_LEN};
 
 /// Most controls a HELLO can list: 5 fixed bytes plus 2 per control must fit
-/// in the 59 byte payload.
+/// in the 59 byte payload. Each encoder with a push switch takes one byte
+/// more, so a HELLO with such encoders fits fewer.
 pub const MAX_CONTROLS: usize = 27;
+
+/// The `kind` byte of an encoder whose entry carries its push switch's
+/// control ID as a third byte (v2, D-094). Decodes to [`ControlKind::Encoder`]
+/// with `push` set.
+pub const KIND_ENCODER_WITH_PUSH: u8 = 3;
 
 /// Fixed part of HELLO before the control list.
 const HELLO_FIXED: usize = 5;
@@ -74,6 +80,28 @@ pub struct FirmwareVersion {
 pub struct Control {
     pub id: u8,
     pub kind: ControlKind,
+    /// An encoder's push switch: the ID of a button in the same HELLO, which
+    /// the encoder mode routes with the encoder (D-094). `None` for buttons
+    /// and for encoders without one.
+    pub push: Option<u8>,
+}
+
+impl Control {
+    pub fn button(id: u8) -> Self {
+        Self {
+            id,
+            kind: ControlKind::Button,
+            push: None,
+        }
+    }
+
+    pub fn encoder(id: u8, push: Option<u8>) -> Self {
+        Self {
+            id,
+            kind: ControlKind::Encoder,
+            push,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -167,27 +195,49 @@ fn decode_hello(p: &[u8]) -> Result<Hello, DecodeError> {
     if usize::from(count) > MAX_CONTROLS {
         return Err(DecodeError::TooManyControls { count });
     }
-    expect_size(t, p, HELLO_FIXED + 2 * usize::from(count))?;
     let encoder_mode = EncoderMode::from_byte(p[3]).ok_or(DecodeError::InvalidField {
         msg_type: t,
         field: "encoder_mode",
         value: p[3],
     })?;
 
+    // Entries are 2 bytes, or 3 for an encoder with its push switch.
     let mut seen = [false; 256];
     let mut controls = Vec::with_capacity(usize::from(count));
-    // Size checked above, so there is no remainder.
-    let (pairs, _) = p[HELLO_FIXED..].as_chunks::<2>();
-    for &[id, kind] in pairs {
-        let kind = ControlKind::from_byte(kind).ok_or(DecodeError::InvalidField {
+    let mut at = HELLO_FIXED;
+    for _ in 0..count {
+        let short = |need: usize| DecodeError::PayloadSize {
             msg_type: t,
-            field: "kind",
-            value: kind,
-        })?;
+            expected: need,
+            got: p.len(),
+        };
+        let &[id, kind] = p.get(at..at + 2).ok_or(short(at + 2))? else {
+            unreachable!("a 2 byte slice");
+        };
+        let (kind, push) = match kind {
+            KIND_ENCODER_WITH_PUSH => {
+                let push = *p.get(at + 2).ok_or(short(at + 3))?;
+                at += 3;
+                (ControlKind::Encoder, Some(push))
+            }
+            k => {
+                at += 2;
+                let kind = ControlKind::from_byte(k).ok_or(DecodeError::InvalidField {
+                    msg_type: t,
+                    field: "kind",
+                    value: k,
+                })?;
+                (kind, None)
+            }
+        };
         if std::mem::replace(&mut seen[usize::from(id)], true) {
             return Err(DecodeError::DuplicateControl { id });
         }
-        controls.push(Control { id, kind });
+        controls.push(Control { id, kind, push });
+    }
+    expect_size(t, p, at)?;
+    if let Some((encoder, push)) = bad_push(&controls) {
+        return Err(DecodeError::BadPush { encoder, push });
     }
     Ok(Hello {
         firmware: FirmwareVersion {
@@ -200,6 +250,34 @@ fn decode_hello(p: &[u8]) -> Result<Hello, DecodeError> {
     })
 }
 
+/// The first encoder whose push switch isn't a button listed in the same
+/// HELLO, or is another encoder's too, or a button that claims a push.
+fn bad_push(controls: &[Control]) -> Option<(u8, u8)> {
+    let mut claimed = [false; 256];
+    for c in controls {
+        let Some(push) = c.push else { continue };
+        let is_button = controls
+            .iter()
+            .any(|b| b.id == push && b.kind == ControlKind::Button);
+        if c.kind != ControlKind::Encoder
+            || !is_button
+            || std::mem::replace(&mut claimed[usize::from(push)], true)
+        {
+            return Some((c.id, push));
+        }
+    }
+    None
+}
+
+/// HELLO's payload size for these controls.
+fn hello_len(controls: &[Control]) -> usize {
+    HELLO_FIXED
+        + controls
+            .iter()
+            .map(|c| if c.push.is_some() { 3 } else { 2 })
+            .sum::<usize>()
+}
+
 /// Encodes a device to app message. Refuses anything the decoder would reject.
 pub fn encode_device(seq: u8, m: &DeviceMessage) -> Result<[u8; REPORT_LEN], EncodeError> {
     let report = match m {
@@ -209,8 +287,15 @@ pub fn encode_device(seq: u8, m: &DeviceMessage) -> Result<[u8; REPORT_LEN], Enc
                     count: h.controls.len(),
                 });
             }
+            let len = hello_len(&h.controls);
+            if len > MAX_PAYLOAD_LEN {
+                return Err(EncodeError::HelloTooLong { len });
+            }
+            if let Some((encoder, push)) = bad_push(&h.controls) {
+                return Err(EncodeError::BadPush { encoder, push });
+            }
             let mut seen = [false; 256];
-            let mut p = Vec::with_capacity(HELLO_FIXED + 2 * h.controls.len());
+            let mut p = Vec::with_capacity(len);
             p.extend_from_slice(&[
                 h.firmware.major,
                 h.firmware.minor,
@@ -223,7 +308,10 @@ pub fn encode_device(seq: u8, m: &DeviceMessage) -> Result<[u8; REPORT_LEN], Enc
                 if std::mem::replace(&mut seen[usize::from(c.id)], true) {
                     return Err(EncodeError::DuplicateControl { id: c.id });
                 }
-                p.extend_from_slice(&[c.id, c.kind as u8]);
+                match c.push {
+                    Some(push) => p.extend_from_slice(&[c.id, KIND_ENCODER_WITH_PUSH, push]),
+                    None => p.extend_from_slice(&[c.id, c.kind as u8]),
+                }
             }
             build_report(msg::HELLO, seq, &p)
         }

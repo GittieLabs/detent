@@ -29,7 +29,7 @@ struct FakeTransport : detent::LinkTransport {
   const uint8_t* last() const { return sent[count - 1]; }
 };
 
-const Control kControls[] = {{1, DETENT_KIND_BUTTON}, {2, DETENT_KIND_BUTTON}, {9, DETENT_KIND_ENCODER}};
+const Control kControls[] = {{1, DETENT_KIND_BUTTON, 0}, {2, DETENT_KIND_BUTTON, 0}, {9, DETENT_KIND_ENCODER, 0}};
 const detent::LinkConfig kConfig = {0, 1, 2, kControls, 3};
 
 FakeTransport* tx;

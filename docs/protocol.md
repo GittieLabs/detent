@@ -1,8 +1,10 @@
 # Protocol
 
-`PROTOCOL_VERSION = 1`, **frozen** on 2026-11-07 at the end of M1.
+`PROTOCOL_VERSION = 2`, **frozen** on 2026-11-11 (D-094). v1 was frozen on 2026-11-07 at the end of M1; v2 differs only in byte 0 and HELLO's kind 3 (an encoder with its push switch).
 
-Any change to the wire format needs a version bump; `protocol/tests/frozen.rs` pins the exact v1 bytes of every message and fails otherwise. The Rust crate in `protocol/` is the source of truth; `scripts/gen-header.sh` generates `firmware/include/detent_protocol.h` from it, and a test fails if they drift.
+Any change to the wire format needs a version bump; `protocol/tests/frozen.rs` pins the exact v2 bytes of every message and fails otherwise.
+
+A report with an older version (1 up to `PROTOCOL_VERSION - 1`) means the unit runs older firmware. The app keeps it connected (those reports count as hearing from it), sends it nothing it can't read, and shows that its firmware needs updating. Any other wrong version is rejected as garbage. The Rust crate in `protocol/` is the source of truth; `scripts/gen-header.sh` generates `firmware/include/detent_protocol.h` from it, and a test fails if they drift.
 
 ## Transport
 
@@ -36,13 +38,13 @@ Offsets are within the 63 byte report, after the report ID. A report with `len >
 
 | Type | Name | Payload |
 | --- | --- | --- |
-| `0x01` | HELLO | `fw_major u8, fw_minor u8, fw_patch u8, encoder_mode u8, control_count u8`, then `control_count` pairs of `(control_id u8, kind u8)`. Kind: `1` button, `2` encoder. Max 27 controls; control IDs are unique. |
+| `0x01` | HELLO | `fw_major u8, fw_minor u8, fw_patch u8, encoder_mode u8, control_count u8`, then `control_count` entries: `(control_id u8, kind u8)`, or for kind `3` `(control_id u8, 3, push_id u8)`. Kind: `1` button, `2` encoder, `3` encoder whose push switch is the button `push_id`. A push switch must be a button listed in the same HELLO and belong to one encoder only. Max 27 controls, and the payload must fit 59 bytes (each kind `3` entry takes one byte more); control IDs are unique. |
 | `0x02` | BUTTON | `control_id u8, action u8`. Action: `1` down, `2` up, `3` long press (fires once at 600 ms held, before up). |
 | `0x03` | ENCODER | `control_id u8, delta i8`, never 0. Sent only in Mapped mode. Positive is clockwise. Device may coalesce detents within 20 ms. |
 | `0x04` | MENU_SELECT | `item_id u8`. An app owned OLED menu item was picked. |
 | `0x05` | HEARTBEAT | `uptime_s u32, encoder_mode u8`. Every 2 s while the host has the device mounted, measured from the previous one. `uptime_s` is seconds since boot and restarts at 0 after about 49.7 days (the device's 32 bit millisecond clock). |
 
-Encoder mode values: `0` Volume, `1` Menu, `2` Mapped. In Volume and Menu modes the device handles the encoder and its push switch itself; only Mapped mode sends them to the app (the push switch as a BUTTON).
+Encoder mode values: `0` Volume, `1` Menu, `2` Mapped. In Volume and Menu modes the device handles each encoder and its push switch itself; only Mapped mode sends them to the app (the push switch as a BUTTON). The app knows which button is a push switch only from HELLO, never from the USB IDs (D-094).
 
 Device sends HELLO when the host mounts it, on REQUEST_HELLO, and after leaving Setup. The mount HELLO usually goes out before any app has the channel open, so hosts send REQUEST_HELLO after opening. Seq numbers advance even when a send fails, so gaps are visible. Paired (from HELLO_ACK) resets when the host unmounts the device.
 
