@@ -2,7 +2,7 @@
 
 Changes every session. This is the only place progress is tracked.
 
-**Current milestone: M7 Hardening and v0.1** (not yet planned: run `/plan-milestone`)
+**Current milestone: M7 More boards** (not yet planned: run `/plan-milestone`)
 
 Milestones are ordered by risk: macOS signing and permissions, then the USB protocol, are proven before any UI exists. The engine runs headless before it gets a window. The next milestone starts only when every exit criterion of the current one passes on a signed build.
 
@@ -179,7 +179,26 @@ Exit criteria:
 - [x] One button shows the app's dashboard full screen on the secondary display (signed build, `acceptance.md` M6 step 4). Passed 2026-11-10; the page is a configurable URL (D-088).
 - [x] Unplugging that display doesn't crash or strand the window (signed build, `acceptance.md` M6 step 5). Passed 2026-11-10.
 
-## M7 Hardening and v0.1
+## M7 More boards
+
+Keith, 2026-11-10 (D-091): run Detent on an ESP32-S3 DevKitC class board (more GPIO, same chip and flashing; Keith's is a clone, details read from the chip) and on the Raspberry Pi Pico (RP2040), before v0.1. The portable logic in `firmware/lib/` stays shared; each board gets its own pin map, PlatformIO env, and USB glue where the chip differs (the Pico: TinyUSB on the Arduino-Pico core, its serial from the flash chip's unique ID). The app accepts each board's USB IDs and keeps per model knowledge in `models` (D-081).
+
+Exit criteria:
+
+- A DevKitC board and a Pico each pair through the wizard, report their controls in HELLO, and run mappings, the device menu and the status line, on a signed build.
+- The XIAO keeps working unchanged.
+
+## M8 Teensy 4.x
+
+Port to Keith's Teensy 4.x after M7: PJRC's own USB stack (not TinyUSB) needs its descriptors customized for the vendor HID and Consumer Control collections, and it uses PJRC's shared USB IDs.
+
+Exit criteria:
+
+- A Teensy 4.x pairs and runs mappings on a signed build, with the other boards unchanged.
+
+## M9 Hardening and v0.1
+
+Was M7: earlier roadmap notes, acceptance results and decision rows that say "M7" for hardening mean this milestone.
 
 Debug mode and log export, crash recovery, config migration tests, notarized release build.
 
@@ -203,9 +222,13 @@ Multiple connected devices, Bluetooth transport, then Windows.
 
 Recorded for a later update (Keith, 2026-11-10; not in v1):
 
+- [ ] Firmware updates from the app: the Devices screen offers "Update firmware" when a newer signed release fits the board (version from HELLO), puts the board in its bootloader (the 1200 baud touch on the ESP32-S3; the Pico's drag and drop bootloader), and writes it (the `espflash` crate for the ESP32-S3), checking the image's signature first. Release images on GitHub Releases. A failed write leaves the ESP32-S3's ROM bootloader intact, so it's retryable.
+
 - [ ] Chords: a mapping triggered by a control while another button is held (Button 1 held + encoder turn to zoom, Button 2 held + turn to rotate in Plasticity; button + button too). App side only: in Mapped mode the device already reports every down, up and turn. A button used as a chord modifier fires its own press on release, and only if no chord happened (tap vs hold); other buttons keep firing on down. Needs a decisions row relaxing product.md's "no layers" rule for chords. Knob chords need Mapped mode unless the firmware learns to forward turns while a button is held. Check what Plasticity binds for pan, zoom and orbit first: if they're mouse only, a scroll or drag action type would be needed (its own decisions row).
 
 ## Open questions (Keith's call)
+
+- [ ] USB IDs for the Raspberry Pi Pico build: Espressif's PIDs (D-014) cover Espressif chips only. Raspberry Pi assigns free PIDs under its VID (`0x2E8A`); Keith files the request. Until then the Pico uses a PLACEHOLDER pair, marked in `protocol/src/ids.rs` and the firmware.
 
 - [x] GitHub and trademark check on "Detent" before the repo goes public. Keith made the repo public on 2026-11-04 without the check; rename the app and repo later if the name doesn't hold up (D-032).
 - [ ] Bundle identifier: `com.gittielabs.detent` or another domain.
