@@ -34,9 +34,21 @@ const RECONNECT_POLL: Duration = Duration::from_millis(250);
 /// Read timeout, which is also how often the HELLO counter's clock ticks.
 const READ_TIMEOUT_MS: i32 = 100;
 
+/// The USB IDs to look for: the XIAO's, or `DETENT_PROBE_IDS=VID:PID` (hex)
+/// for another board until the models table lands (M7).
+fn target_ids() -> (u16, u16) {
+    let parsed = std::env::var("DETENT_PROBE_IDS").ok().and_then(|v| {
+        let (vid, pid) = v.split_once(':')?;
+        let hex = |s: &str| u16::from_str_radix(s.trim().trim_start_matches("0x"), 16).ok();
+        Some((hex(vid)?, hex(pid)?))
+    });
+    parsed.unwrap_or((ids::VID, ids::PID))
+}
+
 fn is_vendor_channel(d: &DeviceInfo) -> bool {
-    d.vendor_id() == ids::VID
-        && d.product_id() == ids::PID
+    let (vid, pid) = target_ids();
+    d.vendor_id() == vid
+        && d.product_id() == pid
         && d.usage_page() == USAGE_PAGE
         && d.usage() == USAGE
 }
@@ -54,7 +66,8 @@ fn find_channel(api: &mut HidApi) -> Option<(CString, String)> {
 
 fn list(api: &HidApi) {
     let mut found = 0;
-    for d in api.device_list().filter(|d| d.vendor_id() == ids::VID) {
+    let (vid, _) = target_ids();
+    for d in api.device_list().filter(|d| d.vendor_id() == vid) {
         found += 1;
         println!(
             "vid=0x{:04X} pid=0x{:04X} usage_page=0x{:04X} usage=0x{:02X} interface={} serial={} product={}",
@@ -68,7 +81,7 @@ fn list(api: &HidApi) {
         );
     }
     if found == 0 {
-        println!("no HID devices with vid=0x{:04X}", ids::VID);
+        println!("no HID devices with vid=0x{vid:04X}");
     }
 }
 

@@ -232,4 +232,8 @@ Needs a signed build (`just build-dev`) and each board flashed with its release 
 3. The XIAO, unchanged. Plug the XIAO back in: it connects as before with its mappings, device menu and status line, and `scripts/hil.sh` passes on it.
 
 Results:
+- Early check of task 1, 2026-11-11, the Pico USB spike (`pico_spike`, flashed with Keith's OK from BOOTSEL), Keith's Raspberry Pi Pico with no headers:
+  - `ioreg`: VID `0x1209`, PID `0x0001`, manufacturer GittieLabs, product Detent Dev, serial `E6654854571A6E2F`. `ctl-probe list` shows the vendor collection (0xFF00/0x01) and Consumer Control (0x000C) on interface 2, as on the XIAO.
+  - `ctl-probe` with `DETENT_PROBE_IDS=1209:0001`: HELLO (fw 0.1.0, one button) right after connecting, then 45 heartbeats in 90 s; six BOOTSEL presses as `BUTTON 1 down` and `up` in order. Keith saw the Mac's volume rise with each press (Consumer Control).
+  - Step 2 (the full Pico) waits on soldered headers.
 
