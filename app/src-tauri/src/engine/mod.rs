@@ -24,7 +24,7 @@ use crate::router::{trigger_of, Router};
 use crate::store::{Action, Config, MenuItem, Trigger};
 use crate::transport::Bus;
 
-pub use log::{default_path as default_log_path, FileLog};
+pub use log::{default_path as default_log_path, previous_path as previous_log_path, FileLog};
 
 /// Something that happened, in order.
 #[derive(Debug, Clone, PartialEq)]

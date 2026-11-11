@@ -201,6 +201,9 @@ const DEBUG_EVENT = "debug";
 
 export const setDebug = (on: boolean) => invoke<AppState>("set_debug", { on });
 export const getDebugLog = () => invoke<DebugEntry[]>("get_debug_log");
+/** Zips the logs, redacted config and app facts to the Desktop and shows it
+ * in Finder (D-100); answers the zip's path. */
+export const exportLogs = () => invoke<string>("export_logs");
 
 export function onDebug(handler: (entry: DebugEntry) => void): Promise<UnlistenFn> {
   return listen<DebugEntry>(DEBUG_EVENT, (event) => handler(event.payload));

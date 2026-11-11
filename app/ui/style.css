@@ -976,6 +976,12 @@ main#app > .tabs {
 
 .debug h2 {
   flex: none;
+  margin: 0;
+}
+
+.debug-bar {
+  flex: none;
+  margin: 4px 0 8px;
 }
 
 .debug-panels {

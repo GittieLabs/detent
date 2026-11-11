@@ -7,6 +7,7 @@ pub mod apps;
 pub mod devices;
 pub mod displays;
 pub mod engine;
+pub mod export;
 pub mod keys;
 #[cfg(target_os = "macos")]
 pub mod macos;

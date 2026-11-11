@@ -205,6 +205,53 @@ pub fn get_debug_log(shared: State<'_, Shared>) -> Vec<detent_lib::app_state::De
         .entries()
 }
 
+/// Export logs (Debug, M9, D-100): writes `Detent logs <date>.zip` to the
+/// Desktop with the logs, the redacted config and app facts, shows it in
+/// Finder, and answers its path. Async: zipping runs off the main thread.
+#[tauri::command]
+pub async fn export_logs(shared: State<'_, Shared>) -> Result<String, String> {
+    use detent_lib::engine::previous_log_path;
+    let run = |cmd: &str, args: &[&str]| {
+        std::process::Command::new(cmd)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
+    };
+    let home = std::env::var_os("HOME").ok_or("no home folder")?;
+    let desktop = std::path::PathBuf::from(home).join("Desktop");
+    let stamp = run("/bin/date", &["+%Y-%m-%d %H.%M.%S"]).unwrap_or_else(|| "now".into());
+    let macos = match (
+        run("/usr/bin/sw_vers", &["-productVersion"]),
+        run("/usr/bin/sw_vers", &["-buildVersion"]),
+    ) {
+        (Some(v), Some(b)) => format!("macOS {v} ({b})"),
+        (Some(v), None) => format!("macOS {v}"),
+        _ => "macOS (version unknown)".into(),
+    };
+    let logs: Vec<std::path::PathBuf> = shared
+        .log
+        .as_ref()
+        .map(|l| vec![previous_log_path(l.path()), l.path().to_owned()])
+        .unwrap_or_default();
+    let config = shared.writable.load(Ordering::Relaxed).then(|| {
+        shared
+            .config
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    });
+    let info = detent_lib::export::info(env!("CARGO_PKG_VERSION"), &macos, &snapshot(&shared));
+    let zip = detent_lib::export::export(&desktop, &stamp, &logs, config.as_ref(), &info)?;
+    shared.say(&format!("exported logs to {}", zip.display()));
+    let _ = std::process::Command::new("/usr/bin/open")
+        .arg("-R")
+        .arg(&zip)
+        .status();
+    Ok(zip.display().to_string())
+}
+
 /// Names of the connected displays, main first, for Open dashboard's
 /// display picker. Sync, so it runs on the main thread like other window
 /// work.
@@ -351,4 +398,5 @@ pub const ALL: &[&str] = &[
     "start_fresh",
     "set_debug",
     "get_debug_log",
+    "export_logs",
 ];

@@ -355,11 +355,38 @@ fn the_log_file_appends_and_starts_over_past_1_mb() {
     assert_eq!(text.lines().count(), 2, "{text}");
     assert!(text.lines().last().unwrap().ends_with(" second"));
 
+    // Past 1 MB at launch, the old file is kept as detent.log.1.
     std::fs::write(&path, vec![b'x'; 1024 * 1024 + 1]).unwrap();
     FileLog::open(&path).unwrap().line("fresh");
     let text = std::fs::read_to_string(&path).unwrap();
     assert_eq!(text.lines().count(), 1);
     assert!(text.ends_with(" fresh\n"));
+    let previous = dir.join("nested/detent.log.1");
+    assert_eq!(std::fs::metadata(&previous).unwrap().len(), 1024 * 1024 + 1);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_long_session_rotates_the_log_keeping_one_previous_file() {
+    use detent_lib::engine::FileLog;
+    let dir = std::env::temp_dir().join(format!("detent-log-rotate-{}", std::process::id()));
+    let path = dir.join("detent.log");
+    let _ = std::fs::remove_dir_all(&dir);
+    let log = FileLog::with_limit(&path, 200).unwrap();
+    for i in 0..30 {
+        log.line(&format!("line {i:02} with some padding"));
+    }
+    let now = std::fs::read_to_string(&path).unwrap();
+    let previous = std::fs::read_to_string(dir.join("detent.log.1")).unwrap();
+    assert!(
+        now.len() <= 200 + 64,
+        "current stays near the limit: {}",
+        now.len()
+    );
+    assert!(now.contains("line 29"), "{now}");
+    assert!(!previous.contains("line 29"));
+    assert!(previous.len() > 100, "{previous}");
+    assert!(!dir.join("detent.log.2").exists(), "only one previous file");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

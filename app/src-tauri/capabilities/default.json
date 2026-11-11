@@ -29,6 +29,7 @@
     "allow-list-displays",
     "allow-start-fresh",
     "allow-set-debug",
-    "allow-get-debug-log"
+    "allow-get-debug-log",
+    "allow-export-logs"
   ]
 }

@@ -26,6 +26,7 @@ fn main() {
         "start_fresh",
         "set_debug",
         "get_debug_log",
+        "export_logs",
     ];
     tauri_build::try_build(
         tauri_build::Attributes::new()

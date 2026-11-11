@@ -68,6 +68,7 @@ fn main() {
             commands::start_fresh,
             commands::set_debug,
             commands::get_debug_log,
+            commands::export_logs,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build the Detent app");

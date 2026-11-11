@@ -10,7 +10,7 @@ import * as api from "./api";
 import { type AppName, actionText, idName, namesFrom, triggerText } from "./describe";
 import { accessibilityBanner } from "./banners";
 import { drawUnit, pickUnit, unitPicker } from "./drawing";
-import { el, keepingScroll } from "./dom";
+import { button, el, keepingScroll } from "./dom";
 
 export interface TestScreen {
   show(state: AppState): void;
@@ -165,7 +165,25 @@ export function testScreen(root: HTMLElement, chosen: { serial: string | null })
     return el(
       "section",
       { class: "debug" },
-      el("h2", {}, `Debug · ${debugLog.length} of the last ${api.DEBUG_KEEP} events`),
+      el(
+        "header",
+        { class: "bar debug-bar" },
+        el("h2", {}, `Debug · ${debugLog.length} of the last ${api.DEBUG_KEEP} events`),
+        button("Export logs", () => {
+          note = "Exporting logs…";
+          rerender();
+          api
+            .exportLogs()
+            .then((path) => {
+              note = `Logs exported to ${path}, with names, scripts and URLs taken out.`;
+              rerender();
+            })
+            .catch((err) => {
+              note = `Couldn't export logs: ${api.message(err)}`;
+              rerender();
+            });
+        }),
+      ),
       el("div", { class: "debug-panels" }, helloPanel(unit), permissionsPanel(state)),
       debugLog.length
         ? el(
