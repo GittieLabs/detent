@@ -14,13 +14,13 @@ bool ModeRouter::set_mode(uint8_t mode) {
   return true;
 }
 
-void ModeRouter::on_turn(int8_t delta) {
+void ModeRouter::on_turn(uint8_t control, int8_t delta) {
   switch (mode_) {
     case DETENT_ENCODER_MODE_VOLUME:
       sink_.volume_steps(delta);
       break;
     case DETENT_ENCODER_MODE_MAPPED:
-      sink_.encoder(encoder_, delta);
+      sink_.encoder(control, delta);
       break;
     case DETENT_ENCODER_MODE_MENU:
       sink_.menu_scroll(delta);
@@ -30,28 +30,29 @@ void ModeRouter::on_turn(int8_t delta) {
   }
 }
 
-void ModeRouter::on_push(ButtonEvent e) {
+void ModeRouter::on_push(uint8_t control, ButtonEvent e) {
+  Press& p = presses_[control];
   switch (e) {
     case ButtonEvent::Down:
-      pressing_ = true;
-      long_ = false;
-      press_mode_ = mode_;
-      if (press_mode_ == DETENT_ENCODER_MODE_MAPPED) sink_.button(push_, DETENT_ACTION_DOWN);
+      p.pressing = true;
+      p.long_press = false;
+      p.mode = mode_;
+      if (p.mode == DETENT_ENCODER_MODE_MAPPED) sink_.button(control, DETENT_ACTION_DOWN);
       break;
     case ButtonEvent::LongPress:
-      if (!pressing_) break;
-      long_ = true;
-      set_mode(press_mode_ == DETENT_ENCODER_MODE_MENU ? before_menu_ : DETENT_ENCODER_MODE_MENU);
+      if (!p.pressing) break;
+      p.long_press = true;
+      set_mode(p.mode == DETENT_ENCODER_MODE_MENU ? before_menu_ : DETENT_ENCODER_MODE_MENU);
       break;
     case ButtonEvent::Up:
-      if (!pressing_) break;
-      pressing_ = false;
-      if (press_mode_ == DETENT_ENCODER_MODE_MAPPED) {
+      if (!p.pressing) break;
+      p.pressing = false;
+      if (p.mode == DETENT_ENCODER_MODE_MAPPED) {
         // Always pair the Down the app saw, even after a long press.
-        sink_.button(push_, DETENT_ACTION_UP);
-      } else if (!long_ && press_mode_ == DETENT_ENCODER_MODE_VOLUME) {
+        sink_.button(control, DETENT_ACTION_UP);
+      } else if (!p.long_press && p.mode == DETENT_ENCODER_MODE_VOLUME) {
         sink_.mute_toggle();
-      } else if (!long_ && press_mode_ == DETENT_ENCODER_MODE_MENU) {
+      } else if (!p.long_press && p.mode == DETENT_ENCODER_MODE_MENU) {
         sink_.menu_select();
       }
       break;

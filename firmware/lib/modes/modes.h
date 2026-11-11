@@ -1,13 +1,14 @@
-// Encoder modes: what turns and the encoder's push switch do. Owned by the
+// Encoder modes: what turns and the encoders' push switches do. Owned by the
 // firmware; reported in HELLO and HEARTBEAT (docs/protocol.md). Pure C++11,
-// tested natively (D-035).
+// tested natively (D-035). There is one mode, and every encoder and push
+// switch follows it (D-096); a board may have none, one, or several.
 //
 //   Volume  turns step the volume (Consumer Control); a short press toggles
 //           mute. Works with no app running. The boot mode.
 //   Mapped  turns go to the app as ENCODER; the push switch as BUTTON.
 //   Menu    turns scroll the OLED menu; a short press selects.
 //
-// A long press of the push switch opens the menu from any mode and closes it
+// A long press of any push switch opens the menu from any mode and closes it
 // again, back to the mode it came from (D-048). Each press acts in the mode it
 // started in, so the release that ends a long press never mutes or selects.
 
@@ -34,11 +35,12 @@ struct ModeSink {
 
 class ModeRouter {
  public:
-  ModeRouter(uint8_t encoder_control, uint8_t push_control, ModeSink& sink)
-      : encoder_(encoder_control), push_(push_control), sink_(sink) {}
+  explicit ModeRouter(ModeSink& sink) : sink_(sink) {}
 
-  void on_turn(int8_t delta);
-  void on_push(ButtonEvent e);
+  // A turn of encoder `control`.
+  void on_turn(uint8_t control, int8_t delta);
+  // An event of push switch `control` (a button that is an encoder's push).
+  void on_push(uint8_t control, ButtonEvent e);
 
   // Returns false, changing nothing, for an undefined mode.
   bool set_mode(uint8_t mode);
@@ -50,14 +52,18 @@ class ModeRouter {
   uint8_t mode() const { return mode_; }
 
  private:
-  uint8_t encoder_;
-  uint8_t push_;
+  // One press in progress per push switch, by control ID, so two held at
+  // once each pair their own Down and Up.
+  struct Press {
+    bool pressing = false;
+    bool long_press = false;
+    uint8_t mode = DETENT_ENCODER_MODE_VOLUME;
+  };
+
   ModeSink& sink_;
   uint8_t mode_ = DETENT_ENCODER_MODE_VOLUME;
   uint8_t before_menu_ = DETENT_ENCODER_MODE_VOLUME;
-  bool pressing_ = false;
-  bool long_ = false;
-  uint8_t press_mode_ = DETENT_ENCODER_MODE_VOLUME;
+  Press presses_[256];
 };
 
 }  // namespace detent

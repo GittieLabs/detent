@@ -9,20 +9,17 @@
 namespace detent {
 namespace board {
 
-const uint8_t kEncoderPushControl = 6;
-
-const ButtonPin kButtons[] = {
+constexpr ButtonPin kButtons[] = {
     {1, 10},
     {2, 11},
     {3, 12},
     {4, 13},
-    {kEncoderPushControl, 14},
+    {6, 14},  // the encoder's push switch
 };
-const uint8_t kButtonCount = sizeof kButtons / sizeof kButtons[0];
+constexpr uint8_t kButtonCount = sizeof kButtons / sizeof kButtons[0];
 
-const uint8_t kEncoderControl = 5;
-const uint8_t kEncoderA = 15;
-const uint8_t kEncoderB = 16;
+constexpr EncoderPins kEncoders[] = {{5, 15, 16, 6}};
+constexpr uint8_t kEncoderCount = sizeof kEncoders / sizeof kEncoders[0];
 
 const uint8_t kOledSda = 4;  // GP4, I2C0 SDA
 const uint8_t kOledScl = 5;  // GP5, I2C0 SCL

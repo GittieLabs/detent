@@ -30,7 +30,7 @@ VID is Espressif's `0x303A`. The PID comes from Espressif's free usb-pids progra
 
 The USB serial number string is derived from the chip's MAC address, so two identical devices are distinguishable.
 
-**Controls.** `firmware/include/board_pins.h` is the one place that maps controls to pins, and HELLO reports exactly its table (a PLACEHOLDER until the wiring is settled). Buttons are polled and debounced in the main loop; the encoder is decoded from pin change interrupts so turns survive a blocked loop, and detents within 20 ms go out as one ENCODER delta. The encoder's push switch is its own button control, and HELLO names it as the encoder's push (protocol v2, D-094).
+**Controls.** Each board's header in `firmware/include/boards/` (chosen through `include/board_pins.h`) is the one place that maps controls to pins: its buttons, and any number of encoders (none, one, several), each with its A and B pins and an optional push switch that is one of its buttons (D-096). A layout HELLO couldn't report fails to compile. `lib/layout` turns the tables into HELLO's controls and answers which encoder owns a push switch. Buttons are polled and debounced in the main loop; encoders are decoded from pin change interrupts (one handler for all) so turns survive a blocked loop, and detents within 20 ms go out as one ENCODER delta. HELLO names each encoder's push switch (protocol v2, D-094).
 
 **Status LED** (the XIAO's user LED): off with no host, blinking once a second while mounted but not paired, solid once the app has sent HELLO_ACK paired.
 
@@ -59,7 +59,8 @@ Logic lives in pure C++11 libraries under `lib/` with caller supplied time and p
 - `lib/report`: pack device to app messages, strictly parse app to device ones; tested byte for byte against golden vectors generated from the Rust codec (D-039).
 - `lib/link_layer`: HELLO, HEARTBEAT, REQUEST_HELLO, HELLO_ACK, seq, pairing (D-042).
 - `lib/input`: button debounce and long press, quadrature decoding and detent coalescing (D-047).
-- `lib/modes`: what the encoder and its push switch do in Volume, Mapped, and Menu modes (D-048).
+- `lib/modes`: what the encoders and their push switches do in Volume, Mapped, and Menu modes (D-048); every encoder follows the one mode, and a long press of any push switch opens the menu (D-096).
+- `lib/layout`: a board's buttons and encoders, which encoder owns a push switch, and what HELLO lists.
 - `lib/menu`: OLED screens and the firmware owned menu, rendered as text lines (D-050).
 - `lib/injector`: TEST_INJECT replay, enabled only in the debug env (D-043).
 - `lib/usb_identity`: serial from the base MAC, product strings (D-040).

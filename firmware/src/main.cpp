@@ -11,6 +11,7 @@
 #include "display.h"
 #include "injector.h"
 #include "input.h"
+#include "layout.h"
 #include "link_layer.h"
 #include "menu.h"
 #include "modes.h"
@@ -50,10 +51,11 @@ namespace {
 
 namespace board = detent::board;
 
-// What HELLO reports: every button in the board header, then the encoder with
-// its push switch (protocol v2, D-094). Filled in setup(), before USB starts.
-const uint8_t kControlCount = board::kButtonCount + 1;
-detent::Control controls[kControlCount];
+// What HELLO reports: every button in the board header, then every encoder
+// with its push switch (protocol v2, D-094, D-096). Filled in setup(), before
+// USB starts.
+const uint8_t kControlCount = board::kButtonCount + board::kEncoderCount;
+detent::Control controls[kControlCount > 0 ? kControlCount : 1];
 
 uint8_t action_of(detent::ButtonEvent e) {
   switch (e) {
@@ -79,18 +81,24 @@ const detent::LinkConfig kLinkConfig = {
 
 detent::Button buttons[board::kButtonCount];
 
-// The encoder is decoded in a pin change interrupt so turns aren't lost while
-// loop() is blocked in a USB send; loop() polls coalesced deltas.
-detent::Encoder encoder;
+// Encoders are decoded in a pin change interrupt so turns aren't lost while
+// loop() is blocked in a USB send; loop() polls coalesced deltas. One handler
+// serves every encoder: it feeds each its levels, and one that didn't move
+// counts nothing.
+detent::Encoder encoders[board::kEncoderCount > 0 ? board::kEncoderCount : 1];
 detent::IrqLock encoder_lock;
 volatile uint32_t encoder_edges = 0;  // interrupts seen, for the input trace
 
 void DETENT_ISR on_encoder_edge() {
   encoder_edges = encoder_edges + 1;
-  const bool a = digitalRead(board::kEncoderA);
-  const bool b = digitalRead(board::kEncoderB);
+  bool a[board::kEncoderCount > 0 ? board::kEncoderCount : 1];
+  bool b[board::kEncoderCount > 0 ? board::kEncoderCount : 1];
+  for (uint8_t i = 0; i < board::kEncoderCount; i++) {
+    a[i] = digitalRead(board::kEncoders[i].a);
+    b[i] = digitalRead(board::kEncoders[i].b);
+  }
   encoder_lock.lock_isr();
-  encoder.on_edge(a, b);
+  for (uint8_t i = 0; i < board::kEncoderCount; i++) encoders[i].on_edge(a[i], b[i]);
   encoder_lock.unlock_isr();
 }
 
@@ -108,7 +116,7 @@ detent::Injector injector(DETENT_TEST_INJECT != 0);
 detent::Menu menu;
 void on_menu_select();  // defined after `modes`, which it changes
 
-// What the encoder and its push switch do, by mode.
+// What the encoders and their push switches do, by mode.
 struct FirmwareModeSink : detent::ModeSink {
   void volume_steps(int8_t delta) override {
     INPUT_LOG("route: volume %+d\n", delta);
@@ -135,7 +143,7 @@ struct FirmwareModeSink : detent::ModeSink {
 };
 
 FirmwareModeSink mode_sink;
-detent::ModeRouter modes(board::kEncoderControl, board::kEncoderPushControl, mode_sink);
+detent::ModeRouter modes(mode_sink);
 
 void on_menu_select() {
   uint8_t app_item = 0;
@@ -181,8 +189,8 @@ void refresh_display() {
 void on_button(uint8_t control, detent::ButtonEvent e) {
   INPUT_LOG("button %u: %s\n", control,
             e == detent::ButtonEvent::Down ? "down" : e == detent::ButtonEvent::Up ? "up" : "long");
-  if (control == board::kEncoderPushControl) {
-    modes.on_push(e);
+  if (detent::push_owner(board::kEncoders, board::kEncoderCount, control) >= 0) {
+    modes.on_push(control, e);
   } else {
     device_link.send_button(control, action_of(e));
   }
@@ -190,8 +198,8 @@ void on_button(uint8_t control, detent::ButtonEvent e) {
 
 void on_turn(uint8_t control, int8_t delta) {
   INPUT_LOG("turn %u: %+d (mode %u)\n", control, delta, modes.mode());
-  if (control == board::kEncoderControl) {
-    modes.on_turn(delta);
+  if (detent::encoder_index(board::kEncoders, board::kEncoderCount, control) >= 0) {
+    modes.on_turn(control, delta);
   } else {
     device_link.send_encoder(control, delta);
   }
@@ -235,17 +243,17 @@ void update_led(uint32_t now) {
 }
 
 void setup_controls() {
-  for (uint8_t i = 0; i < board::kButtonCount; i++) {
-    controls[i] = {board::kButtons[i].control, DETENT_KIND_BUTTON, 0};
-    pinMode(board::kButtons[i].gpio, INPUT_PULLUP);
+  detent::hello_controls(board::kButtons, board::kButtonCount, board::kEncoders,
+                         board::kEncoderCount, controls);
+  for (uint8_t i = 0; i < board::kButtonCount; i++) pinMode(board::kButtons[i].gpio, INPUT_PULLUP);
+  for (uint8_t i = 0; i < board::kEncoderCount; i++) {
+    const detent::EncoderPins& e = board::kEncoders[i];
+    pinMode(e.a, INPUT_PULLUP);
+    pinMode(e.b, INPUT_PULLUP);
+    encoders[i].reset(digitalRead(e.a), digitalRead(e.b));
+    attachInterrupt(digitalPinToInterrupt(e.a), on_encoder_edge, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(e.b), on_encoder_edge, CHANGE);
   }
-  controls[board::kButtonCount] = {board::kEncoderControl, DETENT_KIND_ENCODER_WITH_PUSH,
-                                   board::kEncoderPushControl};
-  pinMode(board::kEncoderA, INPUT_PULLUP);
-  pinMode(board::kEncoderB, INPUT_PULLUP);
-  encoder.reset(digitalRead(board::kEncoderA), digitalRead(board::kEncoderB));
-  attachInterrupt(digitalPinToInterrupt(board::kEncoderA), on_encoder_edge, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(board::kEncoderB), on_encoder_edge, CHANGE);
 }
 
 #if DETENT_INPUT_LOG
@@ -281,8 +289,10 @@ void trace_pins() {
   for (uint8_t i = 0; i < board::kButtonCount; i++) {
     levels = (levels << 1) | (digitalRead(board::kButtons[i].gpio) ? 1 : 0);
   }
-  levels = (levels << 1) | (digitalRead(board::kEncoderA) ? 1 : 0);
-  levels = (levels << 1) | (digitalRead(board::kEncoderB) ? 1 : 0);
+  for (uint8_t i = 0; i < board::kEncoderCount; i++) {
+    levels = (levels << 1) | (digitalRead(board::kEncoders[i].a) ? 1 : 0);
+    levels = (levels << 1) | (digitalRead(board::kEncoders[i].b) ? 1 : 0);
+  }
   levels |= spare_levels() << 16;
   const uint32_t edges = encoder_edges;
   static uint32_t last_print = 0;
@@ -292,12 +302,18 @@ void trace_pins() {
     last = levels;
     last_edges = edges;
     last_print = now;
-    detent::usb::log().printf("pins: buttons(1,2,3,4,6)=");
+    // Buttons in board order, then each encoder's A and B.
+    const int enc_bits = 2 * board::kEncoderCount;
+    detent::usb::log().printf("pins: buttons=");
     for (int i = board::kButtonCount - 1; i >= 0; i--) {
-      detent::usb::log().print(((levels >> (i + 2)) & 1) ? '1' : '0');
+      detent::usb::log().print(((levels >> (i + enc_bits)) & 1) ? '1' : '0');
     }
-    detent::usb::log().printf(" A=%d B=%d edges=%lu", (levels >> 1) & 1, levels & 1,
-                              static_cast<unsigned long>(edges));
+    for (int i = 0; i < board::kEncoderCount; i++) {
+      const int shift = enc_bits - 2 * i - 2;
+      detent::usb::log().printf(" enc%u A=%d B=%d", static_cast<unsigned>(board::kEncoders[i].control),
+                                (levels >> (shift + 1)) & 1, (levels >> shift) & 1);
+    }
+    detent::usb::log().printf(" edges=%lu", static_cast<unsigned long>(edges));
     // Pin finder: XIAO pins nothing uses (see kSpare), with pull ups, so a
     // wire on the wrong pin shows up by name.
     for (uint8_t i = 0; i < kSpareCount; i++) {
@@ -317,11 +333,13 @@ void poll_controls(uint32_t now) {
     const detent::ButtonEvent e = buttons[i].update(pressed, now);
     if (e != detent::ButtonEvent::None) on_button(board::kButtons[i].control, e);
   }
-  int8_t delta;
-  encoder_lock.lock();
-  const bool turned = encoder.poll(now, &delta);
-  encoder_lock.unlock();
-  if (turned) on_turn(board::kEncoderControl, delta);
+  for (uint8_t i = 0; i < board::kEncoderCount; i++) {
+    int8_t delta;
+    encoder_lock.lock();
+    const bool turned = encoders[i].poll(now, &delta);
+    encoder_lock.unlock();
+    if (turned) on_turn(board::kEncoders[i].control, delta);
+  }
 }
 
 void handle_report(const uint8_t* report, uint32_t now) {

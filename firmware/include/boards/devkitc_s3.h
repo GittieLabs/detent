@@ -4,8 +4,7 @@
 // PLACEHOLDER: Keith hasn't wired one yet (open question in docs/roadmap.md).
 // The pins below avoid the strapping pins (0, 3, 45, 46), the native USB pair
 // (19, 20, which Detent needs: use the board's port labelled USB, not UART),
-// and the flash and PSRAM pins (26 to 37). Control IDs match the XIAO's, so
-// the app's per model knowledge (D-081) holds.
+// and the flash and PSRAM pins (26 to 37). Control IDs match the XIAO's.
 
 #ifndef DETENT_BOARD_DEVKITC_S3_H
 #define DETENT_BOARD_DEVKITC_S3_H
@@ -13,20 +12,17 @@
 namespace detent {
 namespace board {
 
-const uint8_t kEncoderPushControl = 6;  // routed by the encoder mode (lib/modes)
-
-const ButtonPin kButtons[] = {
+constexpr ButtonPin kButtons[] = {
     {1, 4},
     {2, 5},
     {3, 6},
     {4, 7},
-    {kEncoderPushControl, 15},  // the encoder's push switch
+    {6, 15},  // the encoder's push switch
 };
-const uint8_t kButtonCount = sizeof kButtons / sizeof kButtons[0];
+constexpr uint8_t kButtonCount = sizeof kButtons / sizeof kButtons[0];
 
-const uint8_t kEncoderControl = 5;
-const uint8_t kEncoderA = 16;
-const uint8_t kEncoderB = 17;
+constexpr EncoderPins kEncoders[] = {{5, 16, 17, 6}};
+constexpr uint8_t kEncoderCount = sizeof kEncoders / sizeof kEncoders[0];
 
 // The S3's default I2C pins.
 const uint8_t kOledSda = 8;

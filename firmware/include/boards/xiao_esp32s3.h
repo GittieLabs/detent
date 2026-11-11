@@ -16,20 +16,18 @@ namespace board {
 
 // XIAO pin labels: D0=GPIO1 D1=GPIO2 D2=GPIO3 D3=GPIO4 D4=GPIO5 D5=GPIO6
 // D6=GPIO43 D7=GPIO44 D8=GPIO7 D9=GPIO8 D10=GPIO9.
-const uint8_t kEncoderPushControl = 6;  // routed by the encoder mode (lib/modes)
-
-const ButtonPin kButtons[] = {
-    {1, 1},                    // D0
-    {2, 2},                    // D1
-    {3, 3},                    // D2
-    {4, 4},                    // D3
-    {kEncoderPushControl, 9},  // D10, the encoder's push switch
+constexpr ButtonPin kButtons[] = {
+    {1, 1},  // D0
+    {2, 2},  // D1
+    {3, 3},  // D2
+    {4, 4},  // D3
+    {6, 9},  // D10, the encoder's push switch
 };
-const uint8_t kButtonCount = sizeof kButtons / sizeof kButtons[0];
+constexpr uint8_t kButtonCount = sizeof kButtons / sizeof kButtons[0];
 
-const uint8_t kEncoderControl = 5;
-const uint8_t kEncoderA = 7;  // D8
-const uint8_t kEncoderB = 8;  // D9
+// Encoder 5 on D8 (A) and D9 (B), its push switch button 6.
+constexpr EncoderPins kEncoders[] = {{5, 7, 8, 6}};
+constexpr uint8_t kEncoderCount = sizeof kEncoders / sizeof kEncoders[0];
 
 // 128x64 OLED on I2C, the XIAO's default SDA/SCL pins. Most modules answer at
 // 0x3C (some at 0x3D). Modules sold as "SSD1306" sometimes carry an SH1106; if
