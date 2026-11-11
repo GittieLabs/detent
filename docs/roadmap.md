@@ -201,6 +201,10 @@ Exit criteria:
 
 Multiple connected devices, Bluetooth transport, then Windows.
 
+Recorded for a later update (Keith, 2026-11-10; not in v1):
+
+- [ ] Chords: a mapping triggered by a control while another button is held (Button 1 held + encoder turn to zoom, Button 2 held + turn to rotate in Plasticity; button + button too). App side only: in Mapped mode the device already reports every down, up and turn. A button used as a chord modifier fires its own press on release, and only if no chord happened (tap vs hold); other buttons keep firing on down. Needs a decisions row relaxing product.md's "no layers" rule for chords. Knob chords need Mapped mode unless the firmware learns to forward turns while a button is held. Check what Plasticity binds for pan, zoom and orbit first: if they're mouse only, a scroll or drag action type would be needed (its own decisions row).
+
 ## Open questions (Keith's call)
 
 - [x] GitHub and trademark check on "Detent" before the repo goes public. Keith made the repo public on 2026-11-04 without the check; rename the app and repo later if the name doesn't hold up (D-032).
