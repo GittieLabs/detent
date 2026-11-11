@@ -9,17 +9,12 @@
 #include <string.h>
 
 #include "../usb_device.h"
+#include "detent_protocol.h"
 #include "usb_identity.h"
 
-// PLACEHOLDER (open question in docs/roadmap.md): Raspberry Pi assigns free
-// PIDs under its VID 0x2E8A on request. Until then pid.codes' testing pair,
-// which is reserved for exactly this and never ships.
-#ifndef DETENT_PICO_VID
-#define DETENT_PICO_VID 0x1209
-#endif
-#ifndef DETENT_PICO_PID
-#define DETENT_PICO_PID 0x0001
-#endif
+// DETENT_PICO_VID and _PID come from the protocol crate's models table
+// (protocol/src/ids.rs). PLACEHOLDER (open question in docs/roadmap.md):
+// pid.codes' testing pair until Raspberry Pi assigns a PID under 0x2E8A.
 
 namespace detent {
 namespace usb {

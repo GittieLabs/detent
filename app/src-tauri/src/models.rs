@@ -1,6 +1,7 @@
-//! What the app knows about each device model (PID) that HELLO doesn't say
-//! (D-081). HELLO lists controls and kinds but not which button is an
-//! encoder's push switch; the starter template (D-077) lands here too.
+//! What the app knows about each device model (its USB IDs) that HELLO
+//! doesn't say (D-081). HELLO lists controls and kinds but not which button
+//! is an encoder's push switch; the starter template (D-077) lands here too.
+//! The models themselves are `detent_protocol::ids::MODELS` (M7).
 
 use detent_protocol::ids;
 
@@ -10,16 +11,16 @@ use crate::store::{
 
 /// The control ID of the encoder's push switch, if the model has one. In
 /// Volume and Menu modes the device handles it, so it can't be mapped.
-pub fn encoder_push(pid: u16) -> Option<u8> {
-    // Detent Dev: `firmware/include/board_pins.h`, `kEncoderPushControl`.
-    (pid == ids::PID).then_some(6)
+pub fn encoder_push(vid: u16, pid: u16) -> Option<u8> {
+    // Per board: `firmware/include/boards/*.h`, `kEncoderPushControl`.
+    ids::model(vid, pid).and_then(|m| m.encoder_push)
 }
 
 /// The model's starter template (D-077): mappings a newly paired unit can
 /// start with, `device` left empty for the caller to fill. Empty for a model
 /// without one.
-pub fn starter_template(pid: u16) -> Vec<Mapping> {
-    if pid != ids::PID {
+pub fn starter_template(vid: u16, pid: u16) -> Vec<Mapping> {
+    if (vid, pid) != (ids::VID, ids::PID) {
         return Vec::new();
     }
     // Detent Dev: Keith's setup, proven on hardware in M2 and M3.

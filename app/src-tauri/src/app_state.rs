@@ -40,8 +40,8 @@ pub struct ControlView {
 }
 
 /// A unit's controls from its HELLO, in HELLO order.
-pub fn controls_of(pid: u16, hello: &Hello) -> Vec<ControlView> {
-    let push = models::encoder_push(pid);
+pub fn controls_of(vid: u16, pid: u16, hello: &Hello) -> Vec<ControlView> {
+    let push = models::encoder_push(vid, pid);
     let device_mode = hello.encoder_mode != EncoderMode::Mapped;
     hello
         .controls
@@ -458,7 +458,7 @@ impl AppState {
                 if let Some(u) = self.paired_mut(id) {
                     u.firmware = Some(firmware_of(hello));
                     (u.buttons, u.encoders) = (buttons, encoders);
-                    u.controls = controls_of(id.pid, hello);
+                    u.controls = controls_of(id.vid, id.pid, hello);
                 }
             }
             DeviceEvent::Disconnected { id, .. } => {
@@ -517,9 +517,8 @@ impl AppState {
                 });
             }
             DeviceEvent::Mode { id, mode } => {
-                let pid = id.pid;
+                let push = models::encoder_push(id.vid, id.pid);
                 if let Some(u) = self.paired_mut(id) {
-                    let push = models::encoder_push(pid);
                     let device_mode = *mode != EncoderMode::Mapped;
                     for c in &mut u.controls {
                         let encoderish = c.kind == ControlType::Encoder || Some(c.id) == push;
@@ -667,7 +666,7 @@ pub fn set_mapping(
 /// The template mappings for `unit` that it doesn't have yet: none of its
 /// own mappings shares their control, trigger and scope.
 fn template_left(config: &Config, unit: &DeviceEntry) -> Vec<Mapping> {
-    models::starter_template(unit.pid)
+    models::starter_template(unit.vid, unit.pid)
         .into_iter()
         .map(|m| Mapping {
             device: unit.serial.clone(),

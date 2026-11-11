@@ -1038,3 +1038,39 @@ fn a_changed_menu_is_resent_and_an_unchanged_one_is_not() {
     r.at(0.4);
     assert_eq!(menu_sent(&hid).last(), Some(&AppMessage::MenuClear));
 }
+
+// More boards (M7): every known model counts as a Detent unit.
+
+#[test]
+fn a_pico_is_a_detent_unit_like_the_xiao() {
+    use detent_protocol::ids::{PICO_PID, PICO_VID};
+    let mut r = Rig::new(&[], &[]);
+    r.bus.attach(PICO_VID, PICO_PID, Some(OTHER));
+    assert_eq!(
+        r.at(0.0),
+        vec![DeviceEvent::Unknown {
+            vid: PICO_VID,
+            pid: PICO_PID,
+            serial: Some(OTHER.into())
+        }],
+        "an unpaired Pico is news"
+    );
+    let pico = DeviceEntry {
+        vid: PICO_VID,
+        pid: PICO_PID,
+        ..entry(OTHER)
+    };
+    r.devices.set_lists(&[pico], &[]);
+    let events = r.at(0.1);
+    assert!(
+        matches!(&events[..], [DeviceEvent::Connected { id, .. }] if id.vid == PICO_VID),
+        "{events:?}"
+    );
+}
+
+#[test]
+fn a_board_that_is_not_a_detent_model_is_never_reported() {
+    let mut r = Rig::new(&[], &[]);
+    r.bus.attach(0x1209, 0x0002, Some(OTHER));
+    assert_eq!(r.at(0.0), vec![]);
+}

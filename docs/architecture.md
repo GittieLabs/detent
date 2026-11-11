@@ -26,7 +26,7 @@ ESP32-S3 device                         Detent app (Tauri 2, Rust)
 1. Vendor defined HID (usage page `0xFF00`, report ID 6), 63 byte reports, carrying all app traffic. See `protocol.md`.
 2. Standard Consumer Control (report ID 4) for volume up, down, and mute.
 
-VID is Espressif's `0x303A`. The PID comes from Espressif's free usb-pids program (D-014); until that PR merges, firmware uses the placeholder in `protocol/src/ids.rs`. **Never use TinyUSB or IDF default PIDs** (for example `0x4001`); they collide with stock firmware.
+VID is Espressif's `0x303A`. The PID comes from Espressif's free usb-pids program (D-014); until that PR merges, firmware uses the placeholder in `protocol/src/ids.rs`. **Never use TinyUSB or IDF default PIDs** (for example `0x4001`); they collide with stock firmware. Each board build with its own IDs is a model in `ids::MODELS` (D-093); the app's `devices` treats any model as a Detent unit, and `docs/boards.md` lists them.
 
 The USB serial number string is derived from the chip's MAC address, so two identical devices are distinguishable.
 

@@ -427,7 +427,7 @@ impl<B: Bus> Devices<B> {
                 continue;
             }
             if serial.is_empty() || !self.is_paired(c, serial) {
-                let ours = c.vid == ids::VID && c.pid == ids::PID;
+                let ours = ids::is_detent(c.vid, c.pid);
                 if ours
                     && self
                         .unknown_seen

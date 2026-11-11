@@ -16,6 +16,7 @@ pub fn c_header() -> String {
         .collect();
     let vid = ids::VID;
     let pid = ids::PID;
+    let (pico_vid, pico_pid) = (ids::PICO_VID, ids::PICO_PID);
     let (mode_volume, mode_menu, mode_mapped) = (
         EncoderMode::Volume as u8,
         EncoderMode::Menu as u8,
@@ -50,6 +51,8 @@ pub fn c_header() -> String {
 // USB identity
 #define DETENT_USB_VID 0x{vid:04X}
 #define DETENT_USB_PID 0x{pid:04X}  // PLACEHOLDER until the Espressif usb-pids allocation
+#define DETENT_PICO_VID 0x{pico_vid:04X}  // PLACEHOLDER until Raspberry Pi assigns a PID
+#define DETENT_PICO_PID 0x{pico_pid:04X}
 
 // Message types: device to app 0x01..0x7F, app to device 0x80..0xFF
 {types}

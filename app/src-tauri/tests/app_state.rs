@@ -667,7 +667,7 @@ fn just_paired(serial: &str) -> Config {
 
 #[test]
 fn the_detent_dev_template_is_keiths_setup() {
-    let t = detent_lib::models::starter_template(PID);
+    let t = detent_lib::models::starter_template(VID, PID);
     let summary: Vec<_> = t
         .iter()
         .map(|m| (m.control, m.trigger, m.scope.clone(), m.action.clone()))
@@ -705,7 +705,13 @@ fn the_detent_dev_template_is_keiths_setup() {
         summary[4]
     );
     assert_eq!(t.len(), 5);
-    assert!(detent_lib::models::starter_template(0x1234).is_empty());
+    assert!(detent_lib::models::starter_template(VID, 0x1234).is_empty());
+    // The Pico has no template yet: its pins are still a placeholder (M7).
+    assert!(detent_lib::models::starter_template(
+        detent_protocol::ids::PICO_VID,
+        detent_protocol::ids::PICO_PID
+    )
+    .is_empty());
 }
 
 #[test]
@@ -1065,4 +1071,16 @@ fn any_connected_follows_the_paired_units() {
         !s.any_connected(),
         "unplugged: the dashboard may close (D-090)"
     );
+}
+
+#[test]
+fn a_picos_encoder_push_is_known_from_its_model() {
+    use detent_protocol::ids::{PICO_PID, PICO_VID};
+    let controls = app_state::controls_of(PICO_VID, PICO_PID, &dev_hello(EncoderMode::Volume));
+    let push = controls.iter().find(|c| c.id == 6).unwrap();
+    assert_eq!(push.label, "Encoder push");
+    assert!(push.handled_by_device);
+    // An unknown model: no push switch is assumed, so 6 is a plain button.
+    let other = app_state::controls_of(0x1209, 0x0002, &dev_hello(EncoderMode::Volume));
+    assert_eq!(other.iter().find(|c| c.id == 6).unwrap().label, "Button 6");
 }

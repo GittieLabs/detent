@@ -18,6 +18,8 @@
 // USB identity
 #define DETENT_USB_VID 0x303A
 #define DETENT_USB_PID 0x8FDE  // PLACEHOLDER until the Espressif usb-pids allocation
+#define DETENT_PICO_VID 0x1209  // PLACEHOLDER until Raspberry Pi assigns a PID
+#define DETENT_PICO_PID 0x0001
 
 // Message types: device to app 0x01..0x7F, app to device 0x80..0xFF
 #define DETENT_MSG_HELLO 0x01
