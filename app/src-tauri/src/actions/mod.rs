@@ -28,6 +28,8 @@ pub enum Done {
     Script(String),
     /// The shortcut went to the frontmost app (canonical form).
     Sent(String),
+    /// The dashboard window was shown, or hidden by a second press.
+    Dashboard { shown: bool },
     /// Nothing ran: a recording executor (tests, Dry run).
     Recorded,
 }
@@ -43,6 +45,8 @@ impl fmt::Display for Done {
             Self::Script(out) if out.is_empty() => write!(f, "script finished"),
             Self::Script(out) => write!(f, "script returned {out:?}"),
             Self::Sent(keys) => write!(f, "sent {keys}"),
+            Self::Dashboard { shown: true } => write!(f, "dashboard shown"),
+            Self::Dashboard { shown: false } => write!(f, "dashboard hidden"),
             Self::Recorded => write!(f, "recorded (dry run)"),
         }
     }
@@ -60,6 +64,8 @@ pub enum ActionError {
     Script(ScriptError),
     /// A shortcut was refused before any key went out.
     Keys(crate::keys::Refusal),
+    /// The action needs the app around it (a window), not this executor.
+    NeedsTheApp,
 }
 
 impl fmt::Display for ActionError {
@@ -72,6 +78,7 @@ impl fmt::Display for ActionError {
             Self::Audio(e) => e.fmt(f),
             Self::Script(e) => e.fmt(f),
             Self::Keys(e) => e.fmt(f),
+            Self::NeedsTheApp => write!(f, "this action runs only inside the Detent app"),
         }
     }
 }
@@ -141,6 +148,8 @@ impl Executor for SystemExecutor {
             Action::MuteToggle => mute_toggle(),
             Action::AppleScript { source, timeout_ms } => run_applescript(source, *timeout_ms),
             Action::SendShortcut { keys } => send_shortcut(keys),
+            // Windows belong to the app: `launch::AppExecutor` handles it.
+            Action::OpenDashboard { .. } => Err(ActionError::NeedsTheApp),
         }
     }
 }

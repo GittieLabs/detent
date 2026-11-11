@@ -396,6 +396,11 @@ impl AppState {
         }
     }
 
+    /// Whether any paired unit is connected now.
+    pub fn any_connected(&self) -> bool {
+        self.paired.iter().any(|u| u.connected)
+    }
+
     /// Records whether Detent holds the Accessibility grant. Returns whether
     /// that changed, so the app only pushes real changes.
     pub fn set_accessibility(&mut self, granted: bool) -> bool {

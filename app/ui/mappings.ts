@@ -25,6 +25,7 @@ const KINDS: [Kind, string][] = [
   ["volume_set", "Set volume to…"],
   ["mute_toggle", "Mute or unmute"],
   ["send_shortcut", "Send a shortcut"],
+  ["open_dashboard", "Show a dashboard"],
   ["applescript", "Run an AppleScript"],
 ];
 
@@ -40,6 +41,10 @@ interface Draft {
   source: string;
   timeoutS: string;
   keys: string; // canonical shortcut, recorded in the shortcut field
+  url: string;
+  display: string; // "" for the main display
+  dashMode: "fullscreen" | "window";
+  closeNoDevice: boolean;
 }
 
 const trim = (n: number) => String(Math.round(n * 100) / 100);
@@ -56,6 +61,10 @@ function draftFrom(control: number, trigger: Trigger, scope: Scope, m: Mapping |
     source: "",
     timeoutS: "5",
     keys: "",
+    url: api.DEFAULT_DASHBOARD_URL,
+    display: "",
+    dashMode: "fullscreen",
+    closeNoDevice: true,
   };
   const a = m?.action;
   if (!a) return d;
@@ -64,6 +73,12 @@ function draftFrom(control: number, trigger: Trigger, scope: Scope, m: Mapping |
   if (a.type === "volume_up" || a.type === "volume_down") d.stepPct = trim(a.step * 100);
   if (a.type === "volume_set") d.levelPct = trim(a.level * 100);
   if (a.type === "send_shortcut") d.keys = a.keys;
+  if (a.type === "open_dashboard") {
+    d.url = a.url;
+    d.display = a.display ?? "";
+    d.dashMode = a.mode;
+    d.closeNoDevice = a.close_without_device;
+  }
   if (a.type === "applescript") {
     d.source = a.source;
     d.timeoutS = trim(a.timeout_ms / 1000);
@@ -94,6 +109,19 @@ function actionFrom(d: Draft): { action: Action } | { error: string } | null {
       return { action: { type: "mute_toggle" } };
     case "send_shortcut":
       return d.keys ? { action: { type: "send_shortcut", keys: d.keys } } : { error: "Record a shortcut." };
+    case "open_dashboard": {
+      const url = d.url.trim() || api.DEFAULT_DASHBOARD_URL;
+      if (!/^https?:\/\/\S+$/.test(url)) return { error: "The page must be a web address starting with https:// or http://." };
+      return {
+        action: {
+          type: "open_dashboard",
+          url,
+          display: d.display || null,
+          mode: d.dashMode,
+          close_without_device: d.closeNoDevice,
+        },
+      };
+    }
     case "applescript": {
       if (d.source.trim() === "") return { error: "Write the script to run." };
       const s = num(d.timeoutS);
@@ -137,7 +165,19 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
   let busy = false;
   let recordFresh = true; // the shortcut field's next key starts a new shortcut
   let apps: AppEntry[] = [];
+  let displays: string[] = []; // connected, main first; refreshed when picked
   let appName: AppName = idName;
+
+  // Displays come and go; refresh the list whenever the screen is built.
+  const loadDisplays = () =>
+    api
+      .listDisplays()
+      .then((names) => {
+        displays = names;
+        rerender();
+      })
+      .catch(() => {});
+  loadDisplays();
 
   api
     .listApps()
@@ -265,8 +305,86 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
     );
   }
 
+  /** The page and the display for Show a dashboard (D-088). */
+  function dashboardFields(d: Draft): HTMLElement {
+    const known = d.display === "" || displays.includes(d.display);
+    return el(
+      "div",
+      { class: "fields" },
+      el(
+        "label",
+        { class: "field" },
+        el("span", {}, "Page"),
+        el("input", {
+          class: "field-input",
+          value: d.url,
+          ariaLabel: "Dashboard page",
+          attrs: { placeholder: api.DEFAULT_DASHBOARD_URL, spellcheck: "false" },
+          onInput: (v) => edit({ url: v }),
+        }),
+      ),
+      el(
+        "label",
+        { class: "field" },
+        el("span", {}, "On display"),
+        el(
+          "select",
+          {
+            class: "field-input",
+            ariaLabel: "Display",
+            value: d.display,
+            onInput: (v) => edit({ display: v }),
+          },
+          el("option", { value: "" }, "Main display"),
+          ...displays.slice(1).map((n) => el("option", { value: n }, n)),
+          known ? null : el("option", { value: d.display }, `${d.display} (not connected)`),
+        ),
+      ),
+      el(
+        "div",
+        { class: "segmented", ariaLabel: "Shown as" },
+        ...(
+          [
+            ["fullscreen", "Full screen"],
+            ["window", "Window"],
+          ] as const
+        ).map(([m, label]) =>
+          el(
+            "button",
+            {
+              type: "button",
+              class: d.dashMode === m ? "seg active" : "seg",
+              onClick: () => edit({ dashMode: m }),
+            },
+            label,
+          ),
+        ),
+      ),
+      el(
+        "label",
+        { class: "check" },
+        el("input", {
+          type: "checkbox",
+          checked: d.closeNoDevice,
+          ariaLabel: "Close when no device is connected",
+          onClick: (e) => edit({ closeNoDevice: (e.target as HTMLInputElement).checked }),
+        }),
+        el("span", {}, "Close when no device is connected (unplug it to dismiss)"),
+      ),
+      el(
+        "p",
+        { class: "hint" },
+        d.dashMode === "fullscreen"
+          ? "Covers the display. Move the mouse for a close button, or press the button again. If the display is unplugged it moves to the main one."
+          : "A normal window you can move and resize. Its close button, or the button again, hides it.",
+      ),
+    );
+  }
+
   function fields(d: Draft): HTMLElement | null {
     switch (d.kind) {
+      case "open_dashboard":
+        return dashboardFields(d);
       case "send_shortcut":
         return shortcutField(d);
       case "open_app":
@@ -518,7 +636,10 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
             class: "field-input",
             ariaLabel: "Action",
             value: d.kind,
-            onInput: (v) => edit({ kind: v as Kind }),
+            onInput: (v) => {
+              if (v === "open_dashboard") loadDisplays();
+              edit({ kind: v as Kind });
+            },
           },
           ...KINDS.map(([k, label]) => el("option", { value: k }, label)),
         ),
@@ -674,7 +795,10 @@ export function mappingsScreen(root: HTMLElement, chosen: { serial: string | nul
             class: "field-input",
             ariaLabel: "Action",
             value: d.kind === "none" ? "" : d.kind,
-            onInput: (v) => edit({ kind: v as Kind }),
+            onInput: (v) => {
+              if (v === "open_dashboard") loadDisplays();
+              edit({ kind: v as Kind });
+            },
           },
           el("option", { value: "" }, "Choose…"),
           ...KINDS.filter(([k]) => k !== "none").map(([k, label]) => el("option", { value: k }, label)),

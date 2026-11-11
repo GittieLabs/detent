@@ -25,6 +25,7 @@
     "allow-fix-accessibility",
     "allow-set-menu-item",
     "allow-remove-menu-item",
-    "allow-move-menu-item"
+    "allow-move-menu-item",
+    "allow-list-displays"
   ]
 }

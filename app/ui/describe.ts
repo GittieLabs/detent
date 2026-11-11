@@ -71,6 +71,10 @@ export function actionText(action: Action, appName: AppName = idName): string {
       return "Mute or unmute";
     case "send_shortcut":
       return `Send ${shortcutText(action.keys)}`;
+    case "open_dashboard": {
+      const on = action.display ? ` on ${action.display}` : "";
+      return `Show dashboard${on}${action.mode === "window" ? " in a window" : ""}`;
+    }
     case "applescript":
       return "Run an AppleScript";
   }

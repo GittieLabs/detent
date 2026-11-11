@@ -42,6 +42,6 @@ Two mappings with the same device, control, trigger, and scope are an error: Det
 | `volume_set` | `level` (0 to 1) | Sets the output volume. |
 | `mute_toggle` | none | Toggles mute. |
 | `send_shortcut` | `keys`: a combo such as `cmd+shift+e`, or up to 4 separated by spaces (`cmd+k cmd+s`). Modifiers `cmd`, `option`, `control`, `shift`; keys are letters, digits, `f1` to `f12`, `space`, `return`, `escape`, `tab`, `delete`, arrows, and punctuation names (`minus`, `comma`...), on US key positions (D-082) | Sends the keys to the frontmost app. Needs Accessibility; refused, sending nothing, while Secure Input is on (a password field has focus). |
+| `open_dashboard` | `url` (optional, http or https, default `https://github.com/gittielabs/detent`), `display` (optional, a display's name as macOS shows it; the main display if left out or not connected), `mode` (optional, `fullscreen` (default) or `window`), `close_without_device` (optional, default `true`) | Shows the page on that display without taking focus: covering it, or in a resizable window. A second press or the close button hides it (full screen: shown when the mouse moves; a window: its own); with `close_without_device`, so does unplugging the device (D-088 to D-090). |
 | `applescript` | `source`, `timeout_ms` (optional, 100 to 60000, default 5000) | Runs AppleScript. The first run against an app shows macOS's Automation prompt naming Detent. |
 
-Open dashboard is deferred until the app's dashboard is defined (D-055).

@@ -115,6 +115,13 @@ export type Action =
   | { type: "volume_set"; level: number }
   | { type: "mute_toggle" }
   | { type: "send_shortcut"; keys: string }
+  | {
+      type: "open_dashboard";
+      url: string;
+      display: string | null;
+      mode: "fullscreen" | "window";
+      close_without_device: boolean; // hide it when no paired device is connected (D-090)
+    }
   | { type: "applescript"; source: string; timeout_ms: number };
 
 /** One resolved input (`app_state::InputView`). */
@@ -163,6 +170,10 @@ export const applyTemplate = (serial: string) =>
 export const removeMapping = (serial: string, control: number, trigger: Trigger, scope: Scope) =>
   invoke<AppState>("remove_mapping", { serial, control, trigger, scope });
 export const listApps = () => invoke<AppEntry[]>("list_apps");
+/** Connected displays' names, main first (Open dashboard's picker). */
+export const listDisplays = () => invoke<string[]>("list_displays");
+/** Open dashboard's default page (D-088; `store::DEFAULT_DASHBOARD_URL`). */
+export const DEFAULT_DASHBOARD_URL = "https://github.com/gittielabs/detent";
 
 export function onResult(handler: (result: ResultView) => void): Promise<UnlistenFn> {
   return listen<ResultView>(RESULT_EVENT, (event) => handler(event.payload));

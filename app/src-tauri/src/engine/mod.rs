@@ -99,6 +99,20 @@ pub fn describe(action: &Action) -> String {
         Action::VolumeSet { level } => format!("volume_set {}%", pct(*level)),
         Action::MuteToggle => "mute_toggle".into(),
         Action::SendShortcut { keys } => format!("send_shortcut {keys}"),
+        Action::OpenDashboard {
+            url, display, mode, ..
+        } => {
+            let on = display
+                .as_deref()
+                .map(|d| format!(" on {d}"))
+                .unwrap_or_default();
+            let how = if *mode == crate::store::DashboardMode::Window {
+                " in a window"
+            } else {
+                ""
+            };
+            format!("open_dashboard {url}{on}{how}")
+        }
         Action::AppleScript { source, .. } => {
             let first = source.lines().next().unwrap_or("");
             let more = if source.lines().nth(1).is_some() {
@@ -235,6 +249,8 @@ pub fn status_of(outcome: &Outcome) -> Option<String> {
         }
         Ok(Done::Sent(keys)) => format!("Sent {keys}"),
         Ok(Done::Script(_)) => "Script done".into(),
+        Ok(Done::Dashboard { shown: true }) => "Dashboard on".into(),
+        Ok(Done::Dashboard { shown: false }) => "Dashboard off".into(),
         Err(_) => "Failed".into(),
     };
     Some(

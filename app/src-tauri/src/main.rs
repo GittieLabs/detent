@@ -2,6 +2,7 @@
 //! threads (`detent_lib::engine`); see `docs/roadmap.md`.
 
 mod commands;
+mod dashboard;
 mod hud;
 mod launch;
 mod tray;
@@ -63,6 +64,7 @@ fn main() {
             commands::set_menu_item,
             commands::remove_menu_item,
             commands::move_menu_item,
+            commands::list_displays,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build the Detent app");

@@ -154,6 +154,9 @@ impl Sink for AppSink {
         }
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         if state.apply(record) {
+            if !state.any_connected() {
+                crate::dashboard::no_device(&self.app);
+            }
             publish(&self.app, &self.tray, &state, self.dry_run);
         }
     }
@@ -166,12 +169,16 @@ fn frontmost() -> Option<String> {
     return None;
 }
 
-fn executor(dry_run: bool) -> Arc<dyn Executor> {
+fn executor(dry_run: bool, app: &AppHandle) -> Arc<dyn Executor> {
     #[cfg(target_os = "macos")]
     if !dry_run {
-        return Arc::new(detent_lib::actions::SystemExecutor);
+        // Open dashboard needs a window, so the app wraps the system executor.
+        return Arc::new(crate::dashboard::AppExecutor {
+            inner: Arc::new(detent_lib::actions::SystemExecutor),
+            app: app.clone(),
+        });
     }
-    let _ = dry_run;
+    let _ = (dry_run, app);
     Arc::new(RecordingExecutor::default())
 }
 
@@ -249,6 +256,8 @@ pub fn start(launch: &Launch, app: AppHandle, tray: tray::Tray) -> Shared {
     initial.set_accessibility(accessibility_granted());
     let state = Arc::new(Mutex::new(initial));
     watch_accessibility(app.clone(), tray.clone(), state.clone(), launch.dry_run);
+    crate::dashboard::watch(app.clone());
+    crate::dashboard::watch_hover(app.clone());
 
     let engine = match Hid::new() {
         Ok(bus) => {
@@ -264,7 +273,7 @@ pub fn start(launch: &Launch, app: AppHandle, tray: tray::Tray) -> Shared {
                 Engine::new(
                     bus,
                     &config,
-                    executor(launch.dry_run),
+                    executor(launch.dry_run, &app),
                     Arc::new(frontmost),
                     sink,
                     Options::default(),

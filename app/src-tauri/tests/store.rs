@@ -1,6 +1,6 @@
 //! Config schema v1: parsing, validation, and error messages that say where.
 
-use detent_lib::store::{self, Config};
+use detent_lib::store::{self, Config, DashboardMode};
 use detent_lib::store::{
     load, parse, Action, ConfigError, Scope, Trigger, DEFAULT_APPLESCRIPT_TIMEOUT_MS,
     DEFAULT_VOLUME_STEP,
@@ -559,4 +559,68 @@ fn bad_device_menu_items_name_the_field() {
         nine.join(",")
     );
     assert_err(&too_many, "devices[0].menu");
+}
+
+// Open dashboard (M6, D-088).
+
+fn dashboard_config(action: &str) -> String {
+    format!(
+        r#"{{ "version": 1,
+          "devices": [{{ "name": "D", "vid": "0x303A", "pid": "0x8FDE", "serial": "S" }}],
+          "mappings": [{{ "device": "S", "control": 1, "trigger": "press", "scope": "everywhere",
+                          "action": {action} }}] }}"#
+    )
+}
+
+#[test]
+fn open_dashboard_defaults_to_the_project_page() {
+    let c = parse(&dashboard_config(r#"{ "type": "open_dashboard" }"#)).unwrap();
+    assert_eq!(
+        c.mappings[0].action,
+        Action::OpenDashboard {
+            url: "https://github.com/gittielabs/detent".into(),
+            display: None,
+            mode: DashboardMode::Fullscreen,
+            close_without_device: true,
+        }
+    );
+    let c = parse(&dashboard_config(
+        r#"{ "type": "open_dashboard", "url": "http://homepage.local:3000", "display": "Studio Display", "mode": "window", "close_without_device": false }"#,
+    ))
+    .unwrap();
+    assert_eq!(
+        c.mappings[0].action,
+        Action::OpenDashboard {
+            url: "http://homepage.local:3000".into(),
+            display: Some("Studio Display".into()),
+            mode: DashboardMode::Window,
+            close_without_device: false,
+        }
+    );
+    let text = store::to_json(&c).unwrap();
+    assert_eq!(parse(&text).unwrap(), c);
+}
+
+#[test]
+fn open_dashboard_needs_a_web_url_and_a_real_display_name() {
+    // Serde reports a bad value inside a tagged action at the action's path,
+    // but names the value and the choices.
+    assert_err(
+        &dashboard_config(r#"{ "type": "open_dashboard", "mode": "kiosk" }"#),
+        "unknown variant `kiosk`, expected `fullscreen` or `window`",
+    );
+    for bad in [
+        r#""url": "file:///etc/passwd""#,
+        r#""url": "github.com""#,
+        r#""url": "https://a b""#,
+    ] {
+        assert_err(
+            &dashboard_config(&format!(r#"{{ "type": "open_dashboard", {bad} }}"#)),
+            "mappings[0].action.url",
+        );
+    }
+    assert_err(
+        &dashboard_config(r#"{ "type": "open_dashboard", "display": " " }"#),
+        "mappings[0].action.display",
+    );
 }

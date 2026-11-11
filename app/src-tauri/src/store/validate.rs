@@ -141,6 +141,23 @@ impl Action {
             Action::VolumeSet { level } if !(0.0..=1.0).contains(level) => {
                 bad("level", "must be from 0 to 1")
             }
+            Action::OpenDashboard { url, .. }
+                if !(url.starts_with("https://") || url.starts_with("http://"))
+                    || url.contains(char::is_whitespace)
+                    || url.trim_end_matches('/').ends_with(':')
+                    || url.split("://").nth(1).is_none_or(str::is_empty) =>
+            {
+                bad(
+                    "url",
+                    "must be a web address starting with https:// or http://",
+                )
+            }
+            Action::OpenDashboard {
+                display: Some(d), ..
+            } if d.trim().is_empty() => bad(
+                "display",
+                "must be a display's name, or left out for the main one",
+            ),
             Action::SendShortcut { keys } if crate::keys::parse(keys).is_err() => bad(
                 "keys",
                 "must be a shortcut such as cmd+shift+e (up to 4 combos, separated by spaces)",

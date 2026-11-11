@@ -166,6 +166,14 @@ pub fn set_dry_run(shared: State<'_, Shared>, on: bool) {
     set_dry_run_now(&shared, on);
 }
 
+/// Names of the connected displays, main first, for Open dashboard's
+/// display picker. Sync, so it runs on the main thread like other window
+/// work.
+#[tauri::command]
+pub fn list_displays(app: tauri::AppHandle) -> Vec<String> {
+    crate::dashboard::display_names(&app)
+}
+
 /// Apps for the app picker (D-080). Async, so the folder scan runs off the
 /// main thread.
 #[tauri::command]
@@ -244,4 +252,5 @@ pub const ALL: &[&str] = &[
     "set_menu_item",
     "remove_menu_item",
     "move_menu_item",
+    "list_displays",
 ];

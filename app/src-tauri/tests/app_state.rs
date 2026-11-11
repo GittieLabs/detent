@@ -1050,3 +1050,19 @@ fn bad_menu_edits_are_refused_with_a_reason() {
         "a menu label is 1 to 16 plain characters (letters, digits, punctuation, spaces)"
     );
 }
+
+#[test]
+fn any_connected_follows_the_paired_units() {
+    let mut s = AppState::new(&config());
+    assert!(!s.any_connected());
+    s.apply(&connected(PAIRED));
+    assert!(s.any_connected());
+    s.apply(&dev(DeviceEvent::Disconnected {
+        id: id(PAIRED),
+        why: Lost::Detached,
+    }));
+    assert!(
+        !s.any_connected(),
+        "unplugged: the dashboard may close (D-090)"
+    );
+}

@@ -22,6 +22,7 @@ fn main() {
         "set_menu_item",
         "remove_menu_item",
         "move_menu_item",
+        "list_displays",
     ];
     tauri_build::try_build(
         tauri_build::Attributes::new()

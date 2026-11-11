@@ -6,6 +6,28 @@ use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 /// Step used by `volume_up` and `volume_down` when none is given: one of the
 /// 16 steps the volume keys use.
 pub const DEFAULT_VOLUME_STEP: f32 = 1.0 / 16.0;
+/// How Open dashboard shows its page (D-089).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DashboardMode {
+    /// Borderless over the whole display; a close button shows on hover.
+    #[default]
+    Fullscreen,
+    /// A normal window with a title bar, resizable, centred on the display.
+    Window,
+}
+
+/// The page Open dashboard shows when none is given (D-088).
+pub const DEFAULT_DASHBOARD_URL: &str = "https://github.com/gittielabs/detent";
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_dashboard_url() -> String {
+    DEFAULT_DASHBOARD_URL.to_owned()
+}
+
 /// How long a `applescript` action may run when no timeout is given.
 pub const DEFAULT_APPLESCRIPT_TIMEOUT_MS: u32 = 5000;
 
@@ -119,6 +141,22 @@ pub enum Action {
         level: f32,
     },
     MuteToggle,
+    /// A web page full screen on a display (D-088); a second press hides it.
+    OpenDashboard {
+        #[serde(default = "default_dashboard_url")]
+        url: String,
+        /// The display's name as macOS reports it; the main one if absent or
+        /// not connected.
+        #[serde(default)]
+        display: Option<String>,
+        /// Full screen on the display, or an ordinary resizable window (D-089).
+        #[serde(default)]
+        mode: DashboardMode,
+        /// Hide it when no paired device is connected, so unplugging the
+        /// device always dismisses it (D-090).
+        #[serde(default = "default_true")]
+        close_without_device: bool,
+    },
     /// A key combo, or a short sequence, to the frontmost app (D-082).
     SendShortcut {
         keys: String,

@@ -672,3 +672,16 @@ fn a_dry_run_sends_no_status() {
     std::thread::sleep(Duration::from_millis(250));
     assert!(statuses(&r.hid).is_empty());
 }
+
+#[test]
+fn the_dashboard_says_shown_or_hidden_on_the_status_line() {
+    use detent_lib::engine::status_of;
+    assert_eq!(
+        status_of(&Ok(Done::Dashboard { shown: true })),
+        Some("Dashboard on".into())
+    );
+    assert_eq!(
+        status_of(&Ok(Done::Dashboard { shown: false })),
+        Some("Dashboard off".into())
+    );
+}
