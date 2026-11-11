@@ -90,6 +90,8 @@ export interface AppState {
   problem: string | null;
   /** The config on disk didn't load; Start fresh is offered (M9). */
   config_broken: boolean;
+  /** Debug is on in the Test screen (M9). */
+  debug: boolean;
   /** Errors the engine recovered from since launch (M9). */
   recovered: number;
 }
@@ -183,6 +185,26 @@ export const listDisplays = () => invoke<string[]>("list_displays");
 export const startFresh = () => invoke<AppState>("start_fresh");
 /** Open dashboard's default page (D-088; `store::DEFAULT_DASHBOARD_URL`). */
 export const DEFAULT_DASHBOARD_URL = "https://github.com/gittielabs/detent";
+
+/** One Debug log line (`app_state::DebugEntry`, M9). */
+export interface DebugEntry {
+  at_ms: number;
+  kind: "report" | "device" | "resolved" | "ran" | "menu" | "reloaded" | "dry_run" | "recovered";
+  serial: string | null;
+  text: string;
+  raw: string | null; // hex, trailing zeros collapsed
+}
+
+/** Entries the Debug log keeps (`app_state::DEBUG_KEEP`). */
+export const DEBUG_KEEP = 500;
+const DEBUG_EVENT = "debug";
+
+export const setDebug = (on: boolean) => invoke<AppState>("set_debug", { on });
+export const getDebugLog = () => invoke<DebugEntry[]>("get_debug_log");
+
+export function onDebug(handler: (entry: DebugEntry) => void): Promise<UnlistenFn> {
+  return listen<DebugEntry>(DEBUG_EVENT, (event) => handler(event.payload));
+}
 
 export function onResult(handler: (result: ResultView) => void): Promise<UnlistenFn> {
   return listen<ResultView>(RESULT_EVENT, (event) => handler(event.payload));

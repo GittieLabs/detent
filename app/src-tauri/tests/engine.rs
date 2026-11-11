@@ -768,3 +768,13 @@ fn a_recovery_reads_well_in_the_log() {
     .to_string();
     assert_eq!(line, "recovered from a panic in the engine thread: boom");
 }
+
+#[test]
+fn raw_reports_are_recorded_only_while_asked_for() {
+    let r = Rig::start();
+    r.engine.as_ref().unwrap().set_raw(true);
+    std::thread::sleep(Duration::from_millis(50));
+    r.hid.push_device(0, &press(1));
+    r.expect(|x| matches!(x, Record::Device(DeviceEvent::Report { .. })));
+    let _ = r.call();
+}

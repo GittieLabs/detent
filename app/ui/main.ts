@@ -95,7 +95,16 @@ async function start(app: HTMLElement) {
   await api.onResult((view) => {
     if (tab === "test" && !wizard.active()) test.result(view);
   });
-  show(await api.getState());
+  // Debug entries are kept even off the Test screen, so switching back
+  // shows what happened meanwhile.
+  await api.onDebug((entry) => test.debug(entry, tab === "test" && !wizard.active()));
+  const first = await api.getState();
+  // Launched with --debug: open on Test with what's been logged so far.
+  if (first.debug) {
+    test.debugLoad(await api.getDebugLog());
+    go("test");
+  }
+  show(first);
 }
 
 const app = document.querySelector<HTMLElement>("#app");

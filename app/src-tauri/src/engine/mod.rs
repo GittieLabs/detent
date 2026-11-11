@@ -542,6 +542,7 @@ impl<B: Bus + 'static> Engine<B> {
                 Command::Identify(true) => self.devices.start_identify(),
                 Command::Identify(false) => self.devices.end_identify(),
                 Command::DryRun(on) => self.set_dry_run(on),
+                Command::Raw(on) => self.devices.set_raw(on),
             }
         }
         let now = (Instant::now(), SystemTime::now());
@@ -607,6 +608,7 @@ enum Command {
     Reload(Config),
     Identify(bool),
     DryRun(bool),
+    Raw(bool),
 }
 
 pub struct EngineHandle {
@@ -627,6 +629,11 @@ impl EngineHandle {
     /// units are opened read only and report `Candidate*` events.
     pub fn identify(&self, on: bool) {
         let _ = self.commands.send(Command::Identify(on));
+    }
+
+    /// Turns the raw report tap on or off (Debug, M9), before the next read.
+    pub fn set_raw(&self, on: bool) {
+        let _ = self.commands.send(Command::Raw(on));
     }
 
     /// Turns dry run on or off (D-079), before the next read.

@@ -1131,3 +1131,80 @@ fn a_recovery_is_counted_and_shown() {
     assert!(s.apply(&r));
     assert_eq!(s.recovered, 2);
 }
+
+mod debug_log {
+    use detent_lib::app_state::{debug_entry, DebugLog, DEBUG_KEEP};
+    use detent_lib::devices::{DeviceEvent, DeviceId};
+    use detent_lib::engine::Record;
+    use detent_protocol::codec::{encode_device, ButtonAction, DeviceMessage};
+
+    fn unit() -> DeviceId {
+        DeviceId {
+            vid: 0x303A,
+            pid: 0x8FDE,
+            serial: "E072A1FC4EDC".into(),
+        }
+    }
+
+    #[test]
+    fn a_report_shows_its_bytes_and_what_they_say() {
+        let msg = DeviceMessage::Button {
+            control: 1,
+            action: ButtonAction::Down,
+        };
+        let bytes = encode_device(7, &msg).unwrap().to_vec();
+        let end = bytes.iter().rposition(|&b| b != 0).unwrap() + 1;
+        let head: Vec<String> = bytes[..end].iter().map(|b| format!("{b:02x}")).collect();
+        let want = format!("{} ... 00 x{}", head.join(" "), bytes.len() - end);
+        let e = debug_entry(
+            &Record::Device(DeviceEvent::Report { id: unit(), bytes }),
+            1234,
+        );
+        assert_eq!(e.at_ms, 1234);
+        assert_eq!(e.kind, "report");
+        assert_eq!(e.serial.as_deref(), Some("E072A1FC4EDC"));
+        assert_eq!(e.text, "seq 7: Button { control: 1, action: Down }");
+        assert_eq!(
+            e.raw.as_deref(),
+            Some(want.as_str()),
+            "trailing zeros collapse"
+        );
+    }
+
+    #[test]
+    fn a_report_that_does_not_decode_says_why() {
+        let e = debug_entry(
+            &Record::Device(DeviceEvent::Report {
+                id: unit(),
+                bytes: vec![0x44, 0x10],
+            }),
+            0,
+        );
+        assert!(e.text.starts_with("rejected: "), "{}", e.text);
+        assert_eq!(e.raw.as_deref(), Some("44 10"));
+    }
+
+    #[test]
+    fn other_records_read_as_the_log_line() {
+        let r = Record::DryRun { on: true };
+        let e = debug_entry(&r, 5);
+        assert_eq!(e.kind, "dry_run");
+        assert_eq!(e.text, r.to_string());
+        assert_eq!(e.raw, None);
+        assert_eq!(e.serial, None);
+    }
+
+    #[test]
+    fn the_log_keeps_only_the_newest_entries() {
+        let mut log = DebugLog::default();
+        for i in 0..(DEBUG_KEEP as u64 + 50) {
+            log.push(debug_entry(&Record::DryRun { on: true }, i));
+        }
+        let kept = log.entries();
+        assert_eq!(kept.len(), DEBUG_KEEP);
+        assert_eq!(kept[0].at_ms, 50, "oldest first, the first 50 dropped");
+        assert_eq!(kept.last().unwrap().at_ms, DEBUG_KEEP as u64 + 49);
+        log.clear();
+        assert!(log.entries().is_empty());
+    }
+}

@@ -137,6 +137,113 @@ pub struct ResultView {
     pub took_ms: f64,
 }
 
+/// How many entries the debug log keeps (M9): enough to scroll back
+/// through a burst of encoder turns, small enough that a stuck encoder
+/// can't grow memory.
+pub const DEBUG_KEEP: usize = 500;
+
+/// One line of the Test screen's Debug log (M9), sent as the `debug` event.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct DebugEntry {
+    /// Unix time in milliseconds when the app saw it.
+    pub at_ms: u64,
+    /// `report`, `device`, `resolved`, `ran`, `menu`, `reloaded`,
+    /// `dry_run` or `recovered`.
+    pub kind: &'static str,
+    pub serial: Option<String>,
+    /// A report's decoded message, or the record's log line.
+    pub text: String,
+    /// A report's bytes in hex, trailing zeros collapsed.
+    pub raw: Option<String>,
+}
+
+/// Hex with trailing zeros collapsed (`02 03 ... 00 x57`), as `ctl-probe`
+/// prints it.
+fn hex_trimmed(bytes: &[u8]) -> String {
+    let end = bytes.iter().rposition(|&b| b != 0).map_or(0, |i| i + 1);
+    let hex = bytes[..end]
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    match (end, bytes.len() - end) {
+        (_, 0) => hex,
+        (0, z) => format!("00 x{z}"),
+        (_, z) => format!("{hex} ... 00 x{z}"),
+    }
+}
+
+/// The debug log's line for a record, seen at `at_ms`.
+pub fn debug_entry(record: &Record, at_ms: u64) -> DebugEntry {
+    let serial_of = |id: &DeviceId| Some(id.serial.clone());
+    let (kind, serial, text, raw) = match record {
+        Record::Device(DeviceEvent::Report { id, bytes }) => {
+            let text = match detent_protocol::codec::decode_device(bytes) {
+                Ok(f) => format!("seq {}: {:?}", f.seq, f.msg),
+                Err(e) => format!("rejected: {e}"),
+            };
+            ("report", serial_of(id), text, Some(hex_trimmed(bytes)))
+        }
+        Record::Device(e) => {
+            let serial = match e {
+                DeviceEvent::Mode { id, .. }
+                | DeviceEvent::Connected { id, .. }
+                | DeviceEvent::Hello { id, .. }
+                | DeviceEvent::Input { id, .. }
+                | DeviceEvent::Outdated { id, .. }
+                | DeviceEvent::Rejected { id, .. }
+                | DeviceEvent::Disconnected { id, .. }
+                | DeviceEvent::OpenFailed { id, .. }
+                | DeviceEvent::CandidateFound { id, .. }
+                | DeviceEvent::CandidateHello { id, .. }
+                | DeviceEvent::CandidatePressed(id)
+                | DeviceEvent::CandidateGone(id)
+                | DeviceEvent::Report { id, .. } => serial_of(id),
+                DeviceEvent::Unknown { serial, .. } | DeviceEvent::UnknownGone { serial, .. } => {
+                    serial.clone()
+                }
+            };
+            ("device", serial, record.to_string(), None)
+        }
+        Record::Resolved { id, .. } => ("resolved", serial_of(id), record.to_string(), None),
+        Record::Ran { id, .. } => ("ran", serial_of(id), record.to_string(), None),
+        Record::MenuPicked { id, .. } => ("menu", serial_of(id), record.to_string(), None),
+        Record::Reloaded { .. } => ("reloaded", None, record.to_string(), None),
+        Record::DryRun { .. } => ("dry_run", None, record.to_string(), None),
+        Record::Recovered { .. } => ("recovered", None, record.to_string(), None),
+    };
+    DebugEntry {
+        at_ms,
+        kind,
+        serial,
+        text,
+        raw,
+    }
+}
+
+/// The newest [`DEBUG_KEEP`] debug entries, oldest first.
+#[derive(Debug, Default)]
+pub struct DebugLog {
+    entries: std::collections::VecDeque<DebugEntry>,
+}
+
+impl DebugLog {
+    pub fn push(&mut self, entry: DebugEntry) {
+        if self.entries.len() == DEBUG_KEEP {
+            self.entries.pop_front();
+        }
+        self.entries.push_back(entry);
+    }
+
+    pub fn entries(&self) -> Vec<DebugEntry> {
+        self.entries.iter().cloned().collect()
+    }
+
+    pub fn clear(&mut self) {
+        self.entries.clear();
+    }
+}
+
 /// What the volume overlay shows (D-083).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Hud {
@@ -319,6 +426,9 @@ pub struct AppState {
     /// The config file on disk didn't load, so Detent won't save over it;
     /// the Devices screen offers Start fresh (M9).
     pub config_broken: bool,
+    /// Debug is on in the Test screen (M9): raw reports are read and every
+    /// record goes to the debug log.
+    pub debug: bool,
     /// Panics the engine or action worker caught and carried on from since
     /// launch (M9 crash recovery); the tray says so.
     pub recovered: u32,
@@ -379,6 +489,7 @@ impl AppState {
             accessibility: Accessibility::default(),
             problem: None,
             config_broken: false,
+            debug: false,
             recovered: 0,
         };
         s.set_config(config);
@@ -582,7 +693,8 @@ impl AppState {
                     c.outdated = true;
                 }
             }
-            DeviceEvent::Input { .. }
+            DeviceEvent::Report { .. }
+            | DeviceEvent::Input { .. }
             | DeviceEvent::Rejected { .. }
             | DeviceEvent::OpenFailed { .. } => {}
         }

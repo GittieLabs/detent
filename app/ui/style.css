@@ -957,3 +957,101 @@ main#app > .tabs {
 .add-row:hover {
   background: transparent;
 }
+
+/* Debug in the Test screen (M9). */
+.debug-toggle {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 13px;
+  margin: 6px 0;
+}
+
+.debug {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 2 1 0;
+}
+
+.debug h2 {
+  flex: none;
+}
+
+.debug-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  flex: none;
+  margin-bottom: 8px;
+}
+
+.debug-facts h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.debug-facts dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 10px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.debug-facts dt {
+  color: var(--muted, #888);
+}
+
+.debug-facts dd {
+  margin: 0;
+}
+
+.debug-log {
+  overflow-y: auto;
+  min-height: 0;
+  font-size: 12px;
+}
+
+.debug-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 4px 10px;
+}
+
+.debug-time,
+.debug-raw {
+  font-family: ui-monospace, Menlo, monospace;
+}
+
+.debug-time {
+  color: var(--muted, #888);
+  white-space: nowrap;
+}
+
+.debug-kind {
+  min-width: 64px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.debug-row.report .debug-kind {
+  color: var(--accent);
+}
+
+.debug-row.recovered .debug-kind,
+.debug-row.recovered .debug-text {
+  color: var(--danger);
+}
+
+.debug-text {
+  overflow-wrap: anywhere;
+}
+
+.debug-raw {
+  display: block;
+  color: var(--muted, #888);
+  overflow-wrap: anywhere;
+}
+

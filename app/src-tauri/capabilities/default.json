@@ -27,6 +27,8 @@
     "allow-remove-menu-item",
     "allow-move-menu-item",
     "allow-list-displays",
-    "allow-start-fresh"
+    "allow-start-fresh",
+    "allow-set-debug",
+    "allow-get-debug-log"
   ]
 }

@@ -168,6 +168,43 @@ pub fn set_dry_run(shared: State<'_, Shared>, on: bool) {
     set_dry_run_now(&shared, on);
 }
 
+/// Turns Debug on or off (the Test screen, M9): raw reports are read and
+/// every record goes to the debug log, which starts empty each time.
+#[tauri::command]
+pub fn set_debug(shared: State<'_, Shared>, on: bool) -> AppState {
+    shared.debug.on.store(on, Ordering::Relaxed);
+    if on {
+        shared
+            .debug
+            .log
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
+    }
+    if let Some(engine) = &shared.engine {
+        engine.set_raw(on);
+    }
+    let state = {
+        let mut state = shared.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.debug = on;
+        state.clone()
+    };
+    shared.publish(&state);
+    state
+}
+
+/// The debug log so far, oldest first, for a window that opens with Debug
+/// already on (`--debug`).
+#[tauri::command]
+pub fn get_debug_log(shared: State<'_, Shared>) -> Vec<detent_lib::app_state::DebugEntry> {
+    shared
+        .debug
+        .log
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .entries()
+}
+
 /// Names of the connected displays, main first, for Open dashboard's
 /// display picker. Sync, so it runs on the main thread like other window
 /// work.
@@ -312,4 +349,6 @@ pub const ALL: &[&str] = &[
     "move_menu_item",
     "list_displays",
     "start_fresh",
+    "set_debug",
+    "get_debug_log",
 ];

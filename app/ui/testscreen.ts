@@ -1,9 +1,11 @@
 // The Test screen (architecture.md, UX): the drawing, live. A press lights
 // its control and lists what fired for the frontmost app and what happened.
 // Dry run is on while this screen shows and executes nothing (D-079); main.ts
-// turns it on and off as the screen is entered and left.
+// turns it on and off as the screen is entered and left. Debug (a toggle
+// here, or `--debug`) adds the raw event log, the last HELLO and the
+// permissions panel (architecture.md, UX; M9).
 
-import type { AppState, InputView, ResultView } from "./api";
+import type { AppState, DebugEntry, InputView, PairedUnit, ResultView } from "./api";
 import * as api from "./api";
 import { type AppName, actionText, idName, namesFrom, triggerText } from "./describe";
 import { accessibilityBanner } from "./banners";
@@ -15,6 +17,10 @@ export interface TestScreen {
   input(view: InputView): void;
   result(view: ResultView): void;
   error(message: string): void;
+  /** A Debug log entry, while Debug is on; drawn only if `visible`. */
+  debug(entry: DebugEntry, visible: boolean): void;
+  /** The Debug log so far (the window opened with Debug already on). */
+  debugLoad(entries: DebugEntry[]): void;
 }
 
 interface Entry {
@@ -32,6 +38,10 @@ export function testScreen(root: HTMLElement, chosen: { serial: string | null })
   let litTimer: number | undefined;
   let note: string | null = null;
   let appName: AppName = idName;
+  // Newest last, at most DEBUG_KEEP; drawn at most once a frame, so a fast
+  // encoder can't stall the window.
+  let debugLog: DebugEntry[] = [];
+  let debugFrame: number | null = null;
 
   api
     .listApps()
@@ -88,6 +98,85 @@ export function testScreen(root: HTMLElement, chosen: { serial: string | null })
     );
   }
 
+  function time(ms: number): string {
+    const d = new Date(ms);
+    const pad = (n: number, w = 2) => String(n).padStart(w, "0");
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
+  }
+
+  function debugRow(state: AppState, e: DebugEntry): HTMLElement {
+    const unit = e.serial ? state.paired.find((u) => u.serial.toLowerCase() === e.serial?.toLowerCase()) : undefined;
+    const who = state.paired.length > 1 && unit ? `${unit.name} · ` : "";
+    return el(
+      "li",
+      { class: `debug-row ${e.kind}` },
+      el("span", { class: "debug-time" }, time(e.at_ms)),
+      el("span", { class: "debug-kind" }, e.kind.replace("_", " ")),
+      el(
+        "div",
+        { class: "grow" },
+        el("div", { class: "debug-text" }, `${who}${e.text}`),
+        e.raw ? el("code", { class: "debug-raw" }, e.raw) : null,
+      ),
+    );
+  }
+
+  function helloPanel(unit: PairedUnit): HTMLElement {
+    const controls = unit.controls.map((c) => c.label).join(", ");
+    return el(
+      "div",
+      { class: "debug-facts" },
+      el("h3", {}, "Last HELLO"),
+      unit.controls.length || unit.firmware
+        ? el(
+            "dl",
+            {},
+            el("dt", {}, "Firmware"),
+            el("dd", {}, `${unit.firmware ?? "unknown"}${unit.outdated ? " (older protocol: update it)" : ""}`),
+            el("dt", {}, "Model"),
+            el("dd", {}, unit.model ?? "unknown"),
+            el("dt", {}, "Controls"),
+            el("dd", {}, controls || "none reported"),
+          )
+        : el("p", { class: "empty" }, unit.connected ? "Waiting for its HELLO." : "Not connected."),
+    );
+  }
+
+  function permissionsPanel(state: AppState): HTMLElement {
+    const a = state.accessibility;
+    return el(
+      "div",
+      { class: "debug-facts" },
+      el("h3", {}, "Permissions"),
+      el(
+        "dl",
+        {},
+        el("dt", {}, "Accessibility"),
+        el("dd", {}, a.granted ? "granted" : a.needed ? "not granted (Send shortcut needs it)" : "not granted (not needed yet)"),
+        el("dt", {}, "Automation"),
+        el("dd", {}, "asked per app the first time a Run AppleScript targets it"),
+        el("dt", {}, "Input Monitoring"),
+        el("dd", {}, "not needed"),
+      ),
+    );
+  }
+
+  function debugSection(state: AppState, unit: PairedUnit): HTMLElement {
+    return el(
+      "section",
+      { class: "debug" },
+      el("h2", {}, `Debug · ${debugLog.length} of the last ${api.DEBUG_KEEP} events`),
+      el("div", { class: "debug-panels" }, helloPanel(unit), permissionsPanel(state)),
+      debugLog.length
+        ? el(
+            "ul",
+            { class: "list debug-log", attrs: { "data-scroll": "debug" } },
+            ...[...debugLog].reverse().map((e) => debugRow(state, e)),
+          )
+        : el("p", { class: "empty" }, "Every report, mapping and result shows here as it happens."),
+    );
+  }
+
   function render(state: AppState) {
     const unit = pickUnit(state, chosen.serial);
     if (!unit) {
@@ -134,6 +223,30 @@ export function testScreen(root: HTMLElement, chosen: { serial: string | null })
               : " is off: presses run for real.",
           ),
         ),
+        el(
+          "label",
+          { class: "debug-toggle" },
+          el("input", {
+            type: "checkbox",
+            checked: state.debug,
+            ariaLabel: "Debug",
+            onClick: (e) => {
+              const on = (e.target as HTMLInputElement).checked;
+              if (on) debugLog = [];
+              api
+                .setDebug(on)
+                .then((s) => {
+                  current = s;
+                  rerender();
+                })
+                .catch((err) => {
+                  note = api.message(err);
+                  rerender();
+                });
+            },
+          }),
+          el("span", {}, el("strong", {}, "Debug"), " shows raw reports, every mapping and result, the last HELLO and permissions."),
+        ),
         state.paused
           ? el("div", { class: "banner" }, el("strong", {}, "Paused. "), "Nothing runs until Pause is off in the menu bar.")
           : null,
@@ -161,6 +274,7 @@ export function testScreen(root: HTMLElement, chosen: { serial: string | null })
                 )
               : el("p", { class: "empty" }, "Press a button on the device."),
           ),
+          state.debug ? debugSection(state, unit) : null,
         ),
       ].filter((p): p is HTMLElement => p !== null),
     ));
@@ -193,6 +307,22 @@ export function testScreen(root: HTMLElement, chosen: { serial: string | null })
     },
     error(message: string) {
       note = message;
+      rerender();
+    },
+    debug(entry: DebugEntry, visible: boolean) {
+      debugLog.push(entry);
+      if (debugLog.length > api.DEBUG_KEEP) debugLog = debugLog.slice(-api.DEBUG_KEEP);
+      // The screens share one root: drawing Test from here while another
+      // screen shows would replace it.
+      if (visible && debugFrame === null) {
+        debugFrame = window.requestAnimationFrame(() => {
+          debugFrame = null;
+          if (visible) rerender();
+        });
+      }
+    },
+    debugLoad(entries: DebugEntry[]) {
+      debugLog = entries.slice(-api.DEBUG_KEEP);
       rerender();
     },
   };

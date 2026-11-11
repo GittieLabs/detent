@@ -13,7 +13,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use detent_lib::actions::{Executor, RecordingExecutor};
-use detent_lib::app_state::AppState;
+use detent_lib::app_state::{AppState, DebugLog};
 use detent_lib::devices::Options;
 use detent_lib::engine::{default_log_path, Engine, EngineHandle, FileLog, Record, Sink};
 use detent_lib::store::{self, Config, ConfigError};
@@ -27,6 +27,8 @@ pub struct Launch {
     pub dry_run: bool,
     pub config: Option<PathBuf>,
     pub settings: bool,
+    /// `--debug`: open the settings window with Debug on (M9).
+    pub debug: bool,
 }
 
 pub fn parse_args(args: &[String]) -> Launch {
@@ -36,6 +38,10 @@ pub fn parse_args(args: &[String]) -> Launch {
         match a.as_str() {
             "--dry-run" => launch.dry_run = true,
             "--settings" => launch.settings = true,
+            "--debug" => {
+                launch.debug = true;
+                launch.settings = true;
+            }
             "--config" => launch.config = it.next().map(PathBuf::from),
             _ => {}
         }
@@ -50,6 +56,15 @@ pub const STATE_EVENT: &str = "state";
 pub const INPUT_EVENT: &str = "input";
 /// The event carrying each action's result to the Test screen.
 pub const RESULT_EVENT: &str = "result";
+/// The event carrying each debug log entry while Debug is on (M9).
+pub const DEBUG_EVENT: &str = "debug";
+
+/// Debug's on switch and its log, shared by the sink and the commands.
+#[derive(Clone, Default)]
+pub struct Debug {
+    pub on: Arc<AtomicBool>,
+    pub log: Arc<Mutex<DebugLog>>,
+}
 
 /// Everything the app shares between the engine's sink, the tray, and the
 /// commands. Managed by Tauri.
@@ -68,6 +83,7 @@ pub struct Shared {
     pub dry_run: bool,
     /// Detent's log, shared with the engine's sink.
     pub log: Option<Arc<FileLog>>,
+    pub debug: Debug,
 }
 
 impl Shared {
@@ -135,14 +151,34 @@ struct AppSink {
     app: AppHandle,
     tray: tray::Tray,
     dry_run: bool,
+    debug: Debug,
 }
 
 impl Sink for AppSink {
     fn record(&self, record: &Record) {
-        let line = record.to_string();
-        eprintln!("detent: {line}");
-        if let Some(log) = &self.log {
-            log.line(&line);
+        let report = matches!(
+            record,
+            Record::Device(detent_lib::devices::DeviceEvent::Report { .. })
+        );
+        // Raw reports go to Debug only: every heartbeat would flood the log.
+        if !report {
+            let line = record.to_string();
+            eprintln!("detent: {line}");
+            if let Some(log) = &self.log {
+                log.line(&line);
+            }
+        }
+        if self.debug.on.load(std::sync::atomic::Ordering::Relaxed) {
+            let at_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_millis() as u64);
+            let entry = detent_lib::app_state::debug_entry(record, at_ms);
+            self.debug
+                .log
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push(entry.clone());
+            let _ = self.app.emit(DEBUG_EVENT, entry);
         }
         if let Some(view) = detent_lib::app_state::input_view(record) {
             let _ = self.app.emit(INPUT_EVENT, view);
@@ -312,6 +348,11 @@ pub fn start(launch: &Launch, app: AppHandle, tray: tray::Tray) -> Shared {
     initial.config_broken = !writable && path.is_some();
     initial.problem = problem;
     initial.set_accessibility(accessibility_granted());
+    initial.debug = launch.debug;
+    let debug = Debug::default();
+    debug
+        .on
+        .store(launch.debug, std::sync::atomic::Ordering::Relaxed);
     let state = Arc::new(Mutex::new(initial));
     watch_accessibility(app.clone(), tray.clone(), state.clone(), launch.dry_run);
     crate::dashboard::watch(app.clone());
@@ -326,6 +367,7 @@ pub fn start(launch: &Launch, app: AppHandle, tray: tray::Tray) -> Shared {
                 app: app.clone(),
                 tray: tray.clone(),
                 dry_run: launch.dry_run,
+                debug: debug.clone(),
             });
             Some(
                 Engine::new(
@@ -346,6 +388,9 @@ pub fn start(launch: &Launch, app: AppHandle, tray: tray::Tray) -> Shared {
             None
         }
     };
+    if let (true, Some(engine)) = (launch.debug, &engine) {
+        engine.set_raw(true);
+    }
     let shared = Shared {
         path,
         config: Mutex::new(config),
@@ -356,6 +401,7 @@ pub fn start(launch: &Launch, app: AppHandle, tray: tray::Tray) -> Shared {
         tray,
         dry_run: launch.dry_run,
         log,
+        debug,
     };
     let snapshot = shared
         .state
@@ -385,12 +431,20 @@ mod tests {
             dry_run: true,
             config: Some("/tmp/c.json".into()),
             settings: false,
+            debug: false,
         };
         assert_eq!(parse_args(&args("--config /tmp/c.json --dry-run")), want);
         assert_eq!(
             parse_args(&args("-psn_0_12345 --dry-run --config /tmp/c.json")),
             want
         );
+    }
+
+    #[test]
+    fn debug_opens_the_window_with_debug_on() {
+        let l = parse_args(&args("--debug"));
+        assert!(l.debug && l.settings);
+        assert!(!parse_args(&args("--settings")).debug);
     }
 
     #[test]

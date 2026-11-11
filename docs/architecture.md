@@ -119,4 +119,4 @@ The app checks permissions at startup and shows missing ones as a single banner 
 
 **Test.** The same drawing, live. Pressing a control highlights it and shows the mapping that would fire for the current frontmost app. **Dry run** is on by default and executes nothing; turn it off to execute for real.
 
-**Debug** (a toggle inside Test, or launch with `--debug`). Scrolling event log with timestamps, decoded fields and raw bytes, the resolved mapping and action result per event, a permissions panel, the last HELLO, and Export logs (zip).
+**Debug** (a toggle inside Test, or launch with `--debug`). Scrolling event log with timestamps, decoded fields and raw bytes, the resolved mapping and action result per event, a permissions panel, the last HELLO, and Export logs (zip). The raw bytes come from a tap in `devices` that's on only while Debug is (D-104); the log keeps the newest 500 entries in `app_state` and raw reports never go to `detent.log`.

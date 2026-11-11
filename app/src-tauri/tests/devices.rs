@@ -1106,3 +1106,42 @@ fn an_older_firmware_is_reported_once_and_kept_up_by_its_heartbeats() {
     }
     assert_eq!(r.devices.connected(), vec![&id(PAIRED)]);
 }
+
+#[test]
+fn with_raw_on_each_report_comes_first_as_its_bytes() {
+    let mut r = Rig::new(&[PAIRED], &[]);
+    let hid = r.bus.attach(VID, PID, Some(PAIRED));
+    r.at(0.0);
+    hid.push_device(3, &press(1));
+    let plain = r.at(0.1);
+    assert!(
+        !plain
+            .iter()
+            .any(|e| matches!(e, DeviceEvent::Report { .. })),
+        "raw is off by default"
+    );
+
+    r.devices.set_raw(true);
+    hid.push_device(4, &press(2));
+    let events = r.at(0.2);
+    let DeviceEvent::Report { id: who, bytes } = &events[0] else {
+        panic!("{events:?}")
+    };
+    assert_eq!(who, &id(PAIRED));
+    let frame = detent_protocol::codec::decode_device(bytes).expect("the raw report decodes");
+    assert_eq!((frame.seq, frame.msg), (4, press(2)));
+    assert!(matches!(events[1], DeviceEvent::Input { .. }), "{events:?}");
+
+    // Heartbeats show too, though they stay internal otherwise.
+    hid.push_device(5, &heartbeat(9));
+    let events = r.at(0.3);
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert!(matches!(events[0], DeviceEvent::Report { .. }));
+
+    r.devices.set_raw(false);
+    hid.push_device(6, &press(1));
+    assert!(!r
+        .at(0.4)
+        .iter()
+        .any(|e| matches!(e, DeviceEvent::Report { .. })));
+}

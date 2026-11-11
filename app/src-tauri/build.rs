@@ -24,6 +24,8 @@ fn main() {
         "move_menu_item",
         "list_displays",
         "start_fresh",
+        "set_debug",
+        "get_debug_log",
     ];
     tauri_build::try_build(
         tauri_build::Attributes::new()

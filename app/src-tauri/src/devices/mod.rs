@@ -76,6 +76,12 @@ pub enum DeviceEvent {
         id: DeviceId,
         hello: Hello,
     },
+    /// Debug (M9): a report as read, before it's decoded, while
+    /// [`Devices::set_raw`] is on. Comes just before what the report caused.
+    Report {
+        id: DeviceId,
+        bytes: Vec<u8>,
+    },
     /// A button, encoder, or menu pick.
     Input {
         id: DeviceId,
@@ -204,6 +210,8 @@ pub struct Devices<B> {
     /// Set by [`Devices::woke`] or [`Devices::reopen_all`]: every unit is
     /// closed for this reason at the start of the next step, then rescanned.
     reopen: Option<Lost>,
+    /// Report every read as [`DeviceEvent::Report`] (Debug, M9).
+    raw: bool,
     /// Set by [`Devices::set_lists`]; handled at the start of the next step.
     relisted: bool,
     /// The pairing wizard is open: unpaired units are opened read only.
@@ -222,6 +230,7 @@ impl<B: Bus> Devices<B> {
             unknown_seen: HashMap::new(),
             open_failed: HashSet::new(),
             reopen: None,
+            raw: false,
             relisted: false,
             identifying: false,
         }
@@ -274,6 +283,11 @@ impl<B: Bus> Devices<B> {
     /// after the 6 s silence timeout, and none is read through a stale handle.
     pub fn woke(&mut self) {
         self.reopen = Some(Lost::Slept);
+    }
+
+    /// Turns the raw report tap on or off (Debug in the Test screen, M9).
+    pub fn set_raw(&mut self, on: bool) {
+        self.raw = on;
     }
 
     /// The engine just recovered from a panic. Like [`Devices::woke`]: the
@@ -560,11 +574,18 @@ impl<B: Bus> Devices<B> {
         let n = u32::try_from(self.units.len()).unwrap_or(u32::MAX);
         let first_wait = self.opts.read_wait / n;
         let mut lost: Vec<(usize, Lost)> = Vec::new();
+        let raw = self.raw;
         for (i, unit) in self.units.iter_mut().enumerate() {
             let mut wait = first_wait;
             loop {
                 match unit.transport.read(wait) {
                     Ok(Some(report)) => {
+                        if raw {
+                            events.push(DeviceEvent::Report {
+                                id: unit.id.clone(),
+                                bytes: report.to_vec(),
+                            });
+                        }
                         if let Err(why) = handle(unit, &report, now, events) {
                             lost.push((i, why));
                             break;
