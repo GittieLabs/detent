@@ -237,4 +237,9 @@ Results:
   - `ioreg`: VID `0x1209`, PID `0x0001`, manufacturer GittieLabs, product Detent Dev, serial `E6654854571A6E2F`. `ctl-probe list` shows the vendor collection (0xFF00/0x01) and Consumer Control (0x000C) on interface 2, as on the XIAO.
   - `ctl-probe` with `DETENT_PROBE_IDS=1209:0001`: HELLO (fw 0.1.0, one button) right after connecting, then 45 heartbeats in 90 s; six BOOTSEL presses as `BUTTON 1 down` and `up` in order. Keith saw the Mac's volume rise with each press (Consumer Control).
   - Step 2 (the full Pico) waits on soldered headers.
+- Step 4, 2026-11-11, signed build (`just build-dev`), XIAO `E072A1FC4EDC`:
+  - On v1 firmware 0.1.0: the log shows `Outdated { version: 1 }` once and no disconnect over 12 s; Keith saw Devices say its firmware is too old.
+  - Flashed to 0.2.0 with Keith's OK: it reconnected with HELLO naming button 6 as encoder 5's push; Keith checked firmware 0.2.0, the knob and its Push on one row, and both handled on the device in Volume mode. PASS.
+  - `scripts/hil.sh` passed on it (debug and release; board left on release 0.2.0).
+  - The second XIAO (`E072A1FC849C`) is still on 0.1.0 until Keith OKs its flash.
 
