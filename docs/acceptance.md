@@ -227,7 +227,7 @@ Results:
 
 Needs a signed build (`just build-dev`) and each board flashed with its release firmware (Keith's OK for each flash), wired with buttons, an encoder and the OLED per its pin map. Steps 1 to 3 are the exit criteria.
 
-1. DevKitC. Plug it in alone: the tray offers "New device found", and the wizard pairs it with its model's name. Mappings shows its controls from HELLO. A mapped button runs, the device menu shows Detent's items after its own, a result shows on the status line, and Mapped mode follows from the board's menu. Its RGB LED blinks unpaired and turns solid when paired.
+1. Feather (D-097). Plug it in alone: the tray offers "New device found", and the wizard pairs it (press BOOT when asked). Mappings shows Button 1 and no encoder. A mapping on Button 1 runs. Its red LED blinks unpaired and turns solid when paired. With an OLED on the STEMMA QT connector it shows the pairing status; the device menu needs an encoder, so that part waits on headers.
 2. Pico. The same as step 1, on the Pico. Flashing it again from `just fw-upload` (or its own target) works without pressing BOOTSEL.
 3. The XIAO, unchanged. Plug the XIAO back in: it connects as before with its mappings, device menu and status line, and `scripts/hil.sh` passes on it.
 4. Protocol v2 (D-094). Before reflashing, plug in a XIAO still on v1 firmware (0.1.0): Devices says its firmware is too old and it stays connected (no reconnect loop in the log). After reflashing it with 0.2.0, it shows firmware 0.2.0, Mappings shows the knob with its Push cell on the same row, and in Volume mode both are marked as handled on the device.

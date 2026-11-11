@@ -7,6 +7,8 @@
 //   kButtons, kButtonCount       every button, push switches included
 //   kEncoders, kEncoderCount     every encoder: control ID, A and B pins, and
 //                                its push switch's button ID or kNoPush
+//   kI2cPowerPin                 a pin to drive high before the OLED starts
+//                                (a switched I2C rail), or -1
 // Any number of encoders works (D-096). For none, C++ still needs one entry:
 //   constexpr EncoderPins kEncoders[] = {{0, 0, 0, kNoPush}};  // unused
 //   constexpr uint8_t kEncoderCount = 0;
@@ -37,12 +39,12 @@ struct SparePin {
 
 #if defined(DETENT_BOARD_XIAO_ESP32S3)
 #include "boards/xiao_esp32s3.h"
-#elif defined(DETENT_BOARD_DEVKITC_S3)
-#include "boards/devkitc_s3.h"
+#elif defined(DETENT_BOARD_FEATHER_ESP32S3)
+#include "boards/feather_esp32s3.h"
 #elif defined(DETENT_BOARD_PICO)
 #include "boards/pico.h"
 #else
-#error "No board: build with -DDETENT_BOARD_XIAO_ESP32S3, _DEVKITC_S3 or _PICO"
+#error "No board: build with -DDETENT_BOARD_XIAO_ESP32S3, _FEATHER_ESP32S3 or _PICO"
 #endif
 
 namespace detent {

@@ -382,6 +382,11 @@ void setup() {
   begin_led();
   setup_controls();
   detent::usb::begin();
+  if (board::kI2cPowerPin >= 0) {  // a switched I2C rail (the Feather's STEMMA QT)
+    pinMode(board::kI2cPowerPin, OUTPUT);
+    digitalWrite(board::kI2cPowerPin, HIGH);
+    delay(5);
+  }
   detent::display::begin();
 }
 

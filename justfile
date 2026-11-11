@@ -42,7 +42,7 @@ gen-header:
 
 # Build the firmware for every board (XIAO, DevKitC, Pico; release and debug)
 fw:
-    pio run -d firmware -e xiao_esp32s3 -e xiao_esp32s3_debug -e devkitc_s3 -e devkitc_s3_debug -e pico -e pico_spike
+    pio run -d firmware -e xiao_esp32s3 -e xiao_esp32s3_debug -e feather_esp32s3 -e feather_esp32s3_debug -e pico -e pico_spike
 
 # Build the debug firmware (TEST_INJECT enabled; never ship it)
 fw-debug:
@@ -52,7 +52,7 @@ fw-debug:
 fw-test:
     pio test -d firmware -e native
 
-# Flash a board's firmware, e.g. `just fw-upload` (XIAO) or `just fw-upload devkitc_s3`
+# Flash a board's firmware, e.g. `just fw-upload` (XIAO) or `just fw-upload feather_esp32s3`
 fw-upload env="xiao_esp32s3":
     pio run -d firmware -e {{env}} -t upload
 
@@ -60,5 +60,5 @@ fw-upload env="xiao_esp32s3":
 ci: lint test
     pnpm -C app install --frozen-lockfile
     pnpm -C app tsc --noEmit
-    pio run -d firmware -e xiao_esp32s3 -e xiao_esp32s3_debug -e devkitc_s3 -e devkitc_s3_debug -e pico -e pico_spike
+    pio run -d firmware -e xiao_esp32s3 -e xiao_esp32s3_debug -e feather_esp32s3 -e feather_esp32s3_debug -e pico -e pico_spike
     pio test -d firmware -e native

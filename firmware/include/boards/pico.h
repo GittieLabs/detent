@@ -24,6 +24,7 @@ constexpr uint8_t kEncoderCount = sizeof kEncoders / sizeof kEncoders[0];
 const uint8_t kOledSda = 4;  // GP4, I2C0 SDA
 const uint8_t kOledScl = 5;  // GP5, I2C0 SCL
 const uint8_t kOledAddress = 0x3C;
+constexpr int kI2cPowerPin = -1;  // always powered
 
 // The on board LED, GP25, active high.
 const LedKind kLedKind = LedKind::ActiveHigh;

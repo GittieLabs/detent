@@ -35,6 +35,7 @@ constexpr uint8_t kEncoderCount = sizeof kEncoders / sizeof kEncoders[0];
 const uint8_t kOledSda = 5;  // D4
 const uint8_t kOledScl = 6;  // D5
 const uint8_t kOledAddress = 0x3C;
+constexpr int kI2cPowerPin = -1;  // always powered
 
 // User LED (GPIO21), active low.
 const LedKind kLedKind = LedKind::ActiveLow;
