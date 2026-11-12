@@ -26,7 +26,7 @@ In Volume mode the knob and its push are **handled by the device**: they show gr
 | Open dashboard | Shows a web page on a chosen display, full screen or in a window, without taking focus. Press again to hide it. By default it also hides when no paired device is connected. |
 | Send shortcut | Sends a key combo, or up to four in a row (`cmd+k cmd+s`), to the app in front. Needs Accessibility. |
 | Volume up, down, set, mute | Changes the Mac's output volume and shows a small level bar. |
-| Run AppleScript | Runs your script, with a timeout. The escape hatch for everything else. |
+| Run AppleScript | Runs your script, with a timeout. The escape hatch for everything else: see [AppleScript recipes](applescript.md). |
 
 **Shortcuts go to the app in front**, because that's how macOS delivers keys: Detent can't press keys inside a background app. Password fields turn on Secure Input, which blocks synthetic keys; Detent then sends nothing and says so. A few apps ignore synthetic keys; use Run AppleScript for those.
 

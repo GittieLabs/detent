@@ -221,6 +221,7 @@ html {
 }
 
 .content pre {
+  tab-size: 4;
   border-radius: 0.5em;
   border: 1px solid var(--detent-border);
 }

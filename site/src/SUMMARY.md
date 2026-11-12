@@ -7,6 +7,7 @@
 - [Build your own device](build-your-own.md)
 - [Pair a device](pairing.md)
 - [Mappings](mappings.md)
+- [AppleScript recipes](applescript.md)
 - [The device menu](device-menu.md)
 - [Test and Debug](test-and-debug.md)
 - [The config file](config.md)
