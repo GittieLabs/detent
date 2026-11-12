@@ -203,7 +203,7 @@ Exit criteria:
 
 ## M8 Teensy 4.x
 
-Port to Keith's Teensy 4.x after M7: PJRC's own USB stack (not TinyUSB) needs its descriptors customized for the vendor HID and Consumer Control collections, and it uses PJRC's shared USB IDs.
+Port to Keith's Teensy 4.x after M7: PJRC's own USB stack (not TinyUSB) needs its descriptors customized for the vendor HID and Consumer Control collections, and it uses PJRC's shared USB IDs. Keith, 2026-11-12: M8 stays; the Teensy joins the boards D-116 lists.
 
 Exit criteria:
 
