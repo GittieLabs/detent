@@ -237,7 +237,7 @@ The items noted during M2 and M6 are now tasks above.
 Exit criteria:
 
 - [ ] Full manual acceptance pass with zero blockers.
-- [ ] Notarized build installs and runs on a clean user account.
+- [x] Notarized build installs and runs on a clean user account. Keith, 2026-11-12: 0.1.0 from `760af79` (`acceptance.md` M9 steps 1 and 2).
 
 ## After v0.1
 
