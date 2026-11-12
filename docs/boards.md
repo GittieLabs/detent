@@ -25,6 +25,10 @@ shows them as needing a firmware update.
 
 A board's layout (its buttons, encoders and which button is each encoder's push switch) is set in its header in `firmware/include/boards/` and reported in HELLO (D-094). The USB IDs only choose the name shown and the starter template, so a different layout needs no new ID.
 
+The user guide's "Build your own device" page (`site/src/build-your-own.md`) walks through a complete custom board, compiled while it was written: the header, the `board_pins.h` branch, the env, the HELLO limits and keeping control IDs stable.
+
+A custom build can set its identity in its env (`-DDETENT_USB_VID`, `-DDETENT_USB_PID`, `-DDETENT_MODEL_NAME`) instead of a `MODELS` row: the generated header only defines them for the board flags it knows.
+
 Adding a board: a header in `firmware/include/boards/`, an env in
 `firmware/platformio.ini` and CI, and a row in `MODELS` (its board flag, IDs
 and model name), then `just gen-header`. A custom build doesn't need the row

@@ -4,6 +4,7 @@
 
 - [Install](install.md)
 - [Boards and firmware](boards.md)
+- [Build your own device](build-your-own.md)
 - [Pair a device](pairing.md)
 - [Mappings](mappings.md)
 - [The device menu](device-menu.md)

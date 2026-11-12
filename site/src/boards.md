@@ -30,4 +30,4 @@ Use the env from the table for other boards. `just fw` builds every board withou
 
 ## Your own layout
 
-A board's pins live in one header in `firmware/include/boards/`: its buttons, its encoders and which button is each encoder's push switch. A layout the device couldn't describe to the app fails to compile, so mistakes show up before you flash.
+A board's pins live in one header in `firmware/include/boards/`: its buttons, its encoders and which button is each encoder's push switch. A layout the device couldn't describe to the app fails to compile, so mistakes show up before you flash. [Build your own device](build-your-own.md) walks through a complete example.
