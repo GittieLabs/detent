@@ -1,0 +1,401 @@
+/*
+ * Detent's look for the docs site (D-124). Layered over mdBook's own CSS.
+ *
+ * Palette (Tailwind names, so the README banner and any later UI share it):
+ *   Neutrals  slate      text, surfaces, borders
+ *   Accent    teal       links, the active page, focus (the one interactive colour)
+ *   Signal    amber      the knob's tick, h1 underline, current-page marker
+ * Light: slate-50 page, slate-800 text, teal-700 links (5.3:1 on slate-50).
+ * Dark:  slate-950 page, slate-200 text, teal-400 links (8:1 on slate-950).
+ *
+ * Only two themes: "Light" and "Navy" (Detent dark). Rust, Coal and Ayu map to
+ * the same palettes and are hidden from the theme menu.
+ */
+
+:root {
+  --detent-teal-300: #5eead4;
+  --detent-teal-400: #2dd4bf;
+  --detent-teal-600: #0d9488;
+  --detent-teal-700: #0f766e;
+  --detent-teal-800: #115e59;
+  --detent-amber-300: #fcd34d;
+  --detent-amber-400: #fbbf24;
+  --detent-amber-500: #f59e0b;
+
+  --content-max-width: 760px;
+  --sidebar-target-width: 280px;
+  --mono-font: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --detent-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
+}
+
+/* ---- Light ------------------------------------------------------------ */
+
+.light,
+.rust {
+  --bg: #f8fafc;
+  --fg: #1e293b;
+  --detent-heading: #0f172a;
+  --detent-muted: #64748b;
+  --detent-surface: #ffffff;
+  --detent-border: #e2e8f0;
+  --detent-tick: var(--detent-amber-500);
+
+  --sidebar-bg: #f1f5f9;
+  --sidebar-fg: #334155;
+  --sidebar-non-existant: #94a3b8;
+  --sidebar-active: var(--detent-teal-700);
+  --sidebar-spacer: #e2e8f0;
+  --scrollbar: #cbd5e1;
+
+  --icons: #64748b;
+  --icons-hover: var(--detent-teal-700);
+
+  --links: var(--detent-teal-700);
+  --inline-code-color: var(--detent-teal-800);
+
+  --theme-popup-bg: #ffffff;
+  --theme-popup-border: #e2e8f0;
+  --theme-hover: #f1f5f9;
+
+  --quote-bg: #f0fdfa;
+  --quote-border: var(--detent-teal-600);
+  --warning-border: var(--detent-amber-500);
+
+  --table-border-color: #e2e8f0;
+  --table-header-bg: #f1f5f9;
+  --table-alternate-bg: #f8fafc;
+
+  --searchbar-border-color: #cbd5e1;
+  --searchbar-bg: #ffffff;
+  --searchbar-fg: #0f172a;
+  --searchbar-shadow-color: rgba(15, 118, 110, 0.25);
+  --searchresults-header-fg: #64748b;
+  --searchresults-border-color: #e2e8f0;
+  --searchresults-li-bg: #f1f5f9;
+  --search-mark-bg: #fde68a;
+
+  --color-scheme: light;
+  --footnote-highlight: #ccfbf1;
+  --overlay-bg: rgba(15, 23, 42, 0.25);
+}
+
+/* ---- Dark ------------------------------------------------------------- */
+
+.navy,
+.coal,
+.ayu {
+  --bg: #020617;
+  --fg: #e2e8f0;
+  --detent-heading: #f8fafc;
+  --detent-muted: #94a3b8;
+  --detent-surface: #0f172a;
+  --detent-border: #1e293b;
+  --detent-tick: var(--detent-amber-400);
+
+  --sidebar-bg: #0b1222;
+  --sidebar-fg: #cbd5e1;
+  --sidebar-non-existant: #475569;
+  --sidebar-active: var(--detent-teal-400);
+  --sidebar-spacer: #1e293b;
+  --scrollbar: #334155;
+
+  --icons: #94a3b8;
+  --icons-hover: var(--detent-teal-300);
+
+  --links: var(--detent-teal-400);
+  --inline-code-color: var(--detent-amber-300);
+
+  --theme-popup-bg: #0f172a;
+  --theme-popup-border: #1e293b;
+  --theme-hover: #1e293b;
+
+  --quote-bg: rgba(45, 212, 191, 0.06);
+  --quote-border: var(--detent-teal-400);
+  --warning-border: var(--detent-amber-400);
+
+  --table-border-color: #1e293b;
+  --table-header-bg: #0f172a;
+  --table-alternate-bg: #050b1a;
+
+  --searchbar-border-color: #334155;
+  --searchbar-bg: #0f172a;
+  --searchbar-fg: #f8fafc;
+  --searchbar-shadow-color: rgba(45, 212, 191, 0.25);
+  --searchresults-header-fg: #94a3b8;
+  --searchresults-border-color: #1e293b;
+  --searchresults-li-bg: #0f172a;
+  --search-mark-bg: #b45309;
+
+  --color-scheme: dark;
+  --footnote-highlight: #134e4a;
+  --overlay-bg: rgba(2, 6, 23, 0.6);
+}
+
+/* Two themes are enough: hide the rest from the menu. */
+.theme-popup #rust,
+.theme-popup #coal,
+.theme-popup #ayu {
+  display: none;
+}
+
+/* ---- Type ------------------------------------------------------------- */
+
+html {
+  font-family: var(--detent-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.content main {
+  line-height: 1.7;
+}
+
+.content h1,
+.content h2,
+.content h3,
+.content h4 {
+  color: var(--detent-heading);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.content h1 {
+  font-size: 2.25em;
+  margin-block-start: 1.5em;
+  padding-block-end: 0.75em;
+  position: relative;
+}
+
+/* The detent tick: a short amber bar under each page title. */
+.content h1::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2.5em;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--detent-tick);
+}
+
+.content h2 {
+  font-size: 1.5em;
+  margin-block-start: 2.5em;
+  padding-block-end: 0.375em;
+  border-bottom: 1px solid var(--detent-border);
+}
+
+.content h3 {
+  font-size: 1.15em;
+  margin-block-start: 2em;
+}
+
+.content a:link,
+.content a:visited {
+  color: var(--links);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, var(--links) 40%, transparent);
+  transition: text-decoration-color 150ms ease-out;
+}
+
+.content a:hover {
+  text-decoration-color: var(--links);
+}
+
+/* Heading anchors stay plain. */
+.content .header:link,
+.content .header:visited {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ---- Code ------------------------------------------------------------- */
+
+.content :not(pre) > code {
+  padding: 0.1em 0.35em;
+  border-radius: 0.375em;
+  background: color-mix(in srgb, var(--detent-border) 70%, transparent);
+  font-size: 0.85em;
+}
+
+.content pre {
+  border-radius: 0.5em;
+  border: 1px solid var(--detent-border);
+}
+
+.content pre > code.hljs,
+.content pre > code {
+  border-radius: 0.5em;
+  padding: 1em 1.25em;
+}
+
+.light .hljs,
+.rust .hljs {
+  background: #f1f5f9;
+}
+
+.navy .hljs,
+.coal .hljs,
+.ayu .hljs {
+  background: #0b1222;
+}
+
+/* ---- Tables, quotes --------------------------------------------------- */
+
+.content table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--table-border-color);
+  border-radius: 0.5em;
+  overflow: hidden;
+  margin-block: 1.5em;
+}
+
+.content table td,
+.content table th {
+  border: none;
+  border-bottom: 1px solid var(--table-border-color);
+  padding: 0.6em 0.9em;
+}
+
+.content table tr:last-child td {
+  border-bottom: none;
+}
+
+.content table thead th {
+  font-weight: 600;
+  text-align: start;
+  color: var(--detent-heading);
+}
+
+.content blockquote {
+  border: none;
+  border-inline-start: 3px solid var(--quote-border);
+  border-radius: 0 0.5em 0.5em 0;
+  padding: 0.75em 1.25em;
+}
+
+/* ---- Sidebar and menu bar --------------------------------------------- */
+
+.sidebar .chapter li.chapter-item {
+  line-height: 1.6;
+}
+
+.sidebar .chapter li a {
+  border-radius: 0.375em;
+  padding: 0.15em 0.5em;
+  transition: background-color 150ms ease-out, color 150ms ease-out;
+}
+
+.sidebar .chapter li a:hover {
+  background: var(--theme-hover);
+  color: var(--sidebar-active);
+}
+
+.sidebar .chapter li a.active {
+  font-weight: 600;
+  background: color-mix(in srgb, var(--sidebar-active) 10%, transparent);
+  box-shadow: inset 3px 0 0 var(--detent-tick);
+}
+
+.menu-title {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--detent-heading);
+}
+
+/* The knob mark before the title: a ring with an amber tick. */
+.menu-title::before {
+  content: "";
+  display: inline-block;
+  width: 1.15em;
+  height: 1.15em;
+  margin-inline-end: 0.45em;
+  vertical-align: -0.18em;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f172a'/%3E%3Ccircle cx='16' cy='17' r='8.5' fill='none' stroke='%23f8fafc' stroke-width='2.5'/%3E%3Cpath d='M16 5.5v6' stroke='%23fbbf24' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+/* ---- The home page hero (introduction.md) ------------------------------ */
+
+.detent-hero {
+  margin: 1.5em 0 2.5em;
+  padding: 2em 2em 1.75em;
+  border-radius: 1em;
+  border: 1px solid var(--detent-border);
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--detent-teal-600) 14%, transparent), transparent 60%),
+    var(--detent-surface);
+}
+
+.detent-hero svg {
+  width: 3.5em;
+  height: 3.5em;
+  display: block;
+  margin-bottom: 1em;
+}
+
+.detent-hero .detent-lede {
+  font-size: 1.2em;
+  line-height: 1.6;
+  color: var(--detent-heading);
+  margin: 0 0 1.5em;
+  max-width: 34em;
+}
+
+.detent-hero .detent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75em;
+}
+
+.content .detent-hero a.detent-button {
+  display: inline-block;
+  padding: 0.55em 1.1em;
+  border-radius: 0.5em;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 150ms ease-out, border-color 150ms ease-out;
+}
+
+.content .detent-hero a.detent-button.primary {
+  background: var(--detent-teal-700);
+  color: #ffffff;
+}
+
+.content .detent-hero a.detent-button.primary:hover {
+  background: var(--detent-teal-800);
+}
+
+.navy .content .detent-hero a.detent-button.primary,
+.coal .content .detent-hero a.detent-button.primary,
+.ayu .content .detent-hero a.detent-button.primary {
+  background: var(--detent-teal-400);
+  color: #042f2e;
+}
+
+.navy .content .detent-hero a.detent-button.primary:hover,
+.coal .content .detent-hero a.detent-button.primary:hover,
+.ayu .content .detent-hero a.detent-button.primary:hover {
+  background: var(--detent-teal-300);
+}
+
+.content .detent-hero a.detent-button.secondary {
+  border: 1px solid var(--detent-border);
+  color: var(--detent-heading);
+}
+
+.content .detent-hero a.detent-button.secondary:hover {
+  border-color: var(--links);
+}
+
+@media (max-width: 600px) {
+  .detent-hero {
+    padding: 1.5em 1.25em;
+  }
+  .content h1 {
+    font-size: 1.85em;
+  }
+}

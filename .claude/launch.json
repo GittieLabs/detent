@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "docs-site",
+      "runtimeExecutable": "mdbook",
+      "runtimeArgs": ["serve", "site", "-p", "3010", "-n", "127.0.0.1"],
+      "port": 3010
+    }
+  ]
+}
