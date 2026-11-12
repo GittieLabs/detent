@@ -23,6 +23,7 @@ pub const ID_NEW_DEVICE: &str = "new_device";
 pub const ID_PAUSE: &str = "pause";
 pub const ID_OPEN: &str = "open";
 pub const ID_QUIT: &str = "quit";
+pub const ID_VERSION: &str = "version";
 
 /// Accessibility status for this process. `None` off macOS, where the grant
 /// doesn't exist.
@@ -108,6 +109,22 @@ fn show_login<R: Runtime>(item: &CheckMenuItem<R>, state: Option<Login>) {
 
 /// Text of the device line, led by its status dot (D-074): green connected,
 /// white none, red a problem.
+/// Which Detent this is, for the tray menu and the settings window's title:
+/// `Detent 0.1.0`, with ` (dev build)` on a debug build so a dev build is
+/// never mistaken for a release.
+pub fn version_label(version: &str, debug: bool) -> String {
+    if debug {
+        format!("Detent {version} (dev build)")
+    } else {
+        format!("Detent {version}")
+    }
+}
+
+/// [`version_label`] for this build.
+pub fn this_version() -> String {
+    version_label(env!("CARGO_PKG_VERSION"), cfg!(debug_assertions))
+}
+
 pub fn device_label(status: &DeviceStatus, dry_run: bool) -> String {
     let base = match status {
         DeviceStatus::Starting => "⚪ Starting".to_owned(),
@@ -241,6 +258,7 @@ pub fn build(app: &AppHandle<Wry>, dry_run: bool) -> tauri::Result<Tray> {
     let pause = CheckMenuItem::with_id(app, ID_PAUSE, "Pause", true, false, None::<&str>)?;
     let open = MenuItem::with_id(app, ID_OPEN, "Open Detent", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, ID_QUIT, "Quit Detent", true, Some("Cmd+Q"))?;
+    let version = MenuItem::with_id(app, ID_VERSION, this_version(), false, None::<&str>)?;
     let menu = Menu::with_items(
         app,
         &[
@@ -251,6 +269,7 @@ pub fn build(app: &AppHandle<Wry>, dry_run: bool) -> tauri::Result<Tray> {
             &login,
             &PredefinedMenuItem::separator(app)?,
             &open,
+            &version,
             &quit,
         ],
     )?;
@@ -380,6 +399,13 @@ mod tests {
     }
 
     #[test]
+    fn the_version_says_which_build_this_is() {
+        assert_eq!(version_label("0.1.0", false), "Detent 0.1.0");
+        assert_eq!(version_label("0.1.0", true), "Detent 0.1.0 (dev build)");
+        assert!(this_version().starts_with(&format!("Detent {}", env!("CARGO_PKG_VERSION"))));
+    }
+
+    #[test]
     fn menu_ids_are_distinct() {
         let ids = [
             ID_DEVICE,
@@ -389,6 +415,7 @@ mod tests {
             ID_PAUSE,
             ID_OPEN,
             ID_QUIT,
+            ID_VERSION,
         ];
         for (i, a) in ids.iter().enumerate() {
             for b in &ids[i + 1..] {

@@ -12,6 +12,7 @@ Detent has no Dock icon. Look for its knob in the menu bar; its menu shows:
 - **New device found: Pair…** when an unpaired Detent device is plugged in.
 - **Pause**: presses are logged but run nothing until you turn it off.
 - **Open Detent**: the settings window.
+- **Detent 0.1.0**: which version is running (*dev build* on one built from source with `just build-dev`). The settings window's title says the same.
 - **Open at login**: starts Detent when you log in.
 - **Quit**.
 
