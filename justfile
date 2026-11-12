@@ -28,6 +28,14 @@ build-release:
 notarize-release:
     scripts/build-release.sh --notarize
 
+# Tag a release: checks, firmware images, notes, the local v<version> tag (D-114)
+release:
+    scripts/release.sh
+
+# Push the release tag and upload a draft GitHub Release (Keith's OK each time)
+release-publish:
+    scripts/release.sh --publish
+
 # Build the documentation site into site/book (needs mdbook 0.4.52)
 site:
     mdbook build site

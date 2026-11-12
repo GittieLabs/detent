@@ -4,6 +4,8 @@
 2. Open it and drag **Detent** to **Applications**.
 3. Open Detent from Applications. It's signed and notarized by Apple, so macOS opens it without a warning.
 
+Each release also carries firmware for every supported board (`detent-fw-<board>-<version>.bin`, or `.uf2` for the Pico), and its notes say which firmware the app expects. See [Boards and firmware](boards.md) for flashing.
+
 Detent has no Dock icon. Look for its knob in the menu bar; its menu shows:
 
 - **The device line**: a green dot and the device's name when it's connected, white when none is, red when something's wrong (with the reason in the settings window).
