@@ -6,6 +6,7 @@ Detent's firmware runs on these boards. Each reports its own buttons and encoder
 | --- | --- | --- |
 | Seeed XIAO ESP32-S3 | `xiao_esp32s3` | The reference board: buttons, one encoder with a push switch, an OLED. |
 | Adafruit ESP32-S3 Feather | `feather_esp32s3` | Works with nothing soldered: the BOOT button is button 1, the red LED shows status, and an OLED plugs into the STEMMA QT connector. |
+| ESP32-S3 DevKitC-1 (N16R8 and similar) | `devkitc_esp32s3` | Plenty of GPIO. Plug the Mac into the port labelled **USB**, not UART: that's the one Detent uses, and flashing works through it too. Its RGB LED shows status. |
 | Raspberry Pi Pico (RP2040) | `pico` | In progress: its USB link works; buttons, encoder and OLED are being tested. |
 
 Boards built on the original ESP32 (no "S3") can't be Detent devices: they have no native USB.

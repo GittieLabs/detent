@@ -14,6 +14,7 @@ Keith decides whether that edit bumps the protocol version (open question in
 |---|---|---|---|---|
 | Seeed XIAO ESP32-S3 | `xiao_esp32s3` | `303A:8FDE` (PLACEHOLDER PID, D-014) | Dev | Shipping board |
 | Adafruit ESP32-S3 Feather (4 MB flash, 2 MB PSRAM) | `feather_esp32s3` | `303A:8FDE`, shared with the XIAO for now | Dev | BOOT as button 1 and no encoder until headers (D-097); own PID or variant is an open question |
+| ESP32-S3 DevKitC-1 class, N16R8 (16 MB flash, 8 MB octal PSRAM) | `devkitc_esp32s3` | `303A:8FDE`, shared with the XIAO until D-112 | Dev | Env and pin map built 2026-11-12 (D-118); Keith's board arrives 2026-11-13. Detent runs on the port labelled USB |
 | Raspberry Pi Pico (RP2040) | `pico`, `pico_spike` | `1209:0001` (pid.codes testing pair, PLACEHOLDER) | Pico | USB spike passed (D-092); full board waits on soldered headers |
 
 A board's layout (its buttons, encoders and which button is each encoder's push switch) is set in its header in `firmware/include/boards/` and reported in HELLO (D-094). The USB IDs only choose the name shown and the starter template, so a different layout needs no new ID.

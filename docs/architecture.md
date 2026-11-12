@@ -65,9 +65,9 @@ Logic lives in pure C++11 libraries under `lib/` with caller supplied time and p
 - `lib/injector`: TEST_INJECT replay, enabled only in the debug env (D-043).
 - `lib/usb_identity`: serial from the base MAC, product strings (D-040).
 - `src/usb_device`: the composite USB device and its receive path (D-036, D-046); `src/display`: draws `lib/menu`'s lines with U8g2; `src/diag`: debug only boot, USB, and input diagnostics (D-049); `src/main.cpp`: wiring.
-- `include/board_pins.h` selects the board by the env's `-DDETENT_BOARD_*` flag: one header per board in `include/boards/` (XIAO ESP32-S3, Adafruit ESP32-S3 Feather, Raspberry Pi Pico) holds its pins, status LED kind, OLED pins, and any switched I2C power pin. `src/platform.h` holds the per chip interrupt attribute and lock; the USB glue is per chip behind `src/usb_device.h` (`src/esp32/`, `src/pico/`, D-092). `include/detent_protocol.h` is generated from the `protocol` crate.
+- `include/board_pins.h` selects the board by the env's `-DDETENT_BOARD_*` flag: one header per board in `include/boards/` (XIAO ESP32-S3, Adafruit ESP32-S3 Feather, ESP32-S3 DevKitC-1, Raspberry Pi Pico) holds its pins, status LED kind, OLED pins, and any switched I2C power pin. `src/platform.h` holds the per chip interrupt attribute and lock; the USB glue is per chip behind `src/usb_device.h` (`src/esp32/`, `src/pico/`, D-092). `include/detent_protocol.h` is generated from the `protocol` crate.
 
-Builds per board: `xiao_esp32s3` and `feather_esp32s3` (each with a `_debug` variant adding TEST_INJECT, diagnostics, and the input trace), `pico`, and `pico_spike` (USB only, no pins). `scripts/hil.sh` exercises the XIAO's on hardware.
+Builds per board: `xiao_esp32s3`, `feather_esp32s3` and `devkitc_esp32s3` (each with a `_debug` variant adding TEST_INJECT, diagnostics, and the input trace), `pico`, and `pico_spike` (USB only, no pins). `scripts/hil.sh` exercises the XIAO's on hardware.
 
 ## App modules (`app/src-tauri/src/`)
 

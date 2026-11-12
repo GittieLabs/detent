@@ -52,9 +52,9 @@ probe *ARGS:
 gen-header:
     scripts/gen-header.sh
 
-# Build the firmware for every board (XIAO, Feather, Pico; release and debug)
+# Build the firmware for every board (XIAO, Feather, DevKitC, Pico; release and debug)
 fw:
-    pio run -d firmware -e xiao_esp32s3 -e xiao_esp32s3_debug -e feather_esp32s3 -e feather_esp32s3_debug -e pico -e pico_spike
+    pio run -d firmware -e xiao_esp32s3 -e xiao_esp32s3_debug -e feather_esp32s3 -e feather_esp32s3_debug -e devkitc_esp32s3 -e devkitc_esp32s3_debug -e pico -e pico_spike
 
 # Build the debug firmware (TEST_INJECT enabled; never ship it)
 fw-debug:
@@ -72,5 +72,5 @@ fw-upload env="xiao_esp32s3":
 ci: lint test
     pnpm -C app install --frozen-lockfile
     pnpm -C app tsc --noEmit
-    pio run -d firmware -e xiao_esp32s3 -e xiao_esp32s3_debug -e feather_esp32s3 -e feather_esp32s3_debug -e pico -e pico_spike
+    pio run -d firmware -e xiao_esp32s3 -e xiao_esp32s3_debug -e feather_esp32s3 -e feather_esp32s3_debug -e devkitc_esp32s3 -e devkitc_esp32s3_debug -e pico -e pico_spike
     pio test -d firmware -e native

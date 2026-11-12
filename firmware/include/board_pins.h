@@ -41,10 +41,12 @@ struct SparePin {
 #include "boards/xiao_esp32s3.h"
 #elif defined(DETENT_BOARD_FEATHER_ESP32S3)
 #include "boards/feather_esp32s3.h"
+#elif defined(DETENT_BOARD_DEVKITC_ESP32S3)
+#include "boards/devkitc_esp32s3.h"
 #elif defined(DETENT_BOARD_PICO)
 #include "boards/pico.h"
 #else
-#error "No board: build with -DDETENT_BOARD_XIAO_ESP32S3, _FEATHER_ESP32S3 or _PICO"
+#error "No board: build with -DDETENT_BOARD_XIAO_ESP32S3, _FEATHER_ESP32S3, _DEVKITC_ESP32S3 or _PICO"
 #endif
 
 namespace detent {
