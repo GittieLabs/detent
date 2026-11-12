@@ -243,7 +243,19 @@ Recorded for a later update (Keith, 2026-11-10; not in v1):
 
 - [ ] Chords: a mapping triggered by a control while another button is held (Button 1 held + encoder turn to zoom, Button 2 held + turn to rotate in Plasticity; button + button too). App side only: in Mapped mode the device already reports every down, up and turn. A button used as a chord modifier fires its own press on release, and only if no chord happened (tap vs hold); other buttons keep firing on down. Needs a decisions row relaxing product.md's "no layers" rule for chords. Knob chords need Mapped mode unless the firmware learns to forward turns while a button is held. Check what Plasticity binds for pan, zoom and orbit first: if they're mouse only, a scroll or drag action type would be needed (its own decisions row).
 
+Custom hardware (Keith, 2026-11-12; not in v1). A builder wants 12 to 24 buttons with per-button addressable LEDs, an OLED, an encoder and a joystick (KY-023 or GuliKit TMR), more than any board's GPIO. Firmware-only items first; the protocol ones wait on the open question below.
+
+- [ ] "Build your own device" docs page (`site/src/` and `docs/boards.md`): a worked example of adding a board header, its env in `platformio.ini`, the `board_pins.h` branch and CI, when a `MODELS` row is needed, and the HELLO limits (27 controls, 59 bytes; a kind `3` encoder costs one byte more). Tested by `tests/site_links.rs` and `just site`. Could be pulled into M9 since custom layouts already work.
+- [ ] Shift register input (74HC165, firmware only): each button reads from a GPIO or from a bit of a daisy-chained 165 chain (PL, CLK, QH pins and chip count in the board header), read once per scan and fed through the existing debounce and long press. No protocol or app change: BUTTON carries control IDs only. Native tests for the bit mapping; HIL with a real chain in `acceptance.md`. Note external pull ups (the 165 has none). 24 buttons plus one encoder with push fits HELLO (25 controls, 56 bytes); two encoders with separate pushes doesn't.
+- [ ] Device-driven addressable LEDs (WS2812/SK6812, firmware only): an LED data pin and count in the board header, each LED tied to a control ID, lit on press and for mode or pairing state. A brightness cap so 24 LEDs stay within USB's 500 mA. Level shifting for 5 V WS2812 data noted in the docs page.
+- [ ] Joystick as existing controls (firmware only): an analog stick (ADC1 pins on the ESP32-S3, powered from 3.3 V) reported as four direction buttons with thresholds and hysteresis, or each axis as an encoder whose rate follows deflection; its push switch is an ordinary button. Native tests for the threshold logic; hands on check in `acceptance.md`.
+- [ ] App-driven LEDs (protocol change): a new app to device message, for example `LED_SET{control_id, rgb}`, and app logic deciding each colour (muted, app scoped mapping active). Atomic protocol bump; a decisions row, since it goes beyond product.md's v1 goals.
+- [ ] Analog axes (protocol change): a HELLO kind `4 axis` and an `AXIS{control_id, value i16}` message, plus a mapping that consumes a continuous value. No v1 action does, so it also needs a new action type and its decisions row.
+- [ ] More than 27 controls or a fuller HELLO (protocol change): HELLO split across reports. Only if a layout needs it.
+
 ## Open questions (Keith's call)
+
+- [ ] Custom hardware protocol changes: should app-driven LEDs and analog axes become protocol v3 work (and which first), or stay firmware-only (device-driven LEDs, joystick as buttons) for now? Placeholder: firmware-only items only.
 
 - [ ] Where v0.1 is published and how it's tagged: placeholder, a `v0.1.0` tag and the notarized DMG on GitHub Releases, uploaded by Keith. The release task only builds and notarizes.
 - [ ] Notarization credentials: Keith runs `xcrun notarytool store-credentials` once and sets `APPLE_NOTARY_PROFILE` to the profile's name (D-099). Needed before the release task's first submission.
