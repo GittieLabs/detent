@@ -330,22 +330,88 @@ html {
     var(--detent-surface);
 }
 
-.detent-hero svg {
+.detent-hero-text > svg {
   width: 3.5em;
   height: 3.5em;
   display: block;
   margin-bottom: 1em;
 }
 
+/* Text beside the macropad on wide screens, below it on narrow ones. */
+.detent-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr);
+  gap: 1.5em 2em;
+  align-items: center;
+}
+
+.detent-hero-device {
+  display: flex;
+  justify-content: center;
+}
+
+/* The macropad from the README banner, coloured by the theme. */
+.detent-device {
+  width: 100%;
+  max-width: 22em;
+  height: auto;
+  filter: drop-shadow(0 12px 24px rgba(15, 23, 42, 0.18));
+  --dev-body: #1e293b;
+  --dev-edge: #0f172a;
+  --dev-key: #334155;
+  --dev-keytop: #475569;
+}
+
+.navy .detent-device,
+.coal .detent-device,
+.ayu .detent-device {
+  filter: drop-shadow(0 12px 28px rgba(45, 212, 191, 0.08));
+  --dev-body: #0f172a;
+  --dev-edge: #1e293b;
+  --dev-key: #1e293b;
+  --dev-keytop: #334155;
+}
+
+.detent-device .body { fill: var(--dev-body); stroke: var(--dev-edge); stroke-width: 2; }
+.detent-device .oled { fill: #020617; }
+.detent-device .oled-text {
+  fill: var(--detent-teal-400);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 15px;
+}
+.detent-device .k { fill: var(--dev-key); }
+.detent-device .kt { fill: var(--dev-keytop); }
+.detent-device .lit,
+.detent-device .led { fill: var(--detent-teal-400); }
+.detent-device .tick { stroke: var(--detent-tick); stroke-width: 6; stroke-linecap: round; }
+
+@media (max-width: 900px) {
+  .detent-hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5em;
+  }
+  .detent-hero-device {
+    order: -1;
+  }
+  .detent-device {
+    max-width: 20em;
+  }
+  /* The macropad leads on narrow screens; the small mark would repeat it. */
+  .detent-hero-text > svg {
+    display: none;
+  }
+}
+
 .detent-hero .detent-lede {
   font-size: 1.2em;
   line-height: 1.6;
   color: var(--detent-heading);
-  margin: 0 0 1.5em;
+  margin: 0;
   max-width: 34em;
 }
 
 .detent-hero .detent-actions {
+  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
   gap: 0.75em;
