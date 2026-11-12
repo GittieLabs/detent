@@ -90,7 +90,7 @@ void begin() {
   format_serial(mac, serial_number);
 
   USB.VID(DETENT_USB_VID);
-  USB.PID(DETENT_USB_PID);  // placeholder until the usb-pids allocation (D-014)
+  USB.PID(DETENT_USB_PID);  // this board's local PID (D-112)
   USB.manufacturerName(kManufacturer);
   USB.productName(kProductName);
   USB.serialNumber(serial_number);

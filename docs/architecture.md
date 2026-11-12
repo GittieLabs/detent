@@ -26,7 +26,7 @@ ESP32-S3 device                         Detent app (Tauri 2, Rust)
 1. Vendor defined HID (usage page `0xFF00`, report ID 6), 63 byte reports, carrying all app traffic. See `protocol.md`.
 2. Standard Consumer Control (report ID 4) for volume up, down, and mute.
 
-VID is Espressif's `0x303A`. The PID comes from Espressif's free usb-pids program (D-014); until that PR merges, firmware uses the placeholder in `protocol/src/ids.rs`. **Never use TinyUSB or IDF default PIDs** (for example `0x4001`); they collide with stock firmware. Each board build with its own IDs is a model in `ids::MODELS` (D-093); the app's `devices` treats any model as a Detent unit, and `docs/boards.md` lists them. A board's controls, including which button is each encoder's push switch, come from its HELLO (D-094); the model only picks the display name and starter template.
+The VID is the chip vendor's (Espressif `0x303A`, Raspberry Pi `0x2E8A`) and each board's PID is chosen locally in `ids::MODELS`, with no vendor allocation until Detent has real adoption (D-112); the generated header gives each build its IDs and its product string `Detent <model name>` (D-113). **Never use TinyUSB, IDF or RP2040 default PIDs** (for example `0x4001`); they collide with stock firmware. The app's `devices` and `ctl-probe` don't go by IDs: a vendor channel whose product string starts `Detent ` is a Detent unit, and nothing else is ever opened. `docs/boards.md` lists the boards. A board's controls, including which button is each encoder's push switch, come from its HELLO (D-094); the model only picks the display name and starter template.
 
 The USB serial number string is derived from the chip's MAC address, so two identical devices are distinguishable.
 
@@ -46,9 +46,9 @@ A long press of the encoder's push switch opens the OLED menu from any mode, and
 
 ## Identity
 
-- **PID** identifies the device *model*.
-- **VID + PID + serial** identifies the *unit*. Mappings attach to a unit.
-- A model can ship a starter template, so a second unit of the same model pairs with sensible defaults.
+- The **product string** `Detent <model name>` says a channel is a Detent unit and names its model; HELLO confirms it (D-112).
+- The **serial** identifies the *unit*: `DeviceId` equality is serial only, so a reflash that changes VID or PID keeps the pairing. Mappings attach to a unit by serial.
+- The **VID and PID** name the model for the starter template (`ids::model`) and keep boards apart in system tools. A model can ship a starter template, so a second unit of the same model pairs with sensible defaults.
 
 Every event inside the app carries a `DeviceId` from day one, even though v1 supports one connected device. That keeps multi device a UI change, not a refactor.
 

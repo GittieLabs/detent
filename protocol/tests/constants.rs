@@ -6,8 +6,8 @@ use detent_protocol::{ids, msg, HEADER_LEN, MAX_PAYLOAD_LEN, PROTOCOL_VERSION, R
 use detent_protocol::{CONSUMER_REPORT_ID, USAGE, USAGE_PAGE, VENDOR_REPORT_ID};
 
 #[test]
-fn version_is_two() {
-    assert_eq!(PROTOCOL_VERSION, 2);
+fn version_is_three() {
+    assert_eq!(PROTOCOL_VERSION, 3);
 }
 
 #[test]
@@ -103,10 +103,23 @@ fn vid_is_espressif() {
 }
 
 #[test]
-fn placeholder_pid_is_in_range_and_not_a_default() {
-    assert!((0x8000..=0x8FFF).contains(&ids::PID));
-    // TinyUSB and ESP-IDF defaults collide with stock firmware (architecture.md).
-    for default in [0x0002, 0x1001, 0x4001, 0x4002, 0x4003, 0x4004] {
-        assert_ne!(ids::PID, default);
+fn local_pids_are_in_range_and_not_defaults() {
+    // D-112: chosen locally, high in Espressif's range and Raspberry Pi's.
+    for m in ids::MODELS {
+        match m.vid {
+            0x303A => assert!((0x8F00..=0x8FFF).contains(&m.pid), "{m:?}"),
+            0x2E8A => assert!(m.pid >= 0xF000, "{m:?}"),
+            other => panic!("{m:?}: unexpected VID {other:04X}"),
+        }
+        // TinyUSB, ESP-IDF and RP2040 defaults collide with stock firmware.
+        for default in [
+            0x0002, 0x0003, 0x000A, 0x1001, 0x4001, 0x4002, 0x4003, 0x4004,
+        ] {
+            assert_ne!(m.pid, default, "{m:?}");
+        }
+        assert!(
+            ids::is_detent_product(Some(&format!("{}{}", ids::PRODUCT_PREFIX, m.name))),
+            "{m:?}"
+        );
     }
 }

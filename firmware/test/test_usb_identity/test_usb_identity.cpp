@@ -3,6 +3,8 @@
 #include <string.h>
 #include <unity.h>
 
+// Build this test as the XIAO: the generated header names it by board flag.
+#define DETENT_BOARD_XIAO_ESP32S3
 #include "usb_identity.h"
 
 void setUp() {}
@@ -36,8 +38,9 @@ static void test_different_units_get_different_serials() {
 
 static void test_product_and_manufacturer_strings() {
   TEST_ASSERT_EQUAL_STRING("GittieLabs", detent::kManufacturer);
-  // "Detent <model name>"; the model name is a placeholder until Keith picks one.
-  TEST_ASSERT_EQUAL_STRING("Detent Dev", detent::kProductName);
+  // "Detent <model name>", the name from the generated header for this
+  // board flag (D-113), defined at the top of this file.
+  TEST_ASSERT_EQUAL_STRING("Detent XIAO", detent::kProductName);
 }
 
 int main() {

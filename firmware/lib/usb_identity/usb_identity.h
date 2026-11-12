@@ -7,10 +7,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// PLACEHOLDER: the model name for the product string "Detent <model name>"
-// (open question in docs/roadmap.md). Override with -DDETENT_MODEL_NAME="...".
+#include "detent_protocol.h"
+
+// The model name in the product string "Detent <model name>" comes from the
+// generated header, by the build's -DDETENT_BOARD_* flag (D-113). Hosts know a
+// Detent by that string (D-112), so a custom board keeps the "Detent " prefix.
+// Only a build with no board flag (the native tests of other libraries) gets
+// this stand in.
 #ifndef DETENT_MODEL_NAME
-#define DETENT_MODEL_NAME "Dev"
+#define DETENT_MODEL_NAME "Test"
 #endif
 
 namespace detent {

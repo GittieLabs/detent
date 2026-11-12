@@ -1,7 +1,7 @@
 //! ctl-probe: opens a Detent device and prints what it sends.
 //!
 //!   ctl-probe [--raw] [--count-hellos N]   decoded events; reopens after unplug
-//!   ctl-probe list                         HID entries with Detent's VID
+//!   ctl-probe list                         every HID entry of each Detent unit
 //!   ctl-probe raw [--secs N]               undecoded reports
 //!
 //! It only ever opens the vendor collection (usage page 0xFF00), never a
@@ -34,8 +34,9 @@ const RECONNECT_POLL: Duration = Duration::from_millis(250);
 /// Read timeout, which is also how often the HELLO counter's clock ticks.
 const READ_TIMEOUT_MS: i32 = 100;
 
-/// `DETENT_PROBE_IDS=VID:PID` (hex), to probe a board that isn't in the
-/// models table yet. Unset: any known Detent model.
+/// `DETENT_PROBE_IDS=VID:PID` (hex), to probe only the board with these IDs,
+/// say one whose product string isn't `Detent ...`. Unset: any unit whose
+/// product string says it's a Detent, as the app finds them (D-112).
 fn override_ids() -> Option<(u16, u16)> {
     std::env::var("DETENT_PROBE_IDS").ok().and_then(|v| {
         let (vid, pid) = v.split_once(':')?;
@@ -44,16 +45,16 @@ fn override_ids() -> Option<(u16, u16)> {
     })
 }
 
-/// Whether these USB IDs are what the probe looks for.
-fn wanted(vid: u16, pid: u16) -> bool {
+/// Whether this HID entry belongs to a device the probe looks for.
+fn wanted(d: &DeviceInfo) -> bool {
     match override_ids() {
-        Some(want) => want == (vid, pid),
-        None => ids::is_detent(vid, pid),
+        Some(want) => want == (d.vendor_id(), d.product_id()),
+        None => ids::is_detent_product(d.product_string()),
     }
 }
 
 fn is_vendor_channel(d: &DeviceInfo) -> bool {
-    wanted(d.vendor_id(), d.product_id()) && d.usage_page() == USAGE_PAGE && d.usage() == USAGE
+    wanted(d) && d.usage_page() == USAGE_PAGE && d.usage() == USAGE
 }
 
 /// The vendor channel's path and serial, if a device is attached.
@@ -71,10 +72,7 @@ fn list(api: &HidApi) {
     let mut found = 0;
     // Every interface of a wanted board, so the vendor channel can be told
     // from the consumer one.
-    for d in api
-        .device_list()
-        .filter(|d| wanted(d.vendor_id(), d.product_id()))
-    {
+    for d in api.device_list().filter(|d| wanted(d)) {
         found += 1;
         println!(
             "vid=0x{:04X} pid=0x{:04X} usage_page=0x{:04X} usage=0x{:02X} interface={} serial={} product={}",

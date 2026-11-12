@@ -35,9 +35,15 @@ fn header_carries_every_message_type() {
 #[test]
 fn header_carries_version_and_usb_ids() {
     let header = detent_protocol::header::c_header();
-    assert!(header.contains("#define DETENT_PROTOCOL_VERSION 2\n"));
-    assert!(header.contains("#define DETENT_USB_VID 0x303A"));
-    assert!(header.contains("#define DETENT_USB_PID 0x8FDE"));
+    assert!(header.contains("#define DETENT_PROTOCOL_VERSION 3\n"));
+    // Each board's IDs and model name under its board flag (D-112, D-113).
+    for m in detent_protocol::ids::MODELS {
+        let block = format!(
+            "defined(DETENT_BOARD_{})\n#define DETENT_USB_VID 0x{:04X}\n#define DETENT_USB_PID 0x{:04X}\n#define DETENT_MODEL_NAME \"{}\"\n",
+            m.board, m.vid, m.pid, m.name
+        );
+        assert!(header.contains(&block), "missing: {block}");
+    }
     assert!(header.contains("#define DETENT_REPORT_LEN 63\n"));
     assert!(header.contains("#define DETENT_VENDOR_REPORT_ID 6\n"));
     assert!(header.contains("#define DETENT_CONSUMER_REPORT_ID 4\n"));

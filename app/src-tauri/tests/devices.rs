@@ -56,11 +56,11 @@ fn id(serial: &str) -> DeviceId {
     }
 }
 
-/// A paired unit connected; MockBus and the real board both say `Detent Dev`.
+/// A paired unit connected; MockBus and the real board both say `Detent XIAO`.
 fn conn(serial: &str) -> DeviceEvent {
     DeviceEvent::Connected {
         id: id(serial),
-        product: Some("Detent Dev".into()),
+        product: Some("Detent XIAO".into()),
     }
 }
 
@@ -413,7 +413,8 @@ fn ignore_wins_over_the_allowlist() {
 fn other_vendors_and_serialless_entries_are_not_news() {
     let mut r = Rig::new(&[PAIRED], &[]);
     // Some other product's vendor page collection, and a Detent with no serial.
-    r.bus.attach(0x046D, 0xC52B, Some("X"));
+    r.bus
+        .attach_product(0x046D, 0xC52B, Some("X"), Some("USB Receiver"));
     r.bus.attach(VID, PID, None);
     assert_eq!(
         r.at(0.0),
@@ -433,12 +434,48 @@ fn serials_match_case_insensitively() {
     assert_eq!(r.at(0.0), vec![conn(PAIRED)]);
 }
 
+// D-112: a unit is its serial. A reflash to other USB IDs keeps its pairing.
+
 #[test]
-fn a_different_pid_with_the_same_serial_is_not_the_paired_unit() {
+fn a_reflashed_unit_with_new_ids_is_still_the_paired_unit() {
     let mut r = Rig::new(&[PAIRED], &[]);
-    r.bus.attach(VID, PID - 1, Some(PAIRED));
-    r.at(0.0);
-    assert_eq!(r.bus.opens(), 0);
+    let hid = r.bus.attach(0x2E8A, 0xF0DE, Some(PAIRED));
+    let events = r.at(0.0);
+    assert!(
+        matches!(&events[..], [DeviceEvent::Connected { id, .. }]
+            if id.serial == PAIRED && (id.vid, id.pid) == (0x2E8A, 0xF0DE)),
+        "{events:?}"
+    );
+    assert_eq!(sent(&hid), vec![AppMessage::RequestHello]);
+}
+
+#[test]
+fn a_unit_is_the_same_whatever_ids_it_attached_with() {
+    let a = DeviceId {
+        vid: VID,
+        pid: PID,
+        serial: PAIRED.into(),
+    };
+    let b = DeviceId {
+        vid: 0x2E8A,
+        pid: 0xF0DE,
+        serial: PAIRED.to_ascii_lowercase(),
+    };
+    assert_eq!(a, b);
+    let set: std::collections::HashSet<DeviceId> = [a, b].into_iter().collect();
+    assert_eq!(set.len(), 1, "equal ids hash the same");
+    assert_ne!(id(PAIRED), id(OTHER));
+}
+
+#[test]
+fn a_paired_serial_on_a_device_that_isnt_a_detent_is_never_opened() {
+    // Same serial, but the product string doesn't claim to be Detent.
+    let mut r = Rig::new(&[PAIRED], &[]);
+    r.bus
+        .attach_product(VID, PID, Some(PAIRED), Some("USB Receiver"));
+    r.bus.attach_product(VID, PID, Some(PAIRED), None);
+    assert_eq!(r.at(0.0), vec![]);
+    assert_eq!(r.bus.opens(), 0, "never opened, never written to");
 }
 
 #[test]
@@ -662,7 +699,7 @@ fn units_still_allowed_are_left_alone() {
 fn found(serial: &str) -> DeviceEvent {
     DeviceEvent::CandidateFound {
         id: id(serial),
-        product: Some("Detent Dev".into()),
+        product: Some("Detent XIAO".into()),
     }
 }
 
@@ -770,7 +807,8 @@ fn an_unplugged_candidate_is_gone() {
 fn identifying_never_opens_ignored_or_foreign_units() {
     let mut r = Rig::new(&[], &[OTHER]);
     r.bus.attach(VID, PID, Some(OTHER));
-    r.bus.attach(0x046D, 0xC52B, Some("X"));
+    r.bus
+        .attach_product(0x046D, 0xC52B, Some("X"), Some("USB Receiver"));
     r.bus.attach(VID, PID, None);
     r.devices.start_identify();
     r.at(0.0);
@@ -1071,10 +1109,29 @@ fn a_pico_is_a_detent_unit_like_the_xiao() {
 }
 
 #[test]
-fn a_board_that_is_not_a_detent_model_is_never_reported() {
+fn any_ids_with_a_detent_product_string_are_a_detent_unit() {
+    // D-112: a custom build on IDs Detent has never heard of is still found.
     let mut r = Rig::new(&[], &[]);
-    r.bus.attach(0x1209, 0x0002, Some(OTHER));
+    r.bus
+        .attach_product(0x1209, 0x0002, Some(OTHER), Some("Detent My Build"));
+    assert_eq!(
+        r.at(0.0),
+        vec![DeviceEvent::Unknown {
+            vid: 0x1209,
+            pid: 0x0002,
+            serial: Some(OTHER.into())
+        }]
+    );
+}
+
+#[test]
+fn a_known_model_id_without_the_product_string_is_never_reported() {
+    let mut r = Rig::new(&[], &[]);
+    r.bus
+        .attach_product(VID, PID, Some(OTHER), Some("Some Other Gadget"));
+    r.devices.start_identify();
     assert_eq!(r.at(0.0), vec![]);
+    assert_eq!(r.bus.opens(), 0);
 }
 
 // Protocol v2 (D-094): a unit on older firmware is alive but can't talk.

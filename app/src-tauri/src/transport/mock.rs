@@ -136,8 +136,20 @@ impl MockBus {
         self.shared.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// Plugs in a vendor channel; returns its device side.
+    /// Plugs in a Detent unit's vendor channel (product `Detent XIAO`);
+    /// returns its device side.
     pub fn attach(&self, vid: u16, pid: u16, serial: Option<&str>) -> MockHid {
+        self.attach_product(vid, pid, serial, Some("Detent XIAO"))
+    }
+
+    /// Plugs in a vendor channel with this USB product string.
+    pub fn attach_product(
+        &self,
+        vid: u16,
+        pid: u16,
+        serial: Option<&str>,
+        product: Option<&str>,
+    ) -> MockHid {
         let mut s = self.state();
         s.next_path += 1;
         let channel = Channel {
@@ -145,7 +157,7 @@ impl MockBus {
             vid,
             pid,
             serial: serial.map(str::to_owned),
-            product: Some("Detent Dev".into()),
+            product: product.map(str::to_owned),
         };
         let hid = MockHid::default();
         s.attached.push((channel, hid.clone()));

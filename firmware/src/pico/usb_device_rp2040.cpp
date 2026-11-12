@@ -12,9 +12,9 @@
 #include "detent_protocol.h"
 #include "usb_identity.h"
 
-// DETENT_PICO_VID and _PID come from the protocol crate's models table
-// (protocol/src/ids.rs). PLACEHOLDER (open question in docs/roadmap.md):
-// pid.codes' testing pair until Raspberry Pi assigns a PID under 0x2E8A.
+// DETENT_USB_VID and _PID come from the protocol crate's models table
+// (protocol/src/ids.rs) by the board flag: Raspberry Pi's VID with a locally
+// chosen PID (D-112).
 
 namespace detent {
 namespace usb {
@@ -89,7 +89,7 @@ void begin() {
   serial_number[2 * PICO_UNIQUE_BOARD_ID_SIZE_BYTES] = '\0';
 
   if (!TinyUSBDevice.isInitialized()) TinyUSBDevice.begin(0);
-  TinyUSBDevice.setID(DETENT_PICO_VID, DETENT_PICO_PID);
+  TinyUSBDevice.setID(DETENT_USB_VID, DETENT_USB_PID);
   TinyUSBDevice.setManufacturerDescriptor(kManufacturer);
   TinyUSBDevice.setProductDescriptor(kProductName);
   TinyUSBDevice.setSerialDescriptor(serial_number);

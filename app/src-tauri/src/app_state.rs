@@ -573,15 +573,13 @@ impl AppState {
     }
 
     fn paired_mut(&mut self, id: &DeviceId) -> Option<&mut PairedUnit> {
-        self.paired
-            .iter_mut()
-            .find(|u| u.vid == id.vid && u.pid == id.pid && same(&u.serial, &id.serial))
+        self.paired.iter_mut().find(|u| same(&u.serial, &id.serial))
     }
 
     fn candidate_mut(&mut self, id: &DeviceId) -> Option<&mut Candidate> {
         self.candidates
             .iter_mut()
-            .find(|c| c.vid == id.vid && c.pid == id.pid && same(&c.serial, &id.serial))
+            .find(|c| same(&c.serial, &id.serial))
     }
 
     /// Folds in one engine record. Returns whether anything the UI shows
@@ -605,6 +603,8 @@ impl AppState {
                 if let Some(u) = self.paired_mut(id) {
                     u.connected = true;
                     u.outdated = false;
+                    // A reflash may have changed its IDs (D-112).
+                    (u.vid, u.pid) = (id.vid, id.pid);
                     if product.is_some() {
                         u.model = model_of(product);
                     }
@@ -667,15 +667,12 @@ impl AppState {
             DeviceEvent::CandidatePressed(id) => {
                 if self.candidate_mut(id).is_some() {
                     for c in &mut self.candidates {
-                        c.picked =
-                            c.vid == id.vid && c.pid == id.pid && same(&c.serial, &id.serial);
+                        c.picked = same(&c.serial, &id.serial);
                     }
                 }
             }
             DeviceEvent::CandidateGone(id) => {
-                self.candidates.retain(|c| {
-                    !(c.vid == id.vid && c.pid == id.pid && same(&c.serial, &id.serial))
-                });
+                self.candidates.retain(|c| !same(&c.serial, &id.serial));
             }
             DeviceEvent::Mode { id, mode } => {
                 if let Some(u) = self.paired_mut(id) {

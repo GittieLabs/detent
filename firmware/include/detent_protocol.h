@@ -4,7 +4,7 @@
 #ifndef DETENT_PROTOCOL_H
 #define DETENT_PROTOCOL_H
 
-#define DETENT_PROTOCOL_VERSION 2
+#define DETENT_PROTOCOL_VERSION 3
 
 // Report layout
 #define DETENT_REPORT_LEN 63
@@ -15,11 +15,26 @@
 #define DETENT_VENDOR_REPORT_ID 6
 #define DETENT_CONSUMER_REPORT_ID 4
 
-// USB identity
+// USB identity (D-112, D-113): each board's local IDs and model name, chosen
+// by its -DDETENT_BOARD_* flag. Hosts recognize a unit by its product string
+// `Detent <model name>` and HELLO, not by these IDs.
+#if defined(DETENT_BOARD_XIAO_ESP32S3)
 #define DETENT_USB_VID 0x303A
-#define DETENT_USB_PID 0x8FDE  // PLACEHOLDER until the Espressif usb-pids allocation
-#define DETENT_PICO_VID 0x1209  // PLACEHOLDER until Raspberry Pi assigns a PID
-#define DETENT_PICO_PID 0x0001
+#define DETENT_USB_PID 0x8FDE
+#define DETENT_MODEL_NAME "XIAO"
+#elif defined(DETENT_BOARD_FEATHER_ESP32S3)
+#define DETENT_USB_VID 0x303A
+#define DETENT_USB_PID 0x8FDF
+#define DETENT_MODEL_NAME "Feather"
+#elif defined(DETENT_BOARD_DEVKITC_ESP32S3)
+#define DETENT_USB_VID 0x303A
+#define DETENT_USB_PID 0x8FE0
+#define DETENT_MODEL_NAME "DevKitC"
+#elif defined(DETENT_BOARD_PICO)
+#define DETENT_USB_VID 0x2E8A
+#define DETENT_USB_PID 0xF0DE
+#define DETENT_MODEL_NAME "Pico"
+#endif
 
 // Message types: device to app 0x01..0x7F, app to device 0x80..0xFF
 #define DETENT_MSG_HELLO 0x01

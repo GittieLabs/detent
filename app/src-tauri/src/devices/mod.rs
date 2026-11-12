@@ -23,13 +23,31 @@ use detent_protocol::{ids, PROTOCOL_VERSION};
 use crate::store::{DeviceEntry, UnitRef};
 use crate::transport::{Bus, Channel, DeviceTransport, TransportError};
 
-/// A unit's identity: VID, PID, and serial together (D-004). Stable across
-/// replugs and reboots.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// A unit as attached: its USB IDs and serial. Two ids are the same unit
+/// when their serials match, ignoring case (D-112): a reflash that changes
+/// the VID or PID is still the same unit, with the same pairing and mappings.
+/// The IDs are kept for the log and the starter template.
+#[derive(Debug, Clone)]
 pub struct DeviceId {
     pub vid: u16,
     pub pid: u16,
     pub serial: String,
+}
+
+impl PartialEq for DeviceId {
+    fn eq(&self, other: &Self) -> bool {
+        same_serial(&self.serial, &other.serial)
+    }
+}
+
+impl Eq for DeviceId {}
+
+impl std::hash::Hash for DeviceId {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        for b in self.serial.bytes() {
+            state.write_u8(b.to_ascii_uppercase());
+        }
+    }
 }
 
 impl fmt::Display for DeviceId {
@@ -327,17 +345,19 @@ impl<B: Bus> Devices<B> {
     fn menu_of(&self, id: &DeviceId) -> Vec<String> {
         self.allow
             .iter()
-            .find(|d| d.vid == id.vid && d.pid == id.pid && same_serial(&d.serial, &id.serial))
+            .find(|d| same_serial(&d.serial, &id.serial))
             .map(|d| d.menu.iter().map(|m| m.label.clone()).collect())
             .unwrap_or_default()
     }
 
     fn still_allowed(&self, id: &DeviceId) -> bool {
-        let matches = |vid, pid, serial: &str| {
-            vid == id.vid && pid == id.pid && same_serial(serial, &id.serial)
-        };
-        self.allow.iter().any(|d| matches(d.vid, d.pid, &d.serial))
-            && !self.ignore.iter().any(|u| matches(u.vid, u.pid, &u.serial))
+        self.allow
+            .iter()
+            .any(|d| same_serial(&d.serial, &id.serial))
+            && !self
+                .ignore
+                .iter()
+                .any(|u| same_serial(&u.serial, &id.serial))
     }
 
     /// One turn: scan if due, read, check heartbeats. Blocks at most about
@@ -375,12 +395,10 @@ impl<B: Bus> Devices<B> {
             let ignore = self.ignore.clone();
             let allow = self.allow.clone();
             self.units.retain(|u| {
-                let listed = |vid, pid, serial: &str| {
-                    vid == u.id.vid && pid == u.id.pid && same_serial(serial, &u.id.serial)
-                };
+                let listed = |serial: &str| same_serial(serial, &u.id.serial);
                 !u.candidate
-                    || !(allow.iter().any(|d| listed(d.vid, d.pid, &d.serial))
-                        || ignore.iter().any(|i| listed(i.vid, i.pid, &i.serial)))
+                    || !(allow.iter().any(|d| listed(&d.serial))
+                        || ignore.iter().any(|i| listed(&i.serial)))
             });
             self.open_failed.clear();
             self.next_scan = None;
@@ -406,16 +424,13 @@ impl<B: Bus> Devices<B> {
         events
     }
 
-    fn is_ignored(&self, c: &Channel, serial: &str) -> bool {
-        self.ignore
-            .iter()
-            .any(|u| u.vid == c.vid && u.pid == c.pid && same_serial(&u.serial, serial))
+    /// Units are matched by serial alone (D-112).
+    fn is_ignored(&self, serial: &str) -> bool {
+        self.ignore.iter().any(|u| same_serial(&u.serial, serial))
     }
 
-    fn is_paired(&self, c: &Channel, serial: &str) -> bool {
-        self.allow
-            .iter()
-            .any(|d| d.vid == c.vid && d.pid == c.pid && same_serial(&d.serial, serial))
+    fn is_paired(&self, serial: &str) -> bool {
+        self.allow.iter().any(|d| same_serial(&d.serial, serial))
     }
 
     fn scan(&mut self, now: Instant, events: &mut Vec<DeviceEvent>) {
@@ -453,19 +468,22 @@ impl<B: Bus> Devices<B> {
         self.open_failed.retain(|id| present_ids.contains(id));
 
         for c in &channels {
+            // Only a channel that says it's a Detent is ever news or opened
+            // (D-112): its USB IDs don't matter.
+            if !ids::is_detent_product(c.product.as_deref()) {
+                continue;
+            }
             let serial = c.serial.as_deref().unwrap_or("");
-            if !serial.is_empty() && self.is_ignored(c, serial) {
+            if !serial.is_empty() && self.is_ignored(serial) {
                 // Ignored: no longer news (reported again if it's un-ignored).
                 self.unknown_seen.remove(&c.path);
                 continue;
             }
-            if serial.is_empty() || !self.is_paired(c, serial) {
-                let ours = ids::is_detent(c.vid, c.pid);
-                if ours
-                    && self
-                        .unknown_seen
-                        .insert(c.path.clone(), (c.vid, c.pid, c.serial.clone()))
-                        .is_none()
+            if serial.is_empty() || !self.is_paired(serial) {
+                if self
+                    .unknown_seen
+                    .insert(c.path.clone(), (c.vid, c.pid, c.serial.clone()))
+                    .is_none()
                 {
                     events.push(DeviceEvent::Unknown {
                         vid: c.vid,
@@ -473,7 +491,7 @@ impl<B: Bus> Devices<B> {
                         serial: c.serial.clone(),
                     });
                 }
-                if ours && self.identifying && !serial.is_empty() {
+                if self.identifying && !serial.is_empty() {
                     let id = DeviceId {
                         vid: c.vid,
                         pid: c.pid,

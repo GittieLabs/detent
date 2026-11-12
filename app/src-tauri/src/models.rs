@@ -13,10 +13,13 @@ use crate::store::{
 /// start with, `device` left empty for the caller to fill. Empty for a model
 /// without one.
 pub fn starter_template(vid: u16, pid: u16) -> Vec<Mapping> {
-    if (vid, pid) != (ids::VID, ids::PID) {
+    // By model (D-113); the IDs only name it. Only the XIAO has one: the
+    // other boards' pins are still placeholders (M7).
+    if ids::model(vid, pid).is_none_or(|m| m.name != "XIAO") {
         return Vec::new();
     }
-    // Detent Dev: Keith's setup, proven on hardware in M2 and M3.
+    // Detent XIAO (was Detent Dev): Keith's setup, proven on hardware in M2
+    // and M3.
     let press = |control, scope, action| Mapping {
         device: String::new(),
         control,

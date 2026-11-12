@@ -89,6 +89,26 @@ fn a_fresh_state_lists_paired_units_as_not_connected() {
 }
 
 #[test]
+fn a_reflashed_unit_connects_as_itself_with_its_new_ids_and_model() {
+    // D-112: matched by serial; D-113: the new product string names it.
+    let mut s = AppState::new(&config());
+    assert!(s.apply(&dev(DeviceEvent::Connected {
+        id: detent_lib::devices::DeviceId {
+            vid: 0x2E8A,
+            pid: 0xF0DE,
+            serial: PAIRED.to_ascii_lowercase(),
+        },
+        product: Some("Detent Pico".into()),
+    })));
+    assert_eq!(s.paired.len(), 1, "the same unit, not a new one");
+    let u = &s.paired[0];
+    assert!(u.connected);
+    assert_eq!((u.vid, u.pid), (0x2E8A, 0xF0DE));
+    assert_eq!(u.model.as_deref(), Some("Pico"));
+    assert!(s.unknown.is_empty());
+}
+
+#[test]
 fn connecting_and_hello_fill_in_the_live_details() {
     let mut s = AppState::new(&config());
     assert!(s.apply(&connected(PAIRED)));

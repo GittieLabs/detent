@@ -1,8 +1,8 @@
 # Protocol
 
-`PROTOCOL_VERSION = 2`, **frozen** on 2026-11-11 (D-094). v1 was frozen on 2026-11-07 at the end of M1; v2 differs only in byte 0 and HELLO's kind 3 (an encoder with its push switch).
+`PROTOCOL_VERSION = 3`, **frozen** on 2026-11-12 (D-112). v1 was frozen on 2026-11-07 at the end of M1; v2 (2026-11-11, D-094) differs only in byte 0 and HELLO's kind 3 (an encoder with its push switch); v3 differs from v2 only in byte 0 and in how a host recognizes a unit (Identity).
 
-Any change to the wire format needs a version bump; `protocol/tests/frozen.rs` pins the exact v2 bytes of every message and fails otherwise.
+Any change to the wire format needs a version bump; `protocol/tests/frozen.rs` pins the exact v3 bytes of every message and fails otherwise.
 
 A report with an older version (1 up to `PROTOCOL_VERSION - 1`) means the unit runs older firmware. The app keeps it connected (those reports count as hearing from it), sends it nothing it can't read, and shows that its firmware needs updating. Any other wrong version is rejected as garbage. The Rust crate in `protocol/` is the source of truth; `scripts/gen-header.sh` generates `firmware/include/detent_protocol.h` from it, and a test fails if they drift.
 
@@ -60,9 +60,18 @@ Device sends HELLO when the host mounts it, on REQUEST_HELLO, and after leaving 
 
 ## Identity
 
+A host recognizes a Detent unit by what it says about itself, never by its USB IDs (D-112):
+
+1. It exposes the vendor channel (usage page `0xFF00`, usage `0x01`, see Transport).
+2. Its USB product string is `Detent <model name>`: exactly `Detent ` followed by at least one character.
+3. It reports a serial.
+4. Opened, it answers REQUEST_HELLO with a valid HELLO.
+
+A host never opens or writes to a vendor channel that fails 1 to 3. A paired unit is matched by its serial alone (case insensitive), so a reflash that changes its VID, PID or model name keeps its pairing and mappings.
+
 | Field | Value |
 | --- | --- |
-| VID | `0x303A` (Espressif) |
-| PID | Placeholder `0x8FDE` in `protocol/src/ids.rs` until the Espressif usb-pids PR merges (D-014, D-026). Never `0x4001` or other default TinyUSB PIDs. Identity isn't wire format: the allocated PID replaces the placeholder without a version bump. |
-| Serial | 12 uppercase hex chars from the chip's base MAC (`esp_efuse_mac_get_default`), formatted by the firmware, not the core |
-| Product string | `Detent <model name>` (placeholder `Detent Dev`). Manufacturer string `GittieLabs`. |
+| VID | The chip vendor's: `0x303A` (Espressif) for the ESP32-S3 boards, `0x2E8A` (Raspberry Pi) for the Pico. |
+| PID | Chosen locally per board in `protocol/src/ids.rs` (`MODELS`) and listed in `docs/boards.md`; no vendor allocation until Detent has real adoption (D-112). Never `0x4001` or other TinyUSB, ESP-IDF or RP2040 defaults. IDs only name the model (the starter template) and keep boards apart in system tools. |
+| Serial | Unique per chip, formatted by the firmware: on the ESP32-S3, 12 uppercase hex chars from the base MAC (`esp_efuse_mac_get_default`); on the Pico, its flash unique ID in hex. |
+| Product string | `Detent <model name>`: `Detent XIAO`, `Detent Feather`, `Detent DevKitC`, `Detent Pico` (D-113). Manufacturer string `GittieLabs`. A custom build may use its own model name. |

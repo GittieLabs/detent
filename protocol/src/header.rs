@@ -14,9 +14,23 @@ pub fn c_header() -> String {
         .iter()
         .map(|(id, name)| format!("#define DETENT_MSG_{name} 0x{id:02X}\n"))
         .collect();
-    let vid = ids::VID;
-    let pid = ids::PID;
-    let (pico_vid, pico_pid) = (ids::PICO_VID, ids::PICO_PID);
+    let identity: String = ids::MODELS
+        .iter()
+        .enumerate()
+        .map(|(i, m)| {
+            let branch = if i == 0 { "#if" } else { "#elif" };
+            format!(
+                "{branch} defined(DETENT_BOARD_{board})\n\
+                 #define DETENT_USB_VID 0x{vid:04X}\n\
+                 #define DETENT_USB_PID 0x{pid:04X}\n\
+                 #define DETENT_MODEL_NAME \"{name}\"\n",
+                board = m.board,
+                vid = m.vid,
+                pid = m.pid,
+                name = m.name,
+            )
+        })
+        .collect();
     let (mode_volume, mode_menu, mode_mapped) = (
         EncoderMode::Volume as u8,
         EncoderMode::Menu as u8,
@@ -48,11 +62,10 @@ pub fn c_header() -> String {
 #define DETENT_VENDOR_REPORT_ID {VENDOR_REPORT_ID}
 #define DETENT_CONSUMER_REPORT_ID {CONSUMER_REPORT_ID}
 
-// USB identity
-#define DETENT_USB_VID 0x{vid:04X}
-#define DETENT_USB_PID 0x{pid:04X}  // PLACEHOLDER until the Espressif usb-pids allocation
-#define DETENT_PICO_VID 0x{pico_vid:04X}  // PLACEHOLDER until Raspberry Pi assigns a PID
-#define DETENT_PICO_PID 0x{pico_pid:04X}
+// USB identity (D-112, D-113): each board's local IDs and model name, chosen
+// by its -DDETENT_BOARD_* flag. Hosts recognize a unit by its product string
+// `Detent <model name>` and HELLO, not by these IDs.
+{identity}#endif
 
 // Message types: device to app 0x01..0x7F, app to device 0x80..0xFF
 {types}

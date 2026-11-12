@@ -10,7 +10,7 @@ If the file can't be read, Detent never overwrites it: Devices explains the prob
 | --- | --- | --- |
 | `version` | yes | `2`. An older version is upgraded on load and the original kept as `config.json.v<N>.bak`; a newer one is refused and left alone. |
 | `devices` | no | Paired devices. Detent opens these and nothing else. |
-| `ignored` | no | Devices Detent never opens or offers to pair (`vid`, `pid`, `serial`). |
+| `ignored` | no | Devices Detent never opens or offers to pair (`vid`, `pid`, `serial`; matched by `serial`). |
 | `mappings` | no | What each control does. |
 | `paused` | no | `true` while Pause is on. |
 
@@ -19,8 +19,8 @@ If the file can't be read, Detent never overwrites it: Devices explains the prob
 | Field | Meaning |
 | --- | --- |
 | `name` | Your name for it. |
-| `vid`, `pid` | USB IDs, as `"0x303A"` or a number. |
-| `serial` | The device's USB serial (shown by Setup on its OLED). |
+| `vid`, `pid` | USB IDs when it was paired, as `"0x303A"` or a number. For your reference only: Detent knows a device by its serial, so reflashing it with other IDs keeps its mappings. |
+| `serial` | The device's USB serial (shown by Setup on its OLED). This is how Detent recognizes it. |
 | `menu` | Optional: up to 8 `{ "label": "Mail", "action": { ... } }` for the [device menu](device-menu.md). |
 
 ## `mappings[]`

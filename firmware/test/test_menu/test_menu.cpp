@@ -147,7 +147,7 @@ static void test_device_info_and_back() {
   TEST_ASSERT_EQUAL_STRING("Device info", lines[0]);
   TEST_ASSERT_EQUAL_STRING("fw 0.1.0", lines[1]);
   TEST_ASSERT_EQUAL_STRING("E072A1FC4EDC", lines[2]);
-  TEST_ASSERT_EQUAL_STRING("proto 2  paired yes", lines[3]);
+  TEST_ASSERT_EQUAL_STRING("proto 3  paired yes", lines[3]);
   TEST_ASSERT_EQUAL(MenuAction::None, m.select());
   TEST_ASSERT_EQUAL(Screen::Menu, m.screen());
   TEST_ASSERT_EQUAL_UINT8(3, m.cursor());  // back where it was
