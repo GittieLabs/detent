@@ -163,6 +163,20 @@ fn publishing_needs_the_tag_from_prepare() {
     pushed(&dir);
     fails_with(
         &run(&dir, &["--publish"]),
-        "no tag v0.1.0 on HEAD; run just release first",
+        "no tag v0.1.0; run just release first",
     );
+}
+
+#[test]
+fn publishing_refuses_a_tag_that_isnt_on_main() {
+    let dir = repo("publish-off-main", "0.1.0");
+    pushed(&dir);
+    // Tag a commit that never reached origin/main, then go back to main.
+    git(&dir, &["checkout", "-q", "-b", "side"]);
+    std::fs::write(dir.join("side.txt"), "x").unwrap();
+    git(&dir, &["add", "-A"]);
+    git(&dir, &["commit", "-q", "-m", "side"]);
+    git(&dir, &["tag", "-a", "v0.1.0", "-m", "off main"]);
+    git(&dir, &["checkout", "-q", "main"]);
+    fails_with(&run(&dir, &["--publish"]), "which isn't on origin/main");
 }

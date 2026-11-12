@@ -10,9 +10,9 @@
 #
 # Publish (pushes the tag and uploads; Keith's OK each time):
 #   scripts/release.sh --publish  (or: just release-publish)
-#   Pushes the tag and creates a draft GitHub Release with the DMG, the
-#   firmware images and the notes. Nothing is public until Publish is pressed
-#   on GitHub.
+#   Pushes the tag (on main, at or behind HEAD) and creates a draft GitHub
+#   Release with the DMG, the firmware images and the notes. Nothing is
+#   public until Publish is pressed on GitHub.
 #
 # Output: target/release/dist/ (the DMG from just build-release, firmware/,
 # notes-v<version>.md)
@@ -80,8 +80,12 @@ check_dmg() {
 }
 
 if $publish; then
-  [[ "$(git rev-parse --verify --quiet "refs/tags/$tag^{commit}")" == "$(git rev-parse HEAD)" ]] ||
-    die "no tag $tag on HEAD; run just release first."
+  # The tag from prepare may sit behind HEAD (acceptance notes committed
+  # after it), but it must name a commit that's on GitHub.
+  tagged="$(git rev-parse --verify --quiet "refs/tags/$tag^{commit}")" ||
+    die "no tag $tag; run just release first."
+  git merge-base --is-ancestor "$tagged" refs/remotes/origin/main ||
+    die "tag $tag names $(git rev-parse --short "$tagged"), which isn't on origin/main."
   check_dmg
   [[ -f "$notes" ]] || die "no release notes at $notes; run just release first."
   assets=("$dmg")
