@@ -112,6 +112,13 @@ pub enum DeviceEvent {
         id: DeviceId,
         version: u8,
     },
+    /// The unit's firmware speaks a newer protocol `version` than this app:
+    /// Detent needs updating. Kept connected like [`DeviceEvent::Outdated`],
+    /// with nothing sent to it. Reported once per open.
+    Newer {
+        id: DeviceId,
+        version: u8,
+    },
     /// A report the codec refused. The unit stays connected.
     Rejected {
         id: DeviceId,
@@ -197,7 +204,8 @@ struct Unit {
     /// Its app owned OLED menu labels, sent after each HELLO ack (M6).
     menu: Vec<String>,
     /// It spoke an older protocol and that was reported (D-094).
-    outdated: bool,
+    /// An Outdated or Newer event went out for this open.
+    mismatch_reported: bool,
 }
 
 impl Unit {
@@ -534,7 +542,7 @@ impl<B: Bus> Devices<B> {
             path: c.path.clone(),
             transport,
             last_heard: now,
-            outdated: false,
+            mismatch_reported: false,
             hello: None,
             seq_out: 0,
             candidate: true,
@@ -568,7 +576,7 @@ impl<B: Bus> Devices<B> {
             path: c.path.clone(),
             transport,
             last_heard: now,
-            outdated: false,
+            mismatch_reported: false,
             hello: None,
             seq_out: 0,
             candidate: false,
@@ -701,14 +709,18 @@ fn handle(
 ) -> Result<(), Lost> {
     let frame = match decode_device(report) {
         Ok(frame) => frame,
-        // An older protocol: the unit is alive but needs new firmware. Newer
-        // or unknown versions stay garbage, as before.
-        Err(DecodeError::Version { got }) if (1..PROTOCOL_VERSION).contains(&got) => {
+        // Another protocol version: the unit is alive but can't talk to this
+        // app. Older needs new firmware (D-095); newer needs a newer Detent.
+        // Only units that say they're Detent are open (D-112), so a newer
+        // version byte is firmware, not garbage. Version 0 stays garbage.
+        Err(DecodeError::Version { got }) if got >= 1 => {
             unit.last_heard = now;
-            if !std::mem::replace(&mut unit.outdated, true) {
-                events.push(DeviceEvent::Outdated {
-                    id: unit.id.clone(),
-                    version: got,
+            if !std::mem::replace(&mut unit.mismatch_reported, true) {
+                let id = unit.id.clone();
+                events.push(if got < PROTOCOL_VERSION {
+                    DeviceEvent::Outdated { id, version: got }
+                } else {
+                    DeviceEvent::Newer { id, version: got }
                 });
             }
             return Ok(());

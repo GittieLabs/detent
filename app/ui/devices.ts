@@ -51,6 +51,7 @@ export function devicesScreen(root: HTMLElement, openWizard: (() => void) | null
   function details(u: PairedUnit): string {
     const parts: string[] = [];
     if (u.outdated) parts.push("Firmware too old for this Detent: update it to use this unit");
+    if (u.newer) parts.push("Firmware newer than this Detent: update Detent to use this unit");
     if (u.model) parts.push(u.model);
     if (u.firmware) parts.push(`firmware ${u.firmware}`);
     if (u.buttons || u.encoders) {

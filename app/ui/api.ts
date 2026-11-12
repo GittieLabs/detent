@@ -35,6 +35,7 @@ export interface PairedUnit {
   model: string | null;
   firmware: string | null;
   outdated: boolean; // its firmware speaks an older protocol; update it (D-094)
+  newer: boolean; // its firmware speaks a newer protocol; update Detent
   buttons: number;
   encoders: number;
   controls: ControlView[]; // empty until its HELLO this session
@@ -60,6 +61,7 @@ export interface Candidate {
   model: string | null;
   firmware: string | null;
   outdated: boolean; // see PairedUnit.outdated
+  newer: boolean; // see PairedUnit.newer
   buttons: number;
   encoders: number;
   picked: boolean;

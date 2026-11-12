@@ -199,6 +199,7 @@ fn candidates_are_found_described_and_picked() {
             model: Some("Dev".into()),
             firmware: Some("0.1.2".into()),
             outdated: false,
+            newer: false,
             buttons: 2,
             encoders: 1,
             picked: false,
@@ -1137,6 +1138,35 @@ fn an_outdated_unit_says_so_until_it_reconnects() {
     }));
     s.apply(&connected(PAIRED));
     assert!(!s.paired[0].outdated);
+}
+
+#[test]
+fn a_unit_on_newer_firmware_says_update_detent_until_it_reconnects() {
+    let mut s = AppState::new(&config());
+    s.apply(&connected(PAIRED));
+    assert!(s.apply(&dev(DeviceEvent::Newer {
+        id: id(PAIRED),
+        version: detent_protocol::PROTOCOL_VERSION + 1
+    })));
+    assert!(s.paired[0].newer);
+    assert!(!s.paired[0].outdated);
+    s.apply(&connected(PAIRED));
+    assert!(!s.paired[0].newer);
+}
+
+#[test]
+fn a_candidate_on_newer_firmware_says_so_in_the_wizard() {
+    let mut s = AppState::new(&config());
+    s.set_identifying(true);
+    s.apply(&dev(DeviceEvent::CandidateFound {
+        id: id(OTHER),
+        product: Some("Detent XIAO".into()),
+    }));
+    assert!(s.apply(&dev(DeviceEvent::Newer {
+        id: id(OTHER),
+        version: detent_protocol::PROTOCOL_VERSION + 1
+    })));
+    assert!(s.candidates[0].newer);
 }
 
 #[test]

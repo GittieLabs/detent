@@ -118,7 +118,13 @@ pub fn info(app_version: &str, macos: &str, state: &AppState) -> String {
             yes(u.connected),
             u.model.as_deref().unwrap_or("unknown"),
             u.firmware.as_deref().unwrap_or("unknown"),
-            if u.outdated { " (older protocol)" } else { "" },
+            if u.outdated {
+                " (older protocol)"
+            } else if u.newer {
+                " (newer protocol than this Detent)"
+            } else {
+                ""
+            },
             if controls.is_empty() {
                 "none reported this session".to_owned()
             } else {

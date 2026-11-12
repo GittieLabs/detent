@@ -240,7 +240,8 @@ fn garbage_is_rejected_and_the_unit_stays_up() {
     let mut r = Rig::new(&[PAIRED], &[]);
     let hid = r.bus.attach(VID, PID, Some(PAIRED));
     r.at(0.0);
-    let mut bad = vec![VENDOR_REPORT_ID, 9]; // version 9
+    // Version 0 never existed; a higher version is newer firmware instead.
+    let mut bad = vec![VENDOR_REPORT_ID, 0];
     bad.resize(64, 0);
     hid.push_raw(bad);
     hid.push_raw(vec![VENDOR_REPORT_ID, 1, 2]); // short
@@ -286,7 +287,7 @@ fn garbage_does_not_count_as_a_heartbeat() {
     let mut r = Rig::new(&[PAIRED], &[]);
     let hid = r.bus.attach(VID, PID, Some(PAIRED));
     r.at(0.0);
-    let mut bad = vec![VENDOR_REPORT_ID, 9];
+    let mut bad = vec![VENDOR_REPORT_ID, 0];
     bad.resize(64, 0);
     hid.push_raw(bad);
     r.at(5.0);
@@ -1162,6 +1163,52 @@ fn an_older_firmware_is_reported_once_and_kept_up_by_its_heartbeats() {
         assert_eq!(r.at(t), vec![], "t = {t}");
     }
     assert_eq!(r.devices.connected(), vec![&id(PAIRED)]);
+}
+
+/// A heartbeat from firmware newer than this app: the header layout is
+/// assumed to stay, only byte 0 moves on.
+fn newer_heartbeat() -> Vec<u8> {
+    let next = detent_protocol::PROTOCOL_VERSION + 1;
+    let mut r = vec![VENDOR_REPORT_ID, next, 0x05, 0, 5, 1, 0, 0, 0, 0];
+    r.resize(64, 0);
+    r
+}
+
+#[test]
+fn a_newer_firmware_is_reported_once_and_kept_up_by_its_heartbeats() {
+    let mut r = Rig::new(&[PAIRED], &[]);
+    let hid = r.bus.attach(VID, PID, Some(PAIRED));
+    r.at(0.0);
+    let sent_before = sent(&hid);
+    hid.push_raw(newer_heartbeat());
+    assert_eq!(
+        r.at(2.0),
+        vec![DeviceEvent::Newer {
+            id: id(PAIRED),
+            version: detent_protocol::PROTOCOL_VERSION + 1
+        }]
+    );
+    for t in [4.0, 6.0, 8.0, 10.0] {
+        hid.push_raw(newer_heartbeat());
+        assert_eq!(r.at(t), vec![], "t = {t}");
+    }
+    assert_eq!(r.devices.connected(), vec![&id(PAIRED)]);
+    assert_eq!(sent(&hid), sent_before, "nothing more is sent to it");
+}
+
+#[test]
+fn version_zero_is_still_garbage() {
+    let mut r = Rig::new(&[PAIRED], &[]);
+    let hid = r.bus.attach(VID, PID, Some(PAIRED));
+    r.at(0.0);
+    let mut bad = newer_heartbeat();
+    bad[1] = 0;
+    hid.push_raw(bad);
+    let events = r.at(0.1);
+    assert!(
+        matches!(&events[..], [DeviceEvent::Rejected { .. }]),
+        "{events:?}"
+    );
 }
 
 #[test]

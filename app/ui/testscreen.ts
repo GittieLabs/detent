@@ -132,7 +132,7 @@ export function testScreen(root: HTMLElement, chosen: { serial: string | null })
             "dl",
             {},
             el("dt", {}, "Firmware"),
-            el("dd", {}, `${unit.firmware ?? "unknown"}${unit.outdated ? " (older protocol: update it)" : ""}`),
+            el("dd", {}, `${unit.firmware ?? "unknown"}${unit.outdated ? " (older protocol: update it)" : unit.newer ? " (newer protocol: update Detent)" : ""}`),
             el("dt", {}, "Model"),
             el("dd", {}, unit.model ?? "unknown"),
             el("dt", {}, "Controls"),

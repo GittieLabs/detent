@@ -191,6 +191,7 @@ pub fn debug_entry(record: &Record, at_ms: u64) -> DebugEntry {
                 | DeviceEvent::Hello { id, .. }
                 | DeviceEvent::Input { id, .. }
                 | DeviceEvent::Outdated { id, .. }
+                | DeviceEvent::Newer { id, .. }
                 | DeviceEvent::Rejected { id, .. }
                 | DeviceEvent::Disconnected { id, .. }
                 | DeviceEvent::OpenFailed { id, .. }
@@ -350,6 +351,9 @@ pub struct PairedUnit {
     /// Its firmware speaks an older protocol than this app, so it can't be
     /// used until it's updated (D-094). Cleared when it reconnects.
     pub outdated: bool,
+    /// Its firmware speaks a newer protocol than this app: Detent needs
+    /// updating to use it. Cleared when it reconnects.
+    pub newer: bool,
     pub buttons: usize,
     pub encoders: usize,
     /// From its last HELLO this session; empty until then.
@@ -372,6 +376,8 @@ pub struct Candidate {
     pub firmware: Option<String>,
     /// See [`PairedUnit::outdated`].
     pub outdated: bool,
+    /// See [`PairedUnit::newer`].
+    pub newer: bool,
     pub buttons: usize,
     pub encoders: usize,
     /// The user pressed a button on this one most recently.
@@ -516,6 +522,7 @@ impl AppState {
                     model: live.and_then(|u| u.model.clone()),
                     firmware: live.and_then(|u| u.firmware.clone()),
                     outdated: live.is_some_and(|u| u.outdated),
+                    newer: live.is_some_and(|u| u.newer),
                     buttons: live.map_or(0, |u| u.buttons),
                     encoders: live.map_or(0, |u| u.encoders),
                     controls: live.map(|u| u.controls.clone()).unwrap_or_default(),
@@ -603,6 +610,7 @@ impl AppState {
                 if let Some(u) = self.paired_mut(id) {
                     u.connected = true;
                     u.outdated = false;
+                    u.newer = false;
                     // A reflash may have changed its IDs (D-112).
                     (u.vid, u.pid) = (id.vid, id.pid);
                     if product.is_some() {
@@ -619,6 +627,7 @@ impl AppState {
                     (u.buttons, u.encoders) = (buttons, encoders);
                     u.controls = controls_of(hello);
                     u.outdated = false;
+                    u.newer = false;
                 }
             }
             DeviceEvent::Disconnected { id, .. } => {
@@ -651,6 +660,7 @@ impl AppState {
                         model,
                         firmware: None,
                         outdated: false,
+                        newer: false,
                         buttons: 0,
                         encoders: 0,
                         picked: false,
@@ -690,6 +700,13 @@ impl AppState {
                     u.outdated = true;
                 } else if let Some(c) = self.candidate_mut(id) {
                     c.outdated = true;
+                }
+            }
+            DeviceEvent::Newer { id, .. } => {
+                if let Some(u) = self.paired_mut(id) {
+                    u.newer = true;
+                } else if let Some(c) = self.candidate_mut(id) {
+                    c.newer = true;
                 }
             }
             DeviceEvent::Report { .. }
